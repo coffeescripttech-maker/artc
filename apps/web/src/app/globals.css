@@ -1,0 +1,229 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* ARC Design System - CSS Variables */
+  :root {
+    /* Primary - Navy */
+    --arc-navy-900: #0B2553;
+    --arc-navy-700: #164C91;
+    --arc-navy-500: #216FD1;
+    --arc-navy-300: #78AEE8;
+    --arc-navy-100: #DCEBFA;
+    --arc-navy-50: #F2F7FD;
+
+    /* Accent - Orange */
+    --arc-orange-600: #E45100;
+    --arc-orange-500: #F26522;
+    --arc-orange-300: #FF9B66;
+    --arc-orange-100: #FFE4D6;
+    --arc-orange-50: #FFF5EF;
+
+    /* Success - Green */
+    --arc-green-600: #0A9A4A;
+    --arc-green-500: #16B364;
+    --arc-green-300: #70D99D;
+    --arc-green-100: #D8F7E5;
+    --arc-green-50: #EFFBF4;
+
+    /* Practice - Purple */
+    --arc-purple-600: #6B2FC1;
+    --arc-purple-500: #7B3FD0;
+    --arc-purple-300: #B185EA;
+    --arc-purple-100: #EDE4FB;
+    --arc-purple-50: #F7F3FD;
+
+    /* Danger - Red */
+    --arc-red-600: #D92D20;
+    --arc-red-500: #F04438;
+    --arc-red-100: #FEE4E2;
+    --arc-red-50: #FEF3F2;
+
+    /* Neutral */
+    --arc-slate-900: #111827;
+    --arc-slate-700: #374151;
+    --arc-slate-500: #6B7280;
+    --arc-slate-400: #9CA3AF;
+    --arc-slate-300: #D1D5DB;
+    --arc-slate-200: #E5E7EB;
+    --arc-slate-100: #F3F4F6;
+    --arc-slate-50: #F8FAFC;
+
+    /* Semantic */
+    --arc-bg: #F6F9FC;
+    --arc-surface: #FFFFFF;
+    --arc-border: #E5E7EB;
+    --arc-text: #111827;
+    --arc-muted: #64748B;
+
+    /* Legacy shadcn compatibility */
+    --background: var(--arc-bg);
+    --foreground: var(--arc-text);
+    --card: var(--arc-surface);
+    --card-foreground: var(--arc-text);
+    --popover: var(--arc-surface);
+    --popover-foreground: var(--arc-text);
+    --primary: var(--arc-navy-900);
+    --primary-foreground: #FFFFFF;
+    --secondary: var(--arc-slate-100);
+    --secondary-foreground: var(--arc-navy-900);
+    --muted: var(--arc-slate-100);
+    --muted-foreground: var(--arc-muted);
+    --accent: var(--arc-orange-500);
+    --accent-foreground: #FFFFFF;
+    --destructive: var(--arc-red-500);
+    --destructive-foreground: #FFFFFF;
+    --border: var(--arc-border);
+    --input: var(--arc-border);
+    --ring: var(--arc-navy-500);
+    --radius: 0.5rem;
+  }
+
+  /* Dark Mode */
+  .dark {
+    --arc-bg: #0B1220;
+    --arc-surface: #1F2937;
+    --arc-border: #374151;
+    --arc-text: #F9FAFB;
+    --arc-muted: #9CA3AF;
+    --primary: var(--arc-navy-400);
+    --secondary: var(--arc-slate-700);
+    --muted: var(--arc-slate-800);
+  }
+
+  /* Base Styles */
+  * {
+    @apply border-arc-border;
+  }
+
+  body {
+    @apply bg-arc-bg text-arc-text antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--arc-slate-100);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--arc-slate-300);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--arc-slate-400);
+  }
+}
+
+@layer components {
+  /* ARC Button Variants */
+  .btn-arc-primary {
+    @apply bg-arc-navy-900 text-white hover:bg-arc-navy-700;
+  }
+
+  .btn-arc-accent {
+    @apply bg-arc-orange-500 text-white hover:bg-arc-orange-600;
+  }
+
+  .btn-arc-success {
+    @apply bg-arc-green-500 text-white hover:bg-arc-green-600;
+  }
+
+  .btn-arc-practice {
+    @apply bg-arc-purple-500 text-white hover:bg-arc-purple-600;
+  }
+
+  /* ARC Badge Variants */
+  .badge-arc-mastery {
+    @apply bg-arc-green-100 text-arc-green-700 border-0;
+  }
+
+  .badge-arc-progress {
+    @apply bg-arc-navy-100 text-arc-navy-700 border-0;
+  }
+
+  .badge-arc-practice {
+    @apply bg-arc-purple-100 text-arc-purple-700 border-0;
+  }
+
+  .badge-arc-warning {
+    @apply bg-arc-orange-100 text-arc-orange-700 border-0;
+  }
+
+  .badge-arc-alert {
+    @apply bg-arc-red-100 text-arc-red-600 border-0;
+  }
+
+  /* ARC Card Styles */
+  .card-arc {
+    @apply bg-arc-surface border-arc-border shadow-arc;
+  }
+
+  .card-arc-hover {
+    @apply card-arc hover:shadow-arc-md transition-shadow duration-200;
+  }
+
+  /* ARC Input Styles */
+  .input-arc {
+    @apply border-arc-border bg-white focus:border-arc-navy-500 focus:ring-arc-navy-500;
+  }
+
+  /* Progress Bar Colors */
+  .progress-mastery {
+    @apply bg-arc-green-500;
+  }
+
+  .progress-learning {
+    @apply bg-arc-navy-500;
+  }
+
+  .progress-practice {
+    @apply bg-arc-purple-500;
+  }
+
+  .progress-warning {
+    @apply bg-arc-orange-500;
+  }
+}
+
+@layer utilities {
+  /* ARC Gradient Utilities */
+  .bg-arc-gradient-primary {
+    background: linear-gradient(135deg, var(--arc-navy-900) 0%, var(--arc-navy-700) 100%);
+  }
+
+  .bg-arc-gradient-accent {
+    background: linear-gradient(135deg, var(--arc-orange-500) 0%, var(--arc-orange-400) 100%);
+  }
+
+  .bg-arc-gradient-hero {
+    background: linear-gradient(135deg, var(--arc-navy-900) 0%, var(--arc-navy-700) 50%, var(--arc-purple-600) 100%);
+  }
+
+  /* Text Gradient */
+  .text-gradient-arc {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, var(--arc-navy-600) 0%, var(--arc-purple-600) 100%);
+  }
+
+  /* Focus Ring */
+  .focus-ring-arc {
+    @apply focus:outline-none focus:ring-2 focus:ring-arc-navy-500 focus:ring-offset-2;
+  }
+
+  /* Selection Color */
+  .selection-arc {
+    ::selection {
+      background-color: var(--arc-navy-200);
+      color: var(--arc-navy-900);
+    }
+  }
+}

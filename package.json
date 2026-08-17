@@ -1,0 +1,27 @@
+{
+  "name": "aratc-lms",
+  "private": true,
+  "version": "0.0.1",
+  "description": "ARATC Learning Management System - Philippine digital learning and examination platform",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "db:migrate": "turbo run db:migrate",
+    "db:generate": "turbo run db:generate",
+    "db:seed": "turbo run db:seed",
+    "db:studio": "turbo run db:studio",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "@aratc/eslint-config": "workspace:*",
+    "@aratc/tsconfig": "workspace:*",
+    "prettier": "^3.3.3",
+    "turbo": "^2.1.0"
+  },
+  "packageManager": "pnpm@9.9.0",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

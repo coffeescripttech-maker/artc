@@ -1,0 +1,30 @@
+{
+  "name": "@aratc/database",
+  "version": "0.0.1",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "db:generate": "dotenv -e ../../.env -- prisma generate --schema=./prisma/schema.prisma",
+    "db:migrate": "dotenv -e ../../.env -- prisma migrate dev --schema=./prisma/schema.prisma",
+    "db:deploy": "dotenv -e ../../.env -- prisma migrate deploy --schema=./prisma/schema.prisma",
+    "db:seed": "dotenv -e ../../.env -- tsx src/seed.ts",
+    "db:studio": "dotenv -e ../../.env -- prisma studio --schema=./prisma/schema.prisma",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.19.0"
+  },
+  "devDependencies": {
+    "@aratc/tsconfig": "workspace:*",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.5.0",
+    "bcryptjs": "^2.4.3",
+    "dotenv-cli": "^7.4.2",
+    "prisma": "^5.19.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4"
+  }
+}
