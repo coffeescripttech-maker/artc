@@ -22,6 +22,7 @@ import {
   BookOpen,
   Target,
   TrendingUp,
+  TrendingDown,
   Award,
   Star,
   Calculator,
@@ -153,18 +154,11 @@ const mockExams = [
 ];
 
 const stats = [
-  { label: "Upcoming Exams", value: "3", icon: Calendar, color: "blue" },
-  { label: "Completed", value: "24", icon: CheckCircle, color: "green" },
-  { label: "Avg Score", value: "82%", icon: TrendingUp, color: "purple" },
-  { label: "Total Rank", value: "#5", icon: Award, color: "amber" },
+  { label: "Upcoming Exams", value: "3", icon: Calendar, change: "+1", positive: true },
+  { label: "Completed", value: "24", icon: CheckCircle, change: "+3", positive: true },
+  { label: "Avg Score", value: "82%", icon: TrendingUp, change: "+5%", positive: true },
+  { label: "Total Rank", value: "#5", icon: Award, change: "+3", positive: true },
 ];
-
-const colorClasses: Record<string, { bg: string; icon: string }> = {
-  blue: { bg: "bg-blue-100", icon: "text-blue-600" },
-  green: { bg: "bg-green-100", icon: "text-green-600" },
-  purple: { bg: "bg-purple-100", icon: "text-purple-600" },
-  amber: { bg: "bg-amber-100", icon: "text-amber-600" },
-};
 
 export default function ExamsPage() {
   const [activeTab, setActiveTab] = useState("upcoming");
@@ -175,29 +169,33 @@ export default function ExamsPage() {
 
       <div className="p-6">
         {/* Stats */}
-        <div className="grid gap-4 mb-8 md:grid-cols-4">
-          {stats.map((stat) => {
-            const colors = colorClasses[stat.color];
-            return (
-              <Card key={stat.label}>
-                <CardContent className="p-5">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${colors.bg}`}>
-                      <stat.icon className={`h-5 w-5 ${colors.icon}`} />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                      <div className="text-sm text-gray-500">{stat.label}</div>
-                    </div>
+        <div className="grid gap-5 mb-8 md:grid-cols-2 lg:grid-cols-4">
+          {stats.map((stat, index) => (
+            <Card key={stat.label} className="relative overflow-hidden group hover:shadow-xl transition-all duration-300">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transform origin-left transition-transform duration-300" />
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="h-12 w-12 rounded-xl flex items-center justify-center bg-blue-100">
+                    <stat.icon className="h-6 w-6 text-blue-600" />
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                    stat.positive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                  }`}>
+                    {stat.positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                    {stat.change}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-3xl font-bold tracking-tight text-gray-900">{stat.value}</div>
+                  <div className="text-sm font-medium text-gray-500">{stat.label}</div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-4 mb-6 border-b">
+        <div className="flex gap-4 mb-6 border-b border-arc-slate-200">
           {[
             { id: "upcoming", label: "Upcoming", count: upcomingExams.length },
             { id: "past", label: "Past Exams", count: pastExams.length },
@@ -208,8 +206,8 @@ export default function ExamsPage() {
               onClick={() => setActiveTab(tab.id)}
               className={`pb-3 px-1 text-sm font-medium transition-colors relative ${
                 activeTab === tab.id
-                  ? "text-blue-600 border-b-2 border-blue-600"
-                  : "text-gray-500 hover:text-gray-700"
+                  ? "text-arc-orange-600 border-b-2 border-arc-orange-500"
+                  : "text-arc-slate-500 hover:text-arc-navy-900"
               }`}
             >
               {tab.label}
@@ -269,13 +267,13 @@ export default function ExamsPage() {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-y bg-gray-50">
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Exam</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Score</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rank</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Action</th>
+                    <tr className="bg-arc-slate-50 border-b border-arc-slate-200">
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Exam</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Date</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Score</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Rank</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Status</th>
+                      <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">

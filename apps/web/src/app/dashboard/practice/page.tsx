@@ -25,6 +25,11 @@ import {
   Trophy,
   BarChart3,
   Filter,
+  Calculator,
+  FlaskRound,
+  FileArchive,
+  BookMarked,
+  PieChart,
 } from "lucide-react";
 
 const practiceSets = [
@@ -40,7 +45,7 @@ const practiceSets = [
     score: 85,
     questionsAnswered: 20,
     correctAnswers: 17,
-    image: "📐",
+    icon: Calculator,
   },
   {
     id: 2,
@@ -54,7 +59,7 @@ const practiceSets = [
     score: 72,
     questionsAnswered: 25,
     correctAnswers: 18,
-    image: "⚗️",
+    icon: FlaskRound,
   },
   {
     id: 3,
@@ -68,7 +73,7 @@ const practiceSets = [
     score: 0,
     questionsAnswered: 0,
     correctAnswers: 0,
-    image: "📜",
+    icon: FileArchive,
   },
   {
     id: 4,
@@ -82,7 +87,7 @@ const practiceSets = [
     score: 100,
     questionsAnswered: 15,
     correctAnswers: 15,
-    image: "📖",
+    icon: BookMarked,
   },
   {
     id: 5,
@@ -96,7 +101,7 @@ const practiceSets = [
     score: 0,
     questionsAnswered: 0,
     correctAnswers: 0,
-    image: "📊",
+    icon: PieChart,
   },
   {
     id: 6,
@@ -110,7 +115,7 @@ const practiceSets = [
     score: 0,
     questionsAnswered: 0,
     correctAnswers: 0,
-    image: "🧬",
+    icon: BarChart3,
   },
 ];
 
@@ -121,18 +126,11 @@ const difficultyColors: Record<string, string> = {
 };
 
 const stats = [
-  { label: "Practice Sets", value: "24", icon: FileText, color: "blue" },
-  { label: "Questions Answered", value: "486", icon: Target, color: "green" },
-  { label: "Accuracy Rate", value: "78%", icon: TrendingUp, color: "purple" },
-  { label: "Time Spent", value: "12.5h", icon: Clock, color: "amber" },
+  { label: "Practice Sets", value: "24", change: "+3", positive: true, icon: FileText },
+  { label: "Questions Answered", value: "486", change: "+42", positive: true, icon: Target },
+  { label: "Accuracy Rate", value: "78%", change: "+5%", positive: true, icon: TrendingUp },
+  { label: "Time Spent", value: "12.5h", change: "+2.3h", positive: true, icon: Clock },
 ];
-
-const colorClasses: Record<string, { bg: string; icon: string }> = {
-  blue: { bg: "bg-blue-100", icon: "text-blue-600" },
-  green: { bg: "bg-green-100", icon: "text-green-600" },
-  purple: { bg: "bg-purple-100", icon: "text-purple-600" },
-  amber: { bg: "bg-amber-100", icon: "text-amber-600" },
-};
 
 export default function PracticePage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -156,25 +154,29 @@ export default function PracticePage() {
 
       <div className="p-6">
         {/* Stats */}
-        <div className="grid gap-4 mb-8 md:grid-cols-4">
-          {stats.map((stat) => {
-            const colors = colorClasses[stat.color];
-            return (
-              <Card key={stat.label}>
-                <CardContent className="p-5">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${colors.bg}`}>
-                      <stat.icon className={`h-5 w-5 ${colors.icon}`} />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                      <div className="text-sm text-gray-500">{stat.label}</div>
-                    </div>
+        <div className="grid gap-5 mb-8 md:grid-cols-2 lg:grid-cols-4">
+          {stats.map((stat, index) => (
+            <Card key={stat.label} className="relative overflow-hidden group hover:shadow-xl transition-all duration-300">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transform origin-left transition-transform duration-300" />
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="h-12 w-12 rounded-xl flex items-center justify-center bg-blue-100">
+                    <stat.icon className="h-6 w-6 text-blue-600" />
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                    stat.positive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                  }`}>
+                    {stat.positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                    {stat.change}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-3xl font-bold tracking-tight text-gray-900">{stat.value}</div>
+                  <div className="text-sm font-medium text-gray-500">{stat.label}</div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         {/* Filters */}
@@ -227,7 +229,9 @@ export default function PracticePage() {
               <CardContent className="p-5">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
-                    <div className="text-3xl">{practice.image}</div>
+                    <div className="h-12 w-12 rounded-xl bg-gray-100 flex items-center justify-center">
+                      <practice.icon className="h-6 w-6 text-gray-600" />
+                    </div>
                     <div>
                       <h3 className="font-semibold text-gray-900">{practice.title}</h3>
                       <p className="text-sm text-gray-500">{practice.subject}</p>
@@ -264,7 +268,9 @@ export default function PracticePage() {
                         <span className="text-sm text-gray-600">Your Score</span>
                         <span className="text-lg font-bold text-green-600">{practice.score}%</span>
                       </div>
-                      <Progress value={practice.score} className="h-2" indicatorClassName="bg-green-500" />
+                      <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full bg-green-500" style={{ width: `${practice.score}%` }} />
+                          </div>
                       <div className="flex justify-between mt-2 text-xs text-gray-500">
                         <span className="flex items-center gap-1">
                           <CheckCircle className="h-3 w-3 text-green-500" />

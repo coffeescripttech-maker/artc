@@ -47,12 +47,12 @@ export default function SettingsPage() {
 
       <div className="p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-8">
-            <TabsTrigger value="profile">Profile</TabsTrigger>
-            <TabsTrigger value="notifications">Notifications</TabsTrigger>
-            <TabsTrigger value="security">Security</TabsTrigger>
-            <TabsTrigger value="appearance">Appearance</TabsTrigger>
-            <TabsTrigger value="billing">Billing</TabsTrigger>
+          <TabsList className="mb-8 bg-arc-slate-100">
+            <TabsTrigger value="profile" className="data-[state=active]:bg-arc-orange-500 data-[state=active]:text-white">Profile</TabsTrigger>
+            <TabsTrigger value="notifications" className="data-[state=active]:bg-arc-orange-500 data-[state=active]:text-white">Notifications</TabsTrigger>
+            <TabsTrigger value="security" className="data-[state=active]:bg-arc-orange-500 data-[state=active]:text-white">Security</TabsTrigger>
+            <TabsTrigger value="appearance" className="data-[state=active]:bg-arc-orange-500 data-[state=active]:text-white">Appearance</TabsTrigger>
+            <TabsTrigger value="billing" className="data-[state=active]:bg-arc-orange-500 data-[state=active]:text-white">Billing</TabsTrigger>
           </TabsList>
 
           {/* Profile Tab */}
@@ -212,14 +212,14 @@ export default function SettingsPage() {
                   { title: "Achievement Notifications", description: "When you earn badges or achievements", enabled: true },
                   { title: "Marketing Emails", description: "News and promotional content", enabled: false },
                 ].map((item, index) => (
-                  <div key={index} className="flex items-center justify-between py-3 border-b last:border-0">
+                  <div key={index} className="flex items-center justify-between py-3 border-b border-arc-slate-100 last:border-0">
                     <div>
-                      <div className="font-medium text-gray-900">{item.title}</div>
-                      <div className="text-sm text-gray-500">{item.description}</div>
+                      <div className="font-medium text-arc-navy-900">{item.title}</div>
+                      <div className="text-sm text-arc-slate-500">{item.description}</div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input type="checkbox" className="sr-only peer" defaultChecked={item.enabled} />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-100 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-arc-orange-100 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-arc-orange-500"></div>
                     </label>
                   </div>
                 ))}
@@ -376,19 +376,19 @@ export default function SettingsPage() {
                   <CardTitle>Subscription</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="p-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl mb-6">
+                  <div className="p-6 bg-gradient-to-r from-arc-orange-500 to-arc-orange-600 text-white rounded-xl mb-6">
                     <div className="flex justify-between items-start mb-4">
                       <div>
                         <Badge className="bg-white/20 text-white mb-2">Premium Plan</Badge>
                         <div className="text-3xl font-bold">₱2,499/year</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm text-blue-100">Next billing date</div>
+                        <div className="text-sm text-orange-100">Next billing date</div>
                         <div className="font-medium">Dec 31, 2026</div>
                       </div>
                     </div>
                     <div className="flex gap-3">
-                      <Button className="bg-white text-blue-600 hover:bg-blue-50">
+                      <Button className="bg-white text-arc-orange-600 hover:bg-orange-50">
                         Upgrade Plan
                       </Button>
                       <Button variant="outline" className="border-white/30 text-white hover:bg-white/10">

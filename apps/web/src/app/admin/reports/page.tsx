@@ -26,6 +26,7 @@ import {
   Activity,
   Eye,
   Filter,
+  ArrowRight,
 } from "lucide-react";
 
 const reportTypes = [
@@ -87,20 +88,11 @@ const recentReports = [
 ];
 
 const quickStats = [
-  { label: "Total Reports", value: "156", icon: FileText, color: "blue" },
-  { label: "This Month", value: "24", icon: Calendar, color: "green" },
-  { label: "Downloads", value: "1,245", icon: Download, color: "purple" },
-  { label: "Avg Size", value: "2.8 MB", icon: Clock, color: "amber" },
+  { label: "Total Reports", value: "156", change: "+12", positive: true, icon: FileText },
+  { label: "This Month", value: "24", change: "+5", positive: true, icon: Calendar },
+  { label: "Downloads", value: "1,245", change: "+89", positive: true, icon: Download },
+  { label: "Avg Size", value: "2.8 MB", change: "-0.3", positive: false, icon: Clock },
 ];
-
-const colorClasses: Record<string, { bg: string; icon: string }> = {
-  blue: { bg: "bg-blue-100", icon: "text-blue-600" },
-  green: { bg: "bg-green-100", icon: "text-green-600" },
-  purple: { bg: "bg-purple-100", icon: "text-purple-600" },
-  amber: { bg: "bg-amber-100", icon: "text-amber-600" },
-  cyan: { bg: "bg-cyan-100", icon: "text-cyan-600" },
-  pink: { bg: "bg-pink-100", icon: "text-pink-600" },
-};
 
 export default function ReportsPage() {
   const [selectedReport, setSelectedReport] = useState<string | null>(null);
@@ -112,79 +104,90 @@ export default function ReportsPage() {
 
       <div className="p-6">
         {/* Quick Stats */}
-        <div className="grid gap-4 mb-8 md:grid-cols-4">
-          {quickStats.map((stat) => {
-            const colors = colorClasses[stat.color];
-            return (
-              <Card key={stat.label}>
-                <CardContent className="p-5">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${colors.bg}`}>
-                      <stat.icon className={`h-5 w-5 ${colors.icon}`} />
-                    </div>
-                    <div>
-                      <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                      <div className="text-sm text-gray-500">{stat.label}</div>
-                    </div>
+        <div className="grid gap-5 mb-8 md:grid-cols-2 lg:grid-cols-4">
+          {quickStats.map((stat, index) => (
+            <Card key={stat.label} className="relative overflow-hidden group hover:shadow-arc-xl transition-all duration-300">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-arc-orange-500 to-arc-orange-400 transform origin-left transition-transform duration-300 group-hover:scale-x-100" />
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="h-12 w-12 rounded-xl flex items-center justify-center bg-arc-orange-100">
+                    <stat.icon className="h-6 w-6 text-arc-orange-600" />
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                    stat.positive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                  }`}>
+                    {stat.positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                    {stat.change}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-3xl font-bold tracking-tight text-arc-navy-950">{stat.value}</div>
+                  <div className="text-sm font-medium text-arc-slate-500">{stat.label}</div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         {/* Report Types */}
         <div className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Report Types</h2>
+          <h2 className="text-lg font-bold text-arc-navy-900 mb-4 flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-arc-orange-500" />
+            Report Types
+          </h2>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {reportTypes.map((report) => {
-              const colors = colorClasses[report.color];
-              return (
-                <Card
-                  key={report.id}
-                  className={`hover:shadow-lg transition-all cursor-pointer ${
-                    selectedReport === report.id ? "ring-2 ring-blue-500" : ""
-                  }`}
-                  onClick={() => setSelectedReport(report.id)}
-                >
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className={`p-3 rounded-xl ${colors.bg}`}>
-                        <report.icon className={`h-6 w-6 ${colors.icon}`} />
-                      </div>
-                      {selectedReport === report.id && (
-                        <Badge variant="info">Selected</Badge>
-                      )}
+            {reportTypes.map((report) => (
+              <Card
+                key={report.id}
+                className={`hover:shadow-arc-xl transition-all cursor-pointer border-l-4 ${
+                  selectedReport === report.id
+                    ? "ring-2 ring-arc-orange-500 border-l-arc-orange-500"
+                    : "border-l-transparent hover:border-l-arc-orange-500"
+                }`}
+                onClick={() => setSelectedReport(report.id)}
+              >
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="h-12 w-12 rounded-xl bg-arc-orange-100 flex items-center justify-center">
+                      <report.icon className="h-6 w-6 text-arc-orange-600" />
                     </div>
-                    <h3 className="font-semibold text-gray-900 mb-1">{report.title}</h3>
-                    <p className="text-sm text-gray-500 mb-3">{report.description}</p>
-                    <div className="flex items-center justify-between text-xs text-gray-400">
-                      <span>Last generated: {report.lastGenerated}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+                    {selectedReport === report.id && (
+                      <Badge variant="premium" className="font-semibold">Selected</Badge>
+                    )}
+                  </div>
+                  <h3 className="font-bold text-arc-navy-900 mb-1">{report.title}</h3>
+                  <p className="text-sm text-arc-slate-500 mb-3">{report.description}</p>
+                  <div className="flex items-center justify-between text-xs text-arc-slate-400">
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {report.lastGenerated}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
 
         {/* Generate Report Section */}
         {selectedReport && (
-          <Card className="mb-8">
-            <CardHeader>
+          <Card className="mb-8 shadow-arc-md">
+            <CardHeader className="border-b border-arc-slate-100">
               <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-blue-600" />
+                <div className="h-10 w-10 rounded-xl bg-arc-orange-100 flex items-center justify-center">
+                  <BarChart3 className="h-5 w-5 text-arc-orange-600" />
+                </div>
                 Generate New Report
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6">
               <div className="grid gap-4 md:grid-cols-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
+                  <label className="block text-sm font-semibold text-arc-navy-900 mb-2">Date Range</label>
                   <select
                     value={dateRange}
                     onChange={(e) => setDateRange(e.target.value)}
-                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                    className="w-full h-11 px-3 rounded-lg border border-arc-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-arc-navy-500"
                   >
                     <option value="7d">Last 7 days</option>
                     <option value="30d">Last 30 days</option>
@@ -194,16 +197,16 @@ export default function ReportsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Format</label>
-                  <select className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm">
+                  <label className="block text-sm font-semibold text-arc-navy-900 mb-2">Format</label>
+                  <select className="w-full h-11 px-3 rounded-lg border border-arc-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-arc-navy-500">
                     <option value="pdf">PDF</option>
                     <option value="excel">Excel</option>
                     <option value="csv">CSV</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Program Filter</label>
-                  <select className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm">
+                  <label className="block text-sm font-semibold text-arc-navy-900 mb-2">Program Filter</label>
+                  <select className="w-full h-11 px-3 rounded-lg border border-arc-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-arc-navy-500">
                     <option value="all">All Programs</option>
                     <option value="basic">Basic Education</option>
                     <option value="entrance">Entrance Exams</option>
@@ -211,7 +214,7 @@ export default function ReportsPage() {
                   </select>
                 </div>
                 <div className="flex items-end">
-                  <Button className="w-full">
+                  <Button variant="accent" className="w-full h-11 shadow-lg shadow-arc-orange-500/20">
                     <BarChart3 className="h-4 w-4 mr-2" />
                     Generate Report
                   </Button>
@@ -222,50 +225,52 @@ export default function ReportsPage() {
         )}
 
         {/* Recent Reports */}
-        <Card>
-          <CardHeader>
+        <Card className="shadow-arc-md">
+          <CardHeader className="border-b border-arc-slate-100">
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-gray-500" />
+                <div className="h-10 w-10 rounded-xl bg-arc-orange-100 flex items-center justify-center">
+                  <Clock className="h-5 w-5 text-arc-orange-600" />
+                </div>
                 Recent Reports
               </CardTitle>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="border-arc-slate-200 hover:bg-arc-slate-50">
                 <Download className="h-4 w-4 mr-2" />
                 Download All
               </Button>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b">
-                    <th className="py-3 text-left text-xs font-medium text-gray-500 uppercase">Report Name</th>
-                    <th className="py-3 text-left text-xs font-medium text-gray-500 uppercase">Generated</th>
-                    <th className="py-3 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
-                    <th className="py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  <tr className="bg-arc-slate-50 border-b border-arc-slate-200">
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Report Name</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Generated</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Size</th>
+                    <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
+                <tbody className="divide-y divide-arc-slate-100">
                   {recentReports.map((report, index) => (
-                    <tr key={index} className="hover:bg-gray-50">
-                      <td className="py-4">
+                    <tr key={index} className="hover:bg-arc-slate-50 transition-colors">
+                      <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="p-2 bg-gray-100 rounded">
-                            <FileText className="h-4 w-4 text-gray-500" />
+                          <div className="h-10 w-10 rounded-lg bg-arc-orange-100 flex items-center justify-center">
+                            <FileText className="h-5 w-5 text-arc-orange-600" />
                           </div>
-                          <span className="font-medium text-gray-900">{report.name}</span>
+                          <span className="font-semibold text-arc-navy-900">{report.name}</span>
                         </div>
                       </td>
-                      <td className="py-4 text-sm text-gray-600">{report.generated}</td>
-                      <td className="py-4 text-sm text-gray-600">{report.size}</td>
-                      <td className="py-4 text-right">
+                      <td className="px-6 py-4 text-sm text-arc-slate-600">{report.generated}</td>
+                      <td className="px-6 py-4 text-sm font-medium text-arc-slate-600">{report.size}</td>
+                      <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="sm">
+                          <Button variant="ghost" size="sm" className="text-arc-slate-500 hover:text-arc-navy-900 hover:bg-arc-slate-50">
                             <Eye className="h-4 w-4 mr-1" />
                             View
                           </Button>
-                          <Button variant="ghost" size="sm">
+                          <Button variant="ghost" size="sm" className="text-arc-orange-600 hover:text-arc-orange-700 hover:bg-arc-orange-50">
                             <Download className="h-4 w-4 mr-1" />
                             Download
                           </Button>

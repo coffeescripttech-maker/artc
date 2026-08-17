@@ -311,8 +311,8 @@ export default function ProgramsPage() {
                   <div className={`h-2 bg-gradient-to-r ${program.color} opacity-0 group-hover:opacity-100 transition-opacity`} />
                   <CardContent className="p-6">
                     <div className="flex items-start justify-between mb-4">
-                      <div className={`p-3 rounded-xl bg-gradient-to-br ${program.color} text-white text-2xl`}>
-                        {program.image}
+                      <div className={`p-3 rounded-xl bg-gradient-to-br ${program.color} text-white`}>
+                        <program.icon className="h-7 w-7" />
                       </div>
                       <Badge className={stageColors[program.stage]}>
                         {stageLabels[program.stage]}

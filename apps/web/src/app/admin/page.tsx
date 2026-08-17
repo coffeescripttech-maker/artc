@@ -1,7 +1,7 @@
 "use client";
 
 import { DashboardHeader } from "@/components/dashboard";
-import { Card, CardHeader, CardTitle, CardContent, Badge, Progress, Button, Avatar, AvatarFallback, AvatarImage } from "@/components/ui";
+import { Card, CardHeader, CardTitle, CardContent, Badge, Progress, Button, Avatar, AvatarFallback } from "@/components/ui";
 import {
   Users,
   BookOpen,
@@ -11,13 +11,14 @@ import {
   TrendingDown,
   DollarSign,
   Clock,
-  ChevronRight,
   Activity,
   AlertCircle,
   CheckCircle2,
   Eye,
   Edit,
   Trash2,
+  ArrowRight,
+  UsersRound,
 } from "lucide-react";
 
 const stats = [
@@ -28,17 +29,17 @@ const stats = [
 ];
 
 const recentUsers = [
-  { id: 1, name: "Maria Santos", email: "maria.santos@email.com", role: "Student", program: "Grade 10", status: "active", avatar: "MS" },
-  { id: 2, name: "Juan Cruz", email: "juan.cruz@email.com", role: "Student", program: "College Entrance", status: "active", avatar: "JC" },
-  { id: 3, name: "Ana Reyes", email: "ana.reyes@email.com", role: "Teacher", program: "Mathematics", status: "active", avatar: "AR" },
-  { id: 4, name: "Carlo Mendoza", email: "carlo.mendoza@email.com", role: "Student", program: "Grade 8", status: "pending", avatar: "CM" },
+  { id: 1, name: "Maria Santos", email: "maria.santos@email.com", role: "Student", program: "Grade 10", status: "active", avatar: "MS", color: "arc-orange" },
+  { id: 2, name: "Juan Cruz", email: "juan.cruz@email.com", role: "Student", program: "College Entrance", status: "active", avatar: "JC", color: "arc-navy" },
+  { id: 3, name: "Ana Reyes", email: "ana.reyes@email.com", role: "Teacher", program: "Mathematics", status: "active", avatar: "AR", color: "arc-purple" },
+  { id: 4, name: "Carlo Mendoza", email: "carlo.mendoza@email.com", role: "Student", program: "Grade 8", status: "pending", avatar: "CM", color: "arc-green" },
 ];
 
 const programStats = [
-  { name: "Basic Education", students: 8500, progress: 78, revenue: "₱125,000" },
-  { name: "Entrance Exam Prep", students: 3200, progress: 65, revenue: "₱65,000" },
-  { name: "Board Exam Review", students: 1800, progress: 82, revenue: "₱45,000" },
-  { name: "College", students: 1200, progress: 45, revenue: "₱10,000" },
+  { name: "Basic Education", students: 8500, progress: 78, revenue: "₱125,000", color: "from-blue-500 to-indigo-500" },
+  { name: "Entrance Exam Prep", students: 3200, progress: 65, revenue: "₱65,000", color: "from-purple-500 to-pink-500" },
+  { name: "Board Exam Review", students: 1800, progress: 82, revenue: "₱45,000", color: "from-orange-500 to-red-500" },
+  { name: "College", students: 1200, progress: 45, revenue: "₱10,000", color: "from-green-500 to-teal-500" },
 ];
 
 const recentActivity = [
@@ -49,13 +50,6 @@ const recentActivity = [
   { id: 5, action: "New enrollment", user: "Juan Cruz", time: "3 hours ago", type: "info" },
 ];
 
-const colorClasses: Record<string, { bg: string; icon: string; text: string }> = {
-  blue: { bg: "bg-blue-100", icon: "text-blue-600", text: "text-blue-600" },
-  green: { bg: "bg-green-100", icon: "text-green-600", text: "text-green-600" },
-  purple: { bg: "bg-purple-100", icon: "text-purple-600", text: "text-purple-600" },
-  amber: { bg: "bg-amber-100", icon: "text-amber-600", text: "text-amber-600" },
-};
-
 export default function AdminDashboardPage() {
   return (
     <>
@@ -65,92 +59,110 @@ export default function AdminDashboardPage() {
       />
 
       <div className="p-6">
-        {/* Stats Grid */}
-        <div className="grid gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat) => {
-            const colors = colorClasses[stat.color];
-            return (
-              <Card key={stat.label} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className={`p-2 rounded-lg ${colors.bg}`}>
-                      <stat.icon className={`h-5 w-5 ${colors.icon}`} />
-                    </div>
-                    <div className={`flex items-center text-sm font-medium ${stat.positive ? 'text-green-600' : 'text-red-600'}`}>
-                      {stat.positive ? <TrendingUp className="h-4 w-4 mr-1" /> : <TrendingDown className="h-4 w-4 mr-1" />}
-                      {stat.change}
-                    </div>
+        {/* Stats Grid - Professional Design */}
+        <div className="grid gap-5 mb-8 md:grid-cols-2 lg:grid-cols-4">
+          {stats.map((stat, index) => (
+            <Card
+              key={stat.label}
+              className="relative overflow-hidden group hover:shadow-arc-xl transition-all duration-300"
+            >
+              {/* Top accent line */}
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-arc-orange-500 to-arc-orange-400 transform origin-left transition-transform duration-300 group-hover:scale-x-100" />
+
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  {/* Icon with consistent soft color */}
+                  <div className="h-12 w-12 rounded-xl flex items-center justify-center bg-arc-orange-100">
+                    <stat.icon className="h-6 w-6 text-arc-orange-600" />
                   </div>
-                  <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                  <div className="text-sm text-gray-500">{stat.label}</div>
-                </CardContent>
-              </Card>
-            );
-          })}
+
+                  {/* Change badge */}
+                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                    stat.positive
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-red-100 text-red-600'
+                  }`}>
+                    {stat.positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                    {stat.change}
+                  </div>
+                </div>
+
+                {/* Value and Label */}
+                <div className="space-y-1">
+                  <div className="text-3xl font-bold tracking-tight text-arc-navy-950">{stat.value}</div>
+                  <div className="text-sm font-medium text-arc-slate-500">{stat.label}</div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
             {/* Recent Users */}
-            <Card>
+            <Card className="shadow-arc-md">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
-                    <Users className="h-5 w-5 text-blue-600" />
+                    <div className="h-10 w-10 rounded-xl bg-arc-orange-100 flex items-center justify-center">
+                      <UsersRound className="h-5 w-5 text-arc-orange-600" />
+                    </div>
                     Recent Users
                   </CardTitle>
-                  <Button variant="ghost" size="sm">View all</Button>
+                  <Button variant="ghost" size="sm" className="text-arc-orange-600 hover:text-arc-orange-700 hover:bg-arc-orange-50">
+                    View all <ArrowRight className="h-4 w-4 ml-1" />
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="border-b text-left">
-                        <th className="pb-3 text-sm font-medium text-gray-500">User</th>
-                        <th className="pb-3 text-sm font-medium text-gray-500">Role</th>
-                        <th className="pb-3 text-sm font-medium text-gray-500">Program</th>
-                        <th className="pb-3 text-sm font-medium text-gray-500">Status</th>
-                        <th className="pb-3 text-sm font-medium text-gray-500 text-right">Actions</th>
+                      <tr className="bg-arc-slate-50 border-b border-arc-slate-200">
+                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">User</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Role</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Program</th>
+                        <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Status</th>
+                        <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {recentUsers.map((user) => (
-                        <tr key={user.id} className="border-b last:border-0 hover:bg-gray-50">
+                        <tr key={user.id} className="border-b border-arc-slate-50 last:border-0 hover:bg-arc-slate-50 transition-colors">
                           <td className="py-4">
                             <div className="flex items-center gap-3">
-                              <Avatar className="h-9 w-9">
-                                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-indigo-500 text-white text-xs font-medium">
+                              <Avatar className="h-10 w-10 ring-2 ring-white shadow-sm">
+                                <AvatarFallback className={`bg-gradient-to-br from-arc-orange-500 to-arc-orange-600 text-white text-sm font-semibold`}>
                                   {user.avatar}
                                 </AvatarFallback>
                               </Avatar>
                               <div>
-                                <div className="font-medium text-gray-900">{user.name}</div>
-                                <div className="text-xs text-gray-500">{user.email}</div>
+                                <div className="font-semibold text-arc-navy-900">{user.name}</div>
+                                <div className="text-xs text-arc-slate-500">{user.email}</div>
                               </div>
                             </div>
                           </td>
                           <td className="py-4">
-                            <Badge variant={user.role === "Teacher" ? "info" : "secondary"}>
+                            <Badge variant={user.role === "Teacher" ? "premium" : "secondary"} className="font-medium">
                               {user.role}
                             </Badge>
                           </td>
-                          <td className="py-4 text-sm text-gray-600">{user.program}</td>
+                          <td className="py-4 text-sm text-arc-slate-600">{user.program}</td>
                           <td className="py-4">
-                            <Badge variant={user.status === "active" ? "success" : "warning"}>
+                            <Badge variant={user.status === "active" ? "success" : "warning"} className="font-medium">
                               {user.status === "active" ? "Active" : "Pending"}
                             </Badge>
                           </td>
                           <td className="py-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <button className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500">
+                            <div className="flex items-center justify-end gap-1">
+                              <button className="p-2 rounded-lg hover:bg-arc-slate-100 text-arc-slate-500 transition-colors">
                                 <Eye className="h-4 w-4" />
                               </button>
-                              <button className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500">
+                              <button className="p-2 rounded-lg hover:bg-arc-slate-100 text-arc-slate-500 transition-colors">
                                 <Edit className="h-4 w-4" />
                               </button>
-                              <button className="p-1.5 rounded-md hover:bg-gray-100 text-red-500">
+                              <button className="p-2 rounded-lg hover:bg-red-50 text-red-500 transition-colors">
                                 <Trash2 className="h-4 w-4" />
                               </button>
                             </div>
@@ -164,25 +176,27 @@ export default function AdminDashboardPage() {
             </Card>
 
             {/* Program Performance */}
-            <Card>
+            <Card className="shadow-arc-md">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-green-600" />
+                  <div className="h-10 w-10 rounded-xl bg-green-100 flex items-center justify-center">
+                    <TrendingUp className="h-5 w-5 text-green-600" />
+                  </div>
                   Program Performance
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
+                <div className="space-y-5">
                   {programStats.map((program) => (
                     <div key={program.name} className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-900">{program.name}</span>
+                        <span className="text-sm font-semibold text-arc-navy-900">{program.name}</span>
                         <div className="flex items-center gap-4 text-sm">
-                          <span className="text-gray-500">{program.students.toLocaleString()} students</span>
-                          <span className="text-green-600 font-medium">{program.revenue}</span>
+                          <span className="text-arc-slate-500">{program.students.toLocaleString()} students</span>
+                          <span className="text-arc-orange-600 font-semibold">{program.revenue}</span>
                         </div>
                       </div>
-                      <Progress value={program.progress} className="h-2" indicatorClassName="bg-gradient-to-r from-blue-500 to-indigo-500" />
+                      <Progress value={program.progress} className="h-2.5 [&>div]:bg-gradient-to-r [&>div]:${program.color}" />
                     </div>
                   ))}
                 </div>
@@ -193,18 +207,20 @@ export default function AdminDashboardPage() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Recent Activity */}
-            <Card>
+            <Card className="shadow-arc-md">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base">
-                  <Activity className="h-5 w-5 text-purple-600" />
+                  <div className="h-10 w-10 rounded-xl bg-purple-100 flex items-center justify-center">
+                    <Activity className="h-5 w-5 text-purple-600" />
+                  </div>
                   Recent Activity
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
                   {recentActivity.map((activity) => (
-                    <div key={activity.id} className="flex items-start gap-3">
-                      <div className={`mt-0.5 p-1.5 rounded-full ${
+                    <div key={activity.id} className="flex items-start gap-3 p-3 rounded-xl hover:bg-arc-slate-50 transition-colors">
+                      <div className={`mt-0.5 p-2 rounded-lg ${
                         activity.type === "success" ? "bg-green-100" :
                         activity.type === "warning" ? "bg-amber-100" :
                         "bg-blue-100"
@@ -218,8 +234,8 @@ export default function AdminDashboardPage() {
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-900">{activity.action}</p>
-                        <p className="text-xs text-gray-500">{activity.user} • {activity.time}</p>
+                        <p className="text-sm font-medium text-arc-navy-900">{activity.action}</p>
+                        <p className="text-xs text-arc-slate-500">{activity.user} • {activity.time}</p>
                       </div>
                     </div>
                   ))}
@@ -228,25 +244,30 @@ export default function AdminDashboardPage() {
             </Card>
 
             {/* Quick Actions */}
-            <Card>
+            <Card className="shadow-arc-md bg-gradient-to-br from-arc-navy-900 to-arc-navy-800 border-0 text-white">
               <CardHeader>
-                <CardTitle className="text-base">Quick Actions</CardTitle>
+                <CardTitle className="text-base text-white flex items-center gap-2">
+                  <div className="h-10 w-10 rounded-xl bg-arc-orange-500 flex items-center justify-center">
+                    <GraduationCap className="h-5 w-5 text-white" />
+                  </div>
+                  Quick Actions
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Button variant="outline" className="w-full justify-start">
+                <Button variant="accent" className="w-full justify-start bg-arc-orange-500 hover:bg-arc-orange-600 border-0 shadow-lg shadow-arc-orange-500/20">
                   <Users className="h-4 w-4 mr-2" />
                   Add New User
                 </Button>
-                <Button variant="outline" className="w-full justify-start">
+                <Button variant="outline" className="w-full justify-start border-white/20 text-white hover:bg-white/10">
                   <BookOpen className="h-4 w-4 mr-2" />
                   Create Program
                 </Button>
-                <Button variant="outline" className="w-full justify-start">
+                <Button variant="outline" className="w-full justify-start border-white/20 text-white hover:bg-white/10">
                   <FileText className="h-4 w-4 mr-2" />
                   Add Questions
                 </Button>
-                <Button variant="outline" className="w-full justify-start">
-                  <GraduationCap className="h-4 w-4 mr-2" />
+                <Button variant="outline" className="w-full justify-start border-white/20 text-white hover:bg-white/10">
+                  <TrendingUp className="h-4 w-4 mr-2" />
                   View Reports
                 </Button>
               </CardContent>

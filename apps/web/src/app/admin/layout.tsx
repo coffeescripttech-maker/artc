@@ -1,6 +1,7 @@
 "use client";
 
 import { Sidebar } from "@/components/dashboard";
+import { ProtectedRoute } from "@/components/auth/protected-route";
 
 export default function AdminLayout({
   children,
@@ -8,8 +9,10 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   return (
-    <Sidebar role="admin">
-      {children}
-    </Sidebar>
+    <ProtectedRoute allowedRoles={["admin", "content_admin"]}>
+      <Sidebar role="admin">
+        {children}
+      </Sidebar>
+    </ProtectedRoute>
   );
 }

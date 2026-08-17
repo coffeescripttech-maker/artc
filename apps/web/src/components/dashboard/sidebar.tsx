@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { cn } from "@aratc/ui";
 import { Avatar, AvatarFallback, Button, Badge } from "@/components/ui";
+import { createContext, useContext } from "react";
+import { useAuth } from "@/contexts/auth-context";
 import LogoImage from "../../../assets/images/logo/logo.png";
 
 // Sidebar width constants
@@ -95,8 +97,6 @@ interface SidebarProps {
 }
 
 // Create a context to share sidebar state
-import { createContext, useContext } from "react";
-
 interface SidebarContextType {
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
@@ -114,6 +114,7 @@ export function useSidebar() {
 export function Sidebar({ role = "student", children }: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
+  const { user, logout } = useAuth();
 
   // Load collapsed state from localStorage
   const [collapsed, setCollapsedState] = useState(false);
@@ -135,6 +136,21 @@ export function Sidebar({ role = "student", children }: SidebarProps) {
   };
 
   const nav = role === "admin" ? adminNav : studentNav;
+
+  // Get user initials for avatar
+  const getInitials = () => {
+    if (user?.firstName && user?.lastName) {
+      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
+    }
+    if (user?.firstName) {
+      return user.firstName.slice(0, 2).toUpperCase();
+    }
+    return "JD";
+  };
+
+  const handleLogout = () => {
+    logout();
+  };
 
   const sidebarContent = (
     <>
@@ -243,17 +259,22 @@ export function Sidebar({ role = "student", children }: SidebarProps) {
         >
           <Avatar className="h-9 w-9">
             <AvatarFallback className="bg-gradient-to-br from-arc-orange-500 to-arc-orange-600 text-white text-sm font-semibold">
-              JD
+              {getInitials()}
             </AvatarFallback>
           </Avatar>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-white truncate">Juan Dela Cruz</div>
-              <div className="text-xs text-arc-navy-400 truncate">Grade 10 Student</div>
+              <div className="text-sm font-semibold text-white truncate">
+                {user ? `${user.firstName} ${user.lastName}` : "Guest User"}
+              </div>
+              <div className="text-xs text-arc-navy-400 truncate capitalize">
+                {user?.roles?.[0] || "Student"}
+              </div>
             </div>
           )}
         </div>
         <button
+          onClick={handleLogout}
           className={cn(
             "w-full flex items-center gap-3 px-3 py-2 mt-1 rounded-lg text-arc-navy-300 hover:bg-arc-navy-800 hover:text-white transition-colors",
             collapsed && "justify-center"
@@ -312,6 +333,8 @@ interface DashboardHeaderProps {
 }
 
 export function DashboardHeader({ title, subtitle }: DashboardHeaderProps) {
+  const { user } = useAuth();
+
   return (
     <header className="h-16 bg-white border-b border-arc-slate-200 flex items-center justify-between px-6">
       {/* Mobile menu button */}
@@ -338,6 +361,14 @@ export function DashboardHeader({ title, subtitle }: DashboardHeaderProps) {
           <Bell className="h-5 w-5 text-arc-slate-600" />
           <span className="absolute top-1 right-1 h-2 w-2 bg-arc-red-500 rounded-full" />
         </button>
+        {/* User Avatar */}
+        {user && (
+          <Avatar className="h-9 w-9">
+            <AvatarFallback className="bg-gradient-to-br from-arc-orange-500 to-arc-orange-600 text-white text-sm font-semibold">
+              {user.firstName?.[0]}{user.lastName?.[0]}
+            </AvatarFallback>
+          </Avatar>
+        )}
       </div>
     </header>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { Sidebar } from "@/components/dashboard";
+import { ProtectedRoute } from "@/components/auth/protected-route";
 
 export default function DashboardLayout({
   children,
@@ -8,8 +9,10 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <Sidebar role="student">
-      {children}
-    </Sidebar>
+    <ProtectedRoute>
+      <Sidebar role="student">
+        {children}
+      </Sidebar>
+    </ProtectedRoute>
   );
 }

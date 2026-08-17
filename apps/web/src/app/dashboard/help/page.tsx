@@ -29,6 +29,8 @@ import {
   Send,
 } from "lucide-react";
 
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui";
+
 const faqs = [
   {
     category: "Getting Started",
@@ -134,15 +136,16 @@ export default function HelpPage() {
         </div>
 
         {/* Quick Resources */}
-        <div className="grid gap-4 mb-8 md:grid-cols-4">
+        <div className="grid gap-5 mb-8 md:grid-cols-4">
           {resources.map((resource) => (
-            <Card key={resource.title} className="hover:shadow-md transition-shadow cursor-pointer">
+            <Card key={resource.title} className="relative overflow-hidden group hover:shadow-xl transition-all duration-300">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transform origin-left transition-transform duration-300" />
               <CardContent className="p-5 flex items-center gap-4">
-                <div className="p-3 bg-blue-100 rounded-xl">
+                <div className="h-12 w-12 rounded-xl bg-blue-100 flex items-center justify-center">
                   <resource.icon className="h-6 w-6 text-blue-600" />
                 </div>
                 <div>
-                  <div className="font-medium text-gray-900">{resource.title}</div>
+                  <div className="font-semibold text-gray-900">{resource.title}</div>
                   <div className="text-sm text-gray-500">{resource.count}</div>
                 </div>
               </CardContent>

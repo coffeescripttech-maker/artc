@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Eye, EyeOff, Loader2, Check, GraduationCap, Users, Briefcase } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Eye, EyeOff, Loader2, Check, GraduationCap, Users, Briefcase, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui";
 import { Input } from "@/components/ui";
 import { Label } from "@/components/ui";
+import { useAuth } from "@/contexts/auth-context";
 import LogoImage from "../../../assets/images/logo/logo.png";
 
 const accountTypes = [
@@ -49,6 +51,7 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
   const [accountType, setAccountType] = useState("student");
   const [formData, setFormData] = useState({
     firstName: "",
@@ -58,13 +61,36 @@ export default function RegisterPage() {
     confirmPassword: "",
   });
 
+  const { register, isAuthenticated, isLoading: authLoading } = useAuth();
+  const router = useRouter();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      router.push("/dashboard");
+    }
+  }, [isAuthenticated, authLoading, router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+
+    // Validate password match
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
     setIsLoading(true);
-    // TODO: Connect to auth API
-    setTimeout(() => {
+
+    try {
+      await register(formData.firstName, formData.lastName, formData.email, formData.password);
+      router.push("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create account");
+    } finally {
       setIsLoading(false);
-    }, 2000);
+    }
   };
 
   const passwordStrength = passwordRequirements.filter((req) =>
@@ -162,6 +188,14 @@ export default function RegisterPage() {
                 </Link>
               </p>
             </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
+                <p className="text-sm text-red-600">{error}</p>
+              </div>
+            )}
 
             {/* Account Type Selection */}
             <div className="mb-6">

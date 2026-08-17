@@ -87,21 +87,26 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid gap-4 mb-8 md:grid-cols-4">
-          {stats.map((stat) => (
-            <Card key={stat.label}>
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <stat.icon className="h-5 w-5 text-blue-600" />
+        <div className="grid gap-5 mb-8 md:grid-cols-2 lg:grid-cols-4">
+          {stats.map((stat, index) => (
+            <Card key={stat.label} className="relative overflow-hidden group hover:shadow-xl transition-all duration-300">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transform origin-left transition-transform duration-300" />
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="h-12 w-12 rounded-xl flex items-center justify-center bg-blue-100">
+                    <stat.icon className="h-6 w-6 text-blue-600" />
                   </div>
-                  <div className={`flex items-center text-sm font-medium ${stat.positive ? "text-green-600" : "text-red-600"}`}>
-                    {stat.positive ? <TrendingUp className="h-4 w-4 mr-1" /> : <TrendingDown className="h-4 w-4 mr-1" />}
+                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                    stat.positive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                  }`}>
+                    {stat.positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
                     {stat.change}
                   </div>
                 </div>
-                <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                <div className="text-sm text-gray-500">{stat.label}</div>
+                <div className="space-y-1">
+                  <div className="text-3xl font-bold tracking-tight text-gray-900">{stat.value}</div>
+                  <div className="text-sm font-medium text-gray-500">{stat.label}</div>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -158,7 +163,9 @@ export default function AnalyticsPage() {
                         <Badge variant="success" className="text-xs">{subject.trend}</Badge>
                       </div>
                     </div>
-                    <Progress value={subject.score} className="h-3" indicatorClassName={subject.color} />
+                    <div className="h-3 w-full bg-gray-200 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full bg-blue-500" style={{ width: `${subject.score}%` }} />
+                          </div>
                   </div>
                 ))}
               </div>
@@ -182,13 +189,15 @@ export default function AnalyticsPage() {
                   <div key={area.topic} className="p-3 bg-red-50 rounded-lg">
                     <div className="flex justify-between items-center mb-2">
                       <span className="font-medium text-gray-900">{area.topic}</span>
-                      <Badge variant="destructive">{area.improvement}</Badge>
+                      <Badge variant="alert">{area.improvement}</Badge>
                     </div>
                     <div className="flex justify-between text-sm text-gray-600">
                       <span>{area.questions} questions answered</span>
                       <span>{area.correctRate}% correct rate</span>
                     </div>
-                    <Progress value={area.correctRate} className="h-2 mt-2" indicatorClassName="bg-red-500" />
+                    <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden mt-2">
+                            <div className="h-full rounded-full bg-red-500" style={{ width: `${area.correctRate}%` }} />
+                          </div>
                   </div>
                 ))}
               </div>
@@ -218,7 +227,9 @@ export default function AnalyticsPage() {
                       <span>{area.questions} questions answered</span>
                       <span>{area.correctRate}% correct rate</span>
                     </div>
-                    <Progress value={area.correctRate} className="h-2 mt-2" indicatorClassName="bg-green-500" />
+                    <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden mt-2">
+                            <div className="h-full rounded-full bg-green-500" style={{ width: `${area.correctRate}%` }} />
+                          </div>
                   </div>
                 ))}
               </div>

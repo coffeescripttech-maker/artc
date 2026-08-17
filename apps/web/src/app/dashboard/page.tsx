@@ -66,21 +66,26 @@ export default function DashboardPage() {
 
       <div className="p-6">
         {/* Quick Stats */}
-        <div className="grid gap-4 mb-8 md:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat) => (
-            <Card key={stat.label} className="hover:shadow-md transition-shadow">
+        <div className="grid gap-5 mb-8 md:grid-cols-2 lg:grid-cols-4">
+          {stats.map((stat, index) => (
+            <Card key={stat.label} className="relative overflow-hidden group hover:shadow-xl transition-all duration-300">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transform origin-left transition-transform duration-300" />
               <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`p-2 rounded-lg ${stat.positive ? 'bg-green-100' : 'bg-red-100'}`}>
-                    <stat.icon className={`h-5 w-5 ${stat.positive ? 'text-green-600' : 'text-red-600'}`} />
+                <div className="flex items-start justify-between mb-4">
+                  <div className="h-12 w-12 rounded-xl flex items-center justify-center bg-blue-100">
+                    <stat.icon className="h-6 w-6 text-blue-600" />
                   </div>
-                  <div className={`flex items-center text-sm font-medium ${stat.positive ? 'text-green-600' : 'text-red-600'}`}>
-                    {stat.positive ? <ArrowUpRight className="h-4 w-4 mr-1" /> : <ArrowDownRight className="h-4 w-4 mr-1" />}
+                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                    stat.positive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                  }`}>
+                    {stat.positive ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
                     {stat.change}
                   </div>
                 </div>
-                <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                <div className="text-sm text-gray-500">{stat.label}</div>
+                <div className="space-y-1">
+                  <div className="text-3xl font-bold tracking-tight text-gray-900">{stat.value}</div>
+                  <div className="text-sm font-medium text-gray-500">{stat.label}</div>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -156,7 +161,9 @@ export default function DashboardPage() {
                             <span className="font-medium text-gray-700">{goal.title}</span>
                             <span className="text-gray-500">{goal.current}/{goal.target}</span>
                           </div>
-                          <Progress value={(goal.current / goal.target) * 100} className="h-3" indicatorClassName={goal.color} />
+                          <div className="h-3 w-full bg-gray-200 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${goal.color}`} style={{ width: `${(goal.current / goal.target) * 100}%` }} />
+                          </div>
                         </div>
                       ))}
                     </div>

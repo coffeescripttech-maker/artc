@@ -19,10 +19,17 @@ import {
   Users,
   Clock,
   TrendingUp,
+  TrendingDown,
   ChevronRight,
   Play,
   Star,
   Filter,
+  Calculator,
+  FlaskConical,
+  BarChart3,
+  FileText,
+  BookMarked,
+  PenLine,
 } from "lucide-react";
 
 const enrolledPrograms = [
@@ -37,7 +44,7 @@ const enrolledPrograms = [
     streak: 12,
     rating: 4.8,
     nextLesson: "Quadratic Equations: Applications",
-    image: "📐",
+    icon: Calculator,
     color: "from-blue-500 to-blue-600",
   },
   {
@@ -51,7 +58,7 @@ const enrolledPrograms = [
     streak: 8,
     rating: 4.7,
     nextLesson: "Chemical Bonding",
-    image: "🔬",
+    icon: FlaskConical,
     color: "from-green-500 to-green-600",
   },
   {
@@ -65,9 +72,16 @@ const enrolledPrograms = [
     streak: 5,
     rating: 4.9,
     nextLesson: "Advanced Trigonometry",
-    image: "📊",
+    icon: BarChart3,
     color: "from-purple-500 to-purple-600",
   },
+];
+
+const quickStats = [
+  { label: "Enrolled Programs", value: "3", change: "+1", positive: true, icon: BookOpen },
+  { label: "Lessons Completed", value: "96", change: "+12", positive: true, icon: TrendingUp },
+  { label: "Total Study Time", value: "65.5h", change: "+5.2h", positive: true, icon: Clock },
+  { label: "Best Streak", value: "12 days", change: "+3", positive: true, icon: Star },
 ];
 
 const recommendedPrograms = [
@@ -77,7 +91,7 @@ const recommendedPrograms = [
     description: "Philippine History and Government",
     students: 2500,
     rating: 4.6,
-    image: "📜",
+    icon: FileText,
   },
   {
     id: 5,
@@ -85,7 +99,7 @@ const recommendedPrograms = [
     description: "Grammar, Vocabulary, Comprehension",
     students: 3200,
     rating: 4.8,
-    image: "📖",
+    icon: BookMarked,
   },
   {
     id: 6,
@@ -93,7 +107,7 @@ const recommendedPrograms = [
     description: "Entrance exam English preparation",
     students: 1800,
     rating: 4.7,
-    image: "✍️",
+    icon: PenLine,
   },
 ];
 
@@ -107,59 +121,29 @@ export default function MyProgramsPage() {
 
       <div className="p-6">
         {/* Quick Stats */}
-        <div className="grid gap-4 mb-8 md:grid-cols-4">
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <BookOpen className="h-5 w-5 text-blue-600" />
+        <div className="grid gap-5 mb-8 md:grid-cols-2 lg:grid-cols-4">
+          {quickStats.map((stat, index) => (
+            <Card key={stat.label} className="relative overflow-hidden group hover:shadow-xl transition-all duration-300">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transform origin-left transition-transform duration-300" />
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="h-12 w-12 rounded-xl flex items-center justify-center bg-blue-100">
+                    <stat.icon className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                    stat.positive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                  }`}>
+                    {stat.positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                    {stat.change}
+                  </div>
                 </div>
-                <div>
-                  <div className="text-2xl font-bold text-gray-900">3</div>
-                  <div className="text-sm text-gray-500">Enrolled Programs</div>
+                <div className="space-y-1">
+                  <div className="text-3xl font-bold tracking-tight text-gray-900">{stat.value}</div>
+                  <div className="text-sm font-medium text-gray-500">{stat.label}</div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <TrendingUp className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-gray-900">96</div>
-                  <div className="text-sm text-gray-500">Lessons Completed</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Clock className="h-5 w-5 text-purple-600" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-gray-900">65.5h</div>
-                  <div className="text-sm text-gray-500">Total Study Time</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-100 rounded-lg">
-                  <Star className="h-5 w-5 text-amber-600" />
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-gray-900">12</div>
-                  <div className="text-sm text-gray-500">Best Streak (days)</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         {/* Search & Filter */}
@@ -196,7 +180,9 @@ export default function MyProgramsPage() {
                 {/* Header with gradient */}
                 <div className={`bg-gradient-to-r ${program.color} p-4`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-4xl">{program.image}</span>
+                    <div className="h-14 w-14 rounded-xl bg-gradient-to-br {program.color} flex items-center justify-center">
+                      <program.icon className="h-7 w-7 text-white" />
+                    </div>
                     <Badge className="bg-white/20 text-white border-0">
                       <Clock className="h-3 w-3 mr-1" />
                       {program.streak} day streak
@@ -262,7 +248,9 @@ export default function MyProgramsPage() {
               <Card key={program.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-5">
                   <div className="flex items-start gap-4">
-                    <div className="text-3xl">{program.image}</div>
+                    <div className="h-12 w-12 rounded-xl bg-gray-100 flex items-center justify-center">
+                      <program.icon className="h-6 w-6 text-gray-600" />
+                    </div>
                     <div className="flex-1">
                       <h3 className="font-medium text-gray-900 mb-1">{program.name}</h3>
                       <p className="text-sm text-gray-500 mb-3">{program.description}</p>

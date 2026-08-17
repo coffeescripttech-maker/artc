@@ -28,6 +28,9 @@ import {
   Lock,
   CheckCircle,
   ChevronRight,
+  Sparkles,
+  TrendingUp,
+  TrendingDown,
 } from "lucide-react";
 
 const earnedAchievements = [
@@ -147,10 +150,10 @@ const lockedAchievements = [
 ];
 
 const stats = [
-  { label: "Achievements", value: earnedAchievements.length.toString(), icon: Trophy },
-  { label: "Total Points", value: earnedAchievements.reduce((acc, a) => acc + a.points, 0).toString(), icon: Star },
-  { label: "Locked", value: lockedAchievements.length.toString(), icon: Lock },
-  { label: "Progress", value: `${Math.round((earnedAchievements.length / (earnedAchievements.length + lockedAchievements.length)) * 100)}%`, icon: Target },
+  { label: "Achievements", value: earnedAchievements.length.toString(), icon: Trophy, change: "+1", positive: true },
+  { label: "Total Points", value: earnedAchievements.reduce((acc, a) => acc + a.points, 0).toLocaleString(), icon: Star, change: "+350", positive: true },
+  { label: "Locked", value: lockedAchievements.length.toString(), icon: Lock, change: "-1", positive: false },
+  { label: "Progress", value: `${Math.round((earnedAchievements.length / (earnedAchievements.length + lockedAchievements.length)) * 100)}%`, icon: Target, change: "+5%", positive: true },
 ];
 
 export default function AchievementsPage() {
@@ -162,13 +165,26 @@ export default function AchievementsPage() {
 
       <div className="p-6">
         {/* Stats */}
-        <div className="grid gap-4 mb-8 md:grid-cols-4">
-          {stats.map((stat) => (
-            <Card key={stat.label}>
-              <CardContent className="p-5 text-center">
-                <stat.icon className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-                <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                <div className="text-sm text-gray-500">{stat.label}</div>
+        <div className="grid gap-5 mb-8 md:grid-cols-2 lg:grid-cols-4">
+          {stats.map((stat, index) => (
+            <Card key={stat.label} className="relative overflow-hidden group hover:shadow-xl transition-all duration-300">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-yellow-500 to-amber-500 transform origin-left transition-transform duration-300" />
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="h-12 w-12 rounded-xl flex items-center justify-center bg-yellow-100">
+                    <stat.icon className="h-6 w-6 text-yellow-600" />
+                  </div>
+                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                    stat.positive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                  }`}>
+                    {stat.positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                    {stat.change}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-3xl font-bold tracking-tight text-gray-900">{stat.value}</div>
+                  <div className="text-sm font-medium text-gray-500">{stat.label}</div>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -179,7 +195,9 @@ export default function AchievementsPage() {
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className="text-5xl">🔥</div>
+                <div className="h-16 w-16 rounded-2xl bg-white/20 flex items-center justify-center">
+                  <Flame className="h-10 w-10" />
+                </div>
                 <div>
                   <div className="text-3xl font-bold">12 Day Streak!</div>
                   <p className="text-orange-100">Keep it up! You're doing great!</p>
@@ -196,11 +214,11 @@ export default function AchievementsPage() {
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className="flex items-center justify-between mb-6">
-            <TabsList>
-              <TabsTrigger value="earned">
+            <TabsList className="bg-arc-slate-100">
+              <TabsTrigger value="earned" className="data-[state=active]:bg-arc-orange-500 data-[state=active]:text-white">
                 Earned ({earnedAchievements.length})
               </TabsTrigger>
-              <TabsTrigger value="locked">
+              <TabsTrigger value="locked" className="data-[state=active]:bg-arc-orange-500 data-[state=active]:text-white">
                 Locked ({lockedAchievements.length})
               </TabsTrigger>
             </TabsList>

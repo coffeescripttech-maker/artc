@@ -30,6 +30,7 @@ import {
   BookOpen,
   FileText,
   TrendingUp,
+  TrendingDown,
   DollarSign,
   Calendar,
   Clock,
@@ -210,18 +211,11 @@ const statusColors: Record<string, { bg: string; text: string }> = {
 };
 
 const stats = [
-  { label: "Total Programs", value: "48", change: "+5", icon: BookOpen, color: "blue" },
-  { label: "Active Students", value: "15,234", change: "+12%", icon: Users, color: "green" },
-  { label: "Total Revenue", value: "₱245K", change: "+8%", icon: DollarSign, color: "amber" },
-  { label: "Avg Rating", value: "4.7", change: "+0.2", icon: Star, color: "purple" },
+  { label: "Total Programs", value: "48", change: "+5", positive: true, icon: BookOpen },
+  { label: "Active Students", value: "15,234", change: "+12%", positive: true, icon: Users },
+  { label: "Total Revenue", value: "₱245K", change: "+8%", positive: true, icon: DollarSign },
+  { label: "Avg Rating", value: "4.7", change: "+0.2", positive: true, icon: Star },
 ];
-
-const colorClasses: Record<string, { bg: string; icon: string }> = {
-  blue: { bg: "bg-blue-100", icon: "text-blue-600" },
-  green: { bg: "bg-green-100", icon: "text-green-600" },
-  purple: { bg: "bg-purple-100", icon: "text-purple-600" },
-  amber: { bg: "bg-amber-100", icon: "text-amber-600" },
-};
 
 type ViewMode = "grid" | "list";
 
@@ -248,53 +242,58 @@ export default function ProgramsPage() {
 
       <div className="p-6">
         {/* Stats */}
-        <div className="grid gap-4 mb-6 md:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat) => {
-            const colors = colorClasses[stat.color];
-            return (
-              <Card key={stat.label} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-5">
-                  <div className="flex items-center justify-between">
-                    <div className={`p-2 rounded-lg ${colors.bg}`}>
-                      <stat.icon className={`h-5 w-5 ${colors.icon}`} />
-                    </div>
-                    <Badge variant="success" className="text-xs">{stat.change}</Badge>
+        <div className="grid gap-5 mb-8 md:grid-cols-2 lg:grid-cols-4">
+          {stats.map((stat, index) => (
+            <Card key={stat.label} className="relative overflow-hidden group hover:shadow-arc-xl transition-all duration-300">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-arc-orange-500 to-arc-orange-400 transform origin-left transition-transform duration-300 group-hover:scale-x-100" />
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="h-12 w-12 rounded-xl flex items-center justify-center bg-arc-orange-100">
+                    <stat.icon className="h-6 w-6 text-arc-orange-600" />
                   </div>
-                  <div className="mt-3">
-                    <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                    <div className="text-sm text-gray-500">{stat.label}</div>
+                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
+                    stat.positive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                  }`}>
+                    {stat.positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                    {stat.change}
                   </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                </div>
+                <div className="space-y-1">
+                  <div className="text-3xl font-bold tracking-tight text-arc-navy-950">{stat.value}</div>
+                  <div className="text-sm font-medium text-arc-slate-500">{stat.label}</div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         {/* Header & Filters */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-              <Layers className="h-5 w-5 text-gray-500" />
-              All Programs
-              <Badge variant="secondary">{filteredPrograms.length}</Badge>
-            </h2>
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 rounded-xl bg-arc-orange-100 flex items-center justify-center">
+              <Layers className="h-5 w-5 text-arc-orange-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-arc-navy-900">All Programs</h2>
+              <Badge variant="secondary" className="mt-1">{filteredPrograms.length} programs</Badge>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-arc-slate-400" />
               <Input
                 placeholder="Search programs..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 w-64"
+                className="pl-10 w-64 border-arc-slate-200 focus:border-arc-navy-500"
               />
             </div>
 
             <select
               value={selectedStage}
               onChange={(e) => setSelectedStage(e.target.value)}
-              className="h-10 px-3 rounded-md border border-input bg-background text-sm"
+              className="h-10 px-3 rounded-lg border border-arc-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-arc-navy-500"
             >
               <option value="all">All Stages</option>
               <option value="BASIC_EDUCATION">Basic Education</option>
@@ -307,7 +306,7 @@ export default function ProgramsPage() {
             <select
               value={selectedStatus}
               onChange={(e) => setSelectedStatus(e.target.value)}
-              className="h-10 px-3 rounded-md border border-input bg-background text-sm"
+              className="h-10 px-3 rounded-lg border border-arc-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-arc-navy-500"
             >
               <option value="all">All Status</option>
               <option value="published">Published</option>
@@ -315,22 +314,22 @@ export default function ProgramsPage() {
               <option value="archived">Archived</option>
             </select>
 
-            <div className="flex items-center border rounded-md">
+            <div className="flex items-center border border-arc-slate-200 rounded-lg overflow-hidden">
               <button
                 onClick={() => setViewMode("grid")}
-                className={`p-2 ${viewMode === "grid" ? "bg-gray-100 text-gray-900" : "text-gray-500"}`}
+                className={`p-2.5 ${viewMode === "grid" ? "bg-arc-orange-500 text-white" : "text-arc-slate-500 hover:bg-arc-slate-50"}`}
               >
                 <Grid3X3 className="h-4 w-4" />
               </button>
               <button
                 onClick={() => setViewMode("list")}
-                className={`p-2 ${viewMode === "list" ? "bg-gray-100 text-gray-900" : "text-gray-500"}`}
+                className={`p-2.5 ${viewMode === "list" ? "bg-arc-orange-500 text-white" : "text-arc-slate-500 hover:bg-arc-slate-50"}`}
               >
                 <List className="h-4 w-4" />
               </button>
             </div>
 
-            <Button onClick={() => setShowAddModal(true)}>
+            <Button variant="accent" onClick={() => setShowAddModal(true)} className="shadow-lg shadow-arc-orange-500/20">
               <Plus className="h-4 w-4 mr-2" />
               Add Program
             </Button>
@@ -341,7 +340,7 @@ export default function ProgramsPage() {
         {viewMode === "grid" && (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredPrograms.map((program) => (
-              <Card key={program.id} className="hover:shadow-lg transition-all duration-300 group">
+              <Card key={program.id} className="hover:shadow-arc-xl transition-all duration-300 group">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -353,31 +352,31 @@ export default function ProgramsPage() {
                           {program.status.charAt(0).toUpperCase() + program.status.slice(1)}
                         </Badge>
                       </div>
-                      <CardTitle className="text-lg group-hover:text-blue-600 transition-colors">
+                      <CardTitle className="text-lg group-hover:text-arc-orange-600 transition-colors">
                         {program.name}
                       </CardTitle>
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button className="p-1.5 rounded-md hover:bg-gray-100">
-                          <MoreVertical className="h-4 w-4 text-gray-500" />
+                        <button className="p-1.5 rounded-md hover:bg-arc-slate-100 text-arc-slate-500">
+                          <MoreVertical className="h-4 w-4" />
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
-                          <Eye className="h-4 w-4 mr-2" />
+                        <DropdownMenuItem className="cursor-pointer hover:bg-arc-slate-50">
+                          <Eye className="h-4 w-4 mr-2 text-arc-slate-500" />
                           View Details
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Edit className="h-4 w-4 mr-2" />
+                        <DropdownMenuItem className="cursor-pointer hover:bg-arc-slate-50">
+                          <Edit className="h-4 w-4 mr-2 text-arc-slate-500" />
                           Edit Program
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Copy className="h-4 w-4 mr-2" />
+                        <DropdownMenuItem className="cursor-pointer hover:bg-arc-slate-50">
+                          <Copy className="h-4 w-4 mr-2 text-arc-slate-500" />
                           Duplicate
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-red-600">
+                        <DropdownMenuItem className="cursor-pointer text-red-600 hover:bg-red-50">
                           <Trash2 className="h-4 w-4 mr-2" />
                           Delete
                         </DropdownMenuItem>
@@ -386,36 +385,36 @@ export default function ProgramsPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="pb-4">
-                  <p className="text-sm text-gray-600 mb-4 line-clamp-2">{program.description}</p>
+                  <p className="text-sm text-arc-slate-600 mb-4 line-clamp-2">{program.description}</p>
 
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     <div className="flex items-center gap-2 text-sm">
-                      <BookOpen className="h-4 w-4 text-gray-400" />
-                      <span className="text-gray-600">{program.subjects} Subjects</span>
+                      <BookOpen className="h-4 w-4 text-arc-slate-400" />
+                      <span className="text-arc-slate-600">{program.subjects} Subjects</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
-                      <FileText className="h-4 w-4 text-gray-400" />
-                      <span className="text-gray-600">{program.lessons} Lessons</span>
+                      <FileText className="h-4 w-4 text-arc-slate-400" />
+                      <span className="text-arc-slate-600">{program.lessons} Lessons</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
-                      <Users className="h-4 w-4 text-gray-400" />
-                      <span className="text-gray-600">{program.students.toLocaleString()} Students</span>
+                      <Users className="h-4 w-4 text-arc-slate-400" />
+                      <span className="text-arc-slate-600">{program.students.toLocaleString()} Students</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <Star className="h-4 w-4 text-yellow-400" />
-                      <span className="text-gray-600">
+                      <span className="text-arc-slate-600">
                         {program.rating > 0 ? `${program.rating} (${program.reviews})` : "No ratings"}
                       </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-4 border-t">
-                    <div className="text-lg font-bold text-gray-900">₱{program.price.toLocaleString()}</div>
-                    <div className="text-sm text-gray-500">Updated {program.updated}</div>
+                  <div className="flex items-center justify-between pt-4 border-t border-arc-slate-100">
+                    <div className="text-lg font-bold text-arc-navy-900">₱{program.price.toLocaleString()}</div>
+                    <div className="text-sm text-arc-slate-500">Updated {program.updated}</div>
                   </div>
                 </CardContent>
                 <CardFooter className="pt-0">
-                  <Button variant="outline" className="w-full group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600 transition-colors">
+                  <Button variant="outline" className="w-full group-hover:bg-arc-orange-500 group-hover:text-white group-hover:border-arc-orange-500 transition-colors">
                     View Program
                   </Button>
                 </CardFooter>
@@ -426,29 +425,29 @@ export default function ProgramsPage() {
 
         {/* List View */}
         {viewMode === "list" && (
-          <Card>
+          <Card className="shadow-arc-md">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-y bg-gray-50">
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Program</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stage</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Content</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Students</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rating</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    <tr className="bg-arc-slate-50 border-b border-arc-slate-200">
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Program</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Stage</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Content</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Students</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Rating</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Price</th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Status</th>
+                      <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y">
+                  <tbody className="divide-y divide-arc-slate-100">
                     {filteredPrograms.map((program) => (
-                      <tr key={program.id} className="hover:bg-gray-50 transition-colors">
+                      <tr key={program.id} className="hover:bg-arc-slate-50 transition-colors">
                         <td className="px-6 py-4">
                           <div>
-                            <div className="font-medium text-gray-900">{program.name}</div>
-                            <div className="text-sm text-gray-500 max-w-xs truncate">{program.description}</div>
+                            <div className="font-semibold text-arc-navy-900">{program.name}</div>
+                            <div className="text-sm text-arc-slate-500 max-w-xs truncate">{program.description}</div>
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -458,27 +457,27 @@ export default function ProgramsPage() {
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-sm">
-                            <div>{program.subjects} subjects</div>
-                            <div className="text-gray-500">{program.lessons} lessons</div>
-                            <div className="text-gray-500">{program.questions.toLocaleString()} questions</div>
+                            <div className="text-arc-slate-600">{program.subjects} subjects</div>
+                            <div className="text-arc-slate-500">{program.lessons} lessons</div>
+                            <div className="text-arc-slate-500">{program.questions.toLocaleString()} questions</div>
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-sm font-medium text-gray-900">{program.students.toLocaleString()}</div>
+                          <div className="text-sm font-semibold text-arc-navy-900">{program.students.toLocaleString()}</div>
                         </td>
                         <td className="px-6 py-4">
                           {program.rating > 0 ? (
                             <div className="flex items-center gap-1">
                               <Star className="h-4 w-4 text-yellow-400 fill-yellow-400" />
-                              <span className="text-sm font-medium">{program.rating}</span>
-                              <span className="text-sm text-gray-500">({program.reviews})</span>
+                              <span className="text-sm font-medium text-arc-navy-900">{program.rating}</span>
+                              <span className="text-sm text-arc-slate-500">({program.reviews})</span>
                             </div>
                           ) : (
-                            <span className="text-sm text-gray-400">No ratings</span>
+                            <span className="text-sm text-arc-slate-400">No ratings</span>
                           )}
                         </td>
                         <td className="px-6 py-4">
-                          <div className="font-semibold text-gray-900">₱{program.price.toLocaleString()}</div>
+                          <div className="font-semibold text-arc-navy-900">₱{program.price.toLocaleString()}</div>
                         </td>
                         <td className="px-6 py-4">
                           <Badge className={statusColors[program.status].bg + " " + statusColors[program.status].text}>
@@ -488,25 +487,25 @@ export default function ProgramsPage() {
                         <td className="px-6 py-4 text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <button className="p-2 rounded-md hover:bg-gray-100">
-                                <MoreVertical className="h-4 w-4 text-gray-500" />
+                              <button className="p-2 rounded-lg hover:bg-arc-slate-100 text-arc-slate-500">
+                                <MoreVertical className="h-4 w-4" />
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
-                                <Eye className="h-4 w-4 mr-2" />
+                              <DropdownMenuItem className="cursor-pointer hover:bg-arc-slate-50">
+                                <Eye className="h-4 w-4 mr-2 text-arc-slate-500" />
                                 View Details
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
-                                <Edit className="h-4 w-4 mr-2" />
+                              <DropdownMenuItem className="cursor-pointer hover:bg-arc-slate-50">
+                                <Edit className="h-4 w-4 mr-2 text-arc-slate-500" />
                                 Edit Program
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
-                                <Copy className="h-4 w-4 mr-2" />
+                              <DropdownMenuItem className="cursor-pointer hover:bg-arc-slate-50">
+                                <Copy className="h-4 w-4 mr-2 text-arc-slate-500" />
                                 Duplicate
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-red-600">
+                              <DropdownMenuItem className="cursor-pointer text-red-600 hover:bg-red-50">
                                 <Trash2 className="h-4 w-4 mr-2" />
                                 Delete
                               </DropdownMenuItem>
@@ -525,30 +524,35 @@ export default function ProgramsPage() {
 
       {/* Add Program Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white">
-              <h2 className="text-lg font-semibold">Create New Program</h2>
-              <button onClick={() => setShowAddModal(false)} className="p-1 rounded-md hover:bg-gray-100">
-                <X className="h-5 w-5" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-arc-navy-950/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-arc-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-arc-slate-100 bg-arc-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-arc-orange-100 flex items-center justify-center">
+                  <Plus className="h-5 w-5 text-arc-orange-600" />
+                </div>
+                <h2 className="text-lg font-bold text-arc-navy-900">Create New Program</h2>
+              </div>
+              <button onClick={() => setShowAddModal(false)} className="p-2 rounded-lg hover:bg-arc-slate-100 transition-colors">
+                <X className="h-5 w-5 text-arc-slate-500" />
               </button>
             </div>
             <div className="p-6 space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Program Name</label>
-                <Input placeholder="e.g., Grade 10 Mathematics" />
+                <label className="block text-sm font-semibold text-arc-navy-900 mb-2">Program Name</label>
+                <Input placeholder="e.g., Grade 10 Mathematics" className="border-arc-slate-200 focus:border-arc-navy-500" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <label className="block text-sm font-semibold text-arc-navy-900 mb-2">Description</label>
                 <textarea
-                  className="w-full h-24 px-3 py-2 rounded-md border border-input bg-background text-sm"
+                  className="w-full h-24 px-3 py-2 rounded-lg border border-arc-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-arc-navy-500"
                   placeholder="Describe what this program covers..."
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Education Stage</label>
-                  <select className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm">
+                  <label className="block text-sm font-semibold text-arc-navy-900 mb-2">Education Stage</label>
+                  <select className="w-full h-11 px-3 rounded-lg border border-arc-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-arc-navy-500">
                     <option value="BASIC_EDUCATION">Basic Education</option>
                     <option value="ENTRANCE_EXAM">Entrance Exam</option>
                     <option value="COLLEGE">College</option>
@@ -557,18 +561,18 @@ export default function ProgramsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Level</label>
-                  <Input placeholder="e.g., Grade 10" />
+                  <label className="block text-sm font-semibold text-arc-navy-900 mb-2">Level</label>
+                  <Input placeholder="e.g., Grade 10" className="border-arc-slate-200 focus:border-arc-navy-500" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Price (₱)</label>
-                  <Input type="number" placeholder="1999" />
+                  <label className="block text-sm font-semibold text-arc-navy-900 mb-2">Price (₱)</label>
+                  <Input type="number" placeholder="1999" className="border-arc-slate-200 focus:border-arc-navy-500" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                  <select className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm">
+                  <label className="block text-sm font-semibold text-arc-navy-900 mb-2">Status</label>
+                  <select className="w-full h-11 px-3 rounded-lg border border-arc-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-arc-navy-500">
                     <option value="draft">Draft</option>
                     <option value="published">Published</option>
                     <option value="beta">Beta</option>
@@ -576,13 +580,13 @@ export default function ProgramsPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Cover Image URL</label>
-                <Input placeholder="https://..." />
+                <label className="block text-sm font-semibold text-arc-navy-900 mb-2">Cover Image URL</label>
+                <Input placeholder="https://..." className="border-arc-slate-200 focus:border-arc-navy-500" />
               </div>
             </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50">
-              <Button variant="outline" onClick={() => setShowAddModal(false)}>Cancel</Button>
-              <Button>Create Program</Button>
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-arc-slate-100 bg-arc-slate-50">
+              <Button variant="outline" onClick={() => setShowAddModal(false)} className="border-arc-slate-200">Cancel</Button>
+              <Button variant="accent" className="shadow-lg shadow-arc-orange-500/20">Create Program</Button>
             </div>
           </div>
         </div>

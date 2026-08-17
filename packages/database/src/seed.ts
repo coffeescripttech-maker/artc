@@ -24,16 +24,24 @@ async function main() {
     });
   }
 
-  // Create super admin
-  const adminPassword = await hash("admin123", 10);
+  console.log("Created roles");
+
+  // ============================================================
+  // SAMPLE USERS FOR TESTING
+  // ============================================================
+
+  // All passwords are: Test@1234 (for consistency)
+  const testPassword = await hash("Test@1234", 10);
+
+  // Super Admin
   const admin = await prisma.user.upsert({
     where: { email: "admin@aratc.edu.ph" },
     update: {},
     create: {
       email: "admin@aratc.edu.ph",
-      passwordHash: adminPassword,
+      passwordHash: testPassword,
       firstName: "ARATC",
-      lastName: "Admin",
+      lastName: "Administrator",
       status: "ACTIVE",
       roles: {
         create: {
@@ -44,8 +52,132 @@ async function main() {
       },
     },
   });
+  console.log(`✓ Admin: ${admin.email} / Test@1234`);
 
-  console.log(`Created admin user: ${admin.email}`);
+  // Content Admin
+  const contentAdmin = await prisma.user.upsert({
+    where: { email: "content@aratc.edu.ph" },
+    update: {},
+    create: {
+      email: "content@aratc.edu.ph",
+      passwordHash: testPassword,
+      firstName: "Maria",
+      lastName: "Santos",
+      status: "ACTIVE",
+      roles: {
+        create: {
+          role: {
+            connect: { name: "content_admin" },
+          },
+        },
+      },
+    },
+  });
+  console.log(`✓ Content Admin: ${contentAdmin.email} / Test@1234`);
+
+  // School Admin
+  const schoolAdmin = await prisma.user.upsert({
+    where: { email: "school@aratc.edu.ph" },
+    update: {},
+    create: {
+      email: "school@aratc.edu.ph",
+      passwordHash: testPassword,
+      firstName: "Juan",
+      lastName: "Dela Cruz",
+      status: "ACTIVE",
+      roles: {
+        create: {
+          role: {
+            connect: { name: "school_admin" },
+          },
+        },
+      },
+    },
+  });
+  console.log(`✓ School Admin: ${schoolAdmin.email} / Test@1234`);
+
+  // Teacher
+  const teacher = await prisma.user.upsert({
+    where: { email: "teacher@aratc.edu.ph" },
+    update: {},
+    create: {
+      email: "teacher@aratc.edu.ph",
+      passwordHash: testPassword,
+      firstName: "Pedro",
+      lastName: "Garcia",
+      status: "ACTIVE",
+      roles: {
+        create: {
+          role: {
+            connect: { name: "teacher" },
+          },
+        },
+      },
+    },
+  });
+  console.log(`✓ Teacher: ${teacher.email} / Test@1234`);
+
+  // Student
+  const student = await prisma.user.upsert({
+    where: { email: "student@aratc.edu.ph" },
+    update: {},
+    create: {
+      email: "student@aratc.edu.ph",
+      passwordHash: testPassword,
+      firstName: "Ana",
+      lastName: "Reyes",
+      status: "ACTIVE",
+      roles: {
+        create: {
+          role: {
+            connect: { name: "student" },
+          },
+        },
+      },
+      learnerProfile: {
+        create: {
+          currentStage: "BASIC_EDUCATION",
+          currentGradeLevel: "GRADE_7",
+          preferredLanguage: "fil",
+        },
+      },
+    },
+  });
+  console.log(`✓ Student: ${student.email} / Test@1234`);
+
+  // Parent
+  const parent = await prisma.user.upsert({
+    where: { email: "parent@aratc.edu.ph" },
+    update: {},
+    create: {
+      email: "parent@aratc.edu.ph",
+      passwordHash: testPassword,
+      firstName: "Roberto",
+      lastName: "Reyes",
+      status: "ACTIVE",
+      roles: {
+        create: {
+          role: {
+            connect: { name: "parent" },
+          },
+        },
+      },
+    },
+  });
+  console.log(`✓ Parent: ${parent.email} / Test@1234`);
+
+  console.log("\n===========================================");
+  console.log("  SAMPLE LOGIN CREDENTIALS");
+  console.log("===========================================");
+  console.log("  Email                  | Password    | Role");
+  console.log("-------------------------|--------------|----------------");
+  console.log("  admin@aratc.edu.ph     | Test@1234    | Super Admin");
+  console.log("  content@aratc.edu.ph   | Test@1234    | Content Admin");
+  console.log("  school@aratc.edu.ph    | Test@1234    | School Admin");
+  console.log("  teacher@aratc.edu.ph   | Test@1234    | Teacher");
+  console.log("  student@aratc.edu.ph   | Test@1234    | Student");
+  console.log("  parent@aratc.edu.ph    | Test@1234    | Parent");
+  console.log("===========================================\n");
 
   // Create sample Grade 7 Mathematics program
   const program = await prisma.program.upsert({
