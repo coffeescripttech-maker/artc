@@ -30,9 +30,11 @@ function textToHtml(text: string): string {
 export function BlockFields({
   block,
   onUpdate,
+  onSlash,
 }: {
   block: LessonBlock;
   onUpdate: (patch: Record<string, unknown>) => void;
+  onSlash?: () => void;
 }) {
   switch (block.type) {
     case "heading":
@@ -61,6 +63,7 @@ export function BlockFields({
           value={block.html || textToHtml(block.text)}
           onChange={(html, text) => onUpdate({ html, text })}
           placeholder="Write the paragraph text..."
+          onSlash={onSlash}
         />
       );
 
@@ -110,6 +113,7 @@ export function BlockFields({
             value={block.html || textToHtml(block.text)}
             onChange={(html, text) => onUpdate({ html, text })}
             placeholder="Worked example / solution..."
+            onSlash={onSlash}
           />
         </div>
       );
@@ -130,6 +134,7 @@ export function BlockFields({
             value={block.html || textToHtml(block.text)}
             onChange={(html, text) => onUpdate({ html, text })}
             placeholder="Callout message..."
+            onSlash={onSlash}
           />
         </div>
       );

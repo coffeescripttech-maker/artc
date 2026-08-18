@@ -7,6 +7,7 @@ import { WorkspaceHeader, WorkspaceTabs } from "@/components/admin";
 import { LessonCanvas } from "@/components/admin/lesson-canvas";
 import { BlockProperties } from "@/components/admin/block-properties";
 import { BlockLibrary } from "@/components/admin/lesson-block-library";
+import { BlockPicker } from "@/components/admin/block-picker";
 import { LessonBlockRenderer } from "@/components/lesson/block-renderer";
 import { lessonsApi } from "@/lib/api/client";
 import { Button, Badge, Input } from "@/components/ui";
@@ -32,6 +33,7 @@ import {
   AlertCircle,
   FileText,
   List,
+  Plus,
   Settings as SettingsIcon,
 } from "lucide-react";
 
@@ -129,6 +131,10 @@ export default function LessonEditorPage() {
   const [status, setStatus] = useState<LessonApi["status"]>("DRAFT");
   const [blocks, setBlocks] = useState<LessonBlock[]>([]);
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [blockPicker, setBlockPicker] = useState<{ open: boolean; afterId: string | null }>({
+    open: false,
+    afterId: null,
+  });
 
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
@@ -256,6 +262,23 @@ export default function LessonEditorPage() {
     const nb = createBlock(t);
     setBlocks((prev) => [...prev, nb]);
     setSelectedBlockId(nb.id);
+    setActiveTab("content");
+  };
+
+  const openBlockPicker = (afterId: string | null) => setBlockPicker({ open: true, afterId });
+
+  const insertBlockAt = (t: BlockType, afterId: string | null) => {
+    const nb = createBlock(t);
+    const idx = afterId ? blocks.findIndex((b) => b.id === afterId) : -1;
+    if (idx < 0) {
+      setBlocks([...blocks, nb]);
+    } else {
+      const next = [...blocks];
+      next.splice(idx + 1, 0, nb);
+      setBlocks(next);
+    }
+    setSelectedBlockId(nb.id);
+    setBlockPicker({ open: false, afterId: null });
     setActiveTab("content");
   };
 
@@ -503,6 +526,20 @@ export default function LessonEditorPage() {
                 onDelete={removeBlock}
                 onConvert={convertBlock}
               />
+
+              {/* Add content */}
+              <div className="mt-4 flex items-center gap-3">
+                <div className="flex-1 h-px bg-arc-slate-200" />
+                <button
+                  type="button"
+                  onClick={() => openBlockPicker(null)}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-arc-slate-200 bg-white text-sm font-medium text-arc-slate-600 hover:border-arc-orange-300 hover:text-arc-orange-600 transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add content
+                </button>
+                <div className="flex-1 h-px bg-arc-slate-200" />
+              </div>
             </div>
           </main>
 
@@ -510,10 +547,12 @@ export default function LessonEditorPage() {
           <aside className="w-80 shrink-0 border-l border-arc-slate-200 bg-white p-5 pb-28 overflow-y-auto">
             {selectedBlock ? (
               <BlockProperties
+                key={selectedBlock.id}
                 block={selectedBlock}
                 onUpdate={(patch) => updateBlock(selectedBlock.id, patch)}
                 onDuplicate={() => duplicateBlock(selectedBlock.id)}
                 onDelete={() => removeBlock(selectedBlock.id)}
+                onSlash={() => openBlockPicker(selectedBlock.id)}
               />
             ) : (
               <>
@@ -645,6 +684,11 @@ export default function LessonEditorPage() {
           </div>
         </div>
       </div>
+      <BlockPicker
+        open={blockPicker.open}
+        onClose={() => setBlockPicker({ open: false, afterId: null })}
+        onPick={(t) => insertBlockAt(t, blockPicker.afterId)}
+      />
     </>
   );
 }

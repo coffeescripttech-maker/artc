@@ -21,13 +21,15 @@ interface RichTextEditorProps {
   value?: string;
   onChange: (html: string, text: string) => void;
   placeholder?: string;
+  /** Called when the user types "/" in an empty editor (opens the block picker). */
+  onSlash?: () => void;
 }
 
 /**
  * Tiptap-based inline rich text editor for text-family blocks.
  * Emits both HTML (rich) and plain text (fallback) on change.
  */
-export function RichTextEditor({ value = "", onChange, placeholder }: RichTextEditorProps) {
+export function RichTextEditor({ value = "", onChange, placeholder, onSlash }: RichTextEditorProps) {
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -38,12 +40,20 @@ export function RichTextEditor({ value = "", onChange, placeholder }: RichTextEd
         autolink: true,
         protocols: ["http", "https", "mailto"],
       }),
-      Placeholder.configure({ placeholder: placeholder || "Write here..." }),
+      Placeholder.configure({ placeholder: placeholder || "Write here…  (type '/' for blocks)" }),
     ],
     content: value,
     editorProps: {
       attributes: {
         class: "rich-text focus:outline-none min-h-[90px] px-3 py-2",
+      },
+      handleKeyDown: (view, event) => {
+        if (event.key === "/" && onSlash && view.state.doc.textContent.length === 0) {
+          event.preventDefault();
+          onSlash();
+          return true;
+        }
+        return false;
       },
     },
     onUpdate: ({ editor }) => onChange(editor.getHTML(), editor.getText()),

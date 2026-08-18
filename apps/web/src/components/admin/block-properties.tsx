@@ -12,11 +12,13 @@ export function BlockProperties({
   onUpdate,
   onDuplicate,
   onDelete,
+  onSlash,
 }: {
   block: LessonBlock;
   onUpdate: (patch: Record<string, unknown>) => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  onSlash?: () => void;
 }) {
   return (
     <div className="space-y-4">
@@ -44,7 +46,7 @@ export function BlockProperties({
         </div>
       </div>
 
-      <BlockFields block={block} onUpdate={onUpdate} />
+      <BlockFields block={block} onUpdate={onUpdate} onSlash={onSlash} />
     </div>
   );
 }
