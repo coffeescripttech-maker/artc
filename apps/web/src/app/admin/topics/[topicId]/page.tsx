@@ -129,6 +129,7 @@ export default function TopicDetailPage() {
 
   const handleAddLesson = async (data: {
     title: string;
+    slug: string;
     description: string;
     type: string;
     topicId?: string;
@@ -136,33 +137,18 @@ export default function TopicDetailPage() {
     subjectId?: string;
     durationMinutes?: number;
   }) => {
-    try {
-      const newLesson = await lessonsApi.create(
-        {
-          title: data.title,
-          topicId: data.topicId || topicId,
-          description: data.description,
-          type: data.type,
-          durationMinutes: data.durationMinutes
-        },
-        ""
-      );
-      setLessons([...lessons, newLesson as Lesson]);
-      setShowLessonForm(false);
-    } catch (err) {
-      // Fallback to local state
-      const newLesson: Lesson = {
-        id: Date.now().toString(),
-        title: data.title,
-        slug: data.title.toLowerCase().replace(/\s+/g, "-"),
-        type: data.type as Lesson["type"],
-        durationMinutes: data.durationMinutes,
-        status: "DRAFT",
-        orderIndex: lessons.length,
-      };
-      setLessons([...lessons, newLesson]);
-      setShowLessonForm(false);
-    }
+    // Let errors propagate so the LessonForm surfaces them instead of silently
+    // faking a local lesson that never persists.
+    const newLesson = await lessonsApi.create({
+      title: data.title,
+      slug: data.slug,
+      topicId: data.topicId || topicId,
+      description: data.description || undefined,
+      type: data.type,
+      durationMinutes: data.durationMinutes,
+    });
+    setLessons([...lessons, newLesson as Lesson]);
+    setShowLessonForm(false);
   };
 
   const handleDeleteLesson = async (lessonId: string) => {

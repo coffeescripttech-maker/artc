@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { DashboardHeader } from "@/components/dashboard";
+import { WorkspaceHeader } from "@/components/admin";
 import { curriculumApi, programsApi } from "@/lib/api/client";
 import { Button, Input, Card, CardContent } from "@/components/ui";
 import {
@@ -134,15 +134,24 @@ export default function NewCurriculumPage() {
     }
   };
 
+  const selectedProgram = programs.find((p) => p.id === formData.programId);
+  const breadcrumbs = selectedProgram
+    ? [
+        { label: "Programs", href: "/admin/programs" },
+        { label: selectedProgram.name, href: `/admin/programs/${selectedProgram.id}?tab=curriculum` },
+        { label: "New Curriculum" },
+      ]
+    : [
+        { label: "Curriculums", href: "/admin/curriculums" },
+        { label: "New Curriculum" },
+      ];
+
   return (
     <>
-      <DashboardHeader
+      <WorkspaceHeader
         title="Create New Curriculum"
         subtitle="Add a curriculum to define learning paths within a program"
-        breadcrumbs={[
-          { label: "Curriculums", href: "/admin/curriculums" },
-          { label: "New Curriculum" },
-        ]}
+        breadcrumbs={breadcrumbs}
       />
 
       <div className="p-6 max-w-2xl mx-auto">

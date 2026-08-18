@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardHeader } from "@/components/dashboard";
 import { Button, Input, Badge, Card, CardContent } from "@/components/ui";
-import { ProgramCard } from "@/components/admin";
+import { ProgramCard, ConfirmModal } from "@/components/admin";
 import { programsApi } from "@/lib/api/client";
 import {
   Search,
@@ -34,6 +34,12 @@ interface Program {
   };
 }
 
+// Build a unique, URL-safe slug for a duplicated program (slug is @unique in the DB).
+function makeCopySlug(slug: string): string {
+  const suffix = Math.random().toString(36).slice(2, 6);
+  return `${slug}-copy-${suffix}`;
+}
+
 export default function ProgramsPage() {
   const router = useRouter();
   const [programs, setPrograms] = useState<Program[]>([]);
@@ -42,6 +48,7 @@ export default function ProgramsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [programToDelete, setProgramToDelete] = useState<Program | null>(null);
 
   // Fetch programs on mount
   useEffect(() => {
@@ -73,6 +80,31 @@ export default function ProgramsPage() {
 
   const handleCreateProgram = () => {
     router.push("/admin/programs/new");
+  };
+
+  const handleDuplicate = async (program: Program) => {
+    setError(null);
+    try {
+      await programsApi.create({
+        name: `${program.name} (Copy)`,
+        slug: makeCopySlug(program.slug),
+        description: program.description || undefined,
+        // Program.stage is not stored on the program itself, but the create
+        // validator requires a stage — default it (service ignores it).
+        stage: "BASIC_EDUCATION",
+      });
+      await fetchPrograms();
+    } catch (err: any) {
+      console.error("Failed to duplicate program:", err);
+      setError(err?.message || "Failed to duplicate program. Please try again.");
+    }
+  };
+
+  // Thrown errors bubble up to the ConfirmModal, which shows them and stays open.
+  const handleConfirmDelete = async () => {
+    if (!programToDelete) return;
+    await programsApi.delete(programToDelete.id);
+    await fetchPrograms();
   };
 
   return (
@@ -180,7 +212,14 @@ export default function ProgramsPage() {
         {!isLoading && viewMode === "grid" && (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {filteredPrograms.map((program) => (
-              <ProgramCard key={program.id} program={program} />
+              <ProgramCard
+                key={program.id}
+                program={program}
+                onView={() => router.push(`/admin/programs/${program.id}`)}
+                onEdit={() => router.push(`/admin/programs/${program.id}/edit`)}
+                onDuplicate={() => handleDuplicate(program)}
+                onDelete={() => setProgramToDelete(program)}
+              />
             ))}
           </div>
         )}
@@ -206,6 +245,58 @@ export default function ProgramsPage() {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={!!programToDelete}
+        onClose={() => setProgramToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        variant="danger"
+        title="Delete Program"
+        confirmLabel="Delete Program"
+        busyLabel="Deleting..."
+        description={
+          programToDelete && (
+            <div className="space-y-3">
+              <p>
+                You are about to permanently delete{" "}
+                <span className="font-semibold text-arc-navy-900">
+                  {programToDelete.name}
+                </span>
+                . This action cannot be undone.
+              </p>
+              <ul className="space-y-1.5 rounded-lg border border-arc-slate-200 bg-arc-slate-50 p-3 text-xs">
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 text-arc-red-500">•</span>
+                  <span>
+                    <span className="font-semibold">
+                      {programToDelete._count?.enrollments ?? 0}
+                    </span>{" "}
+                    student enrollment(s), plus any batches and CET links, will be
+                    permanently removed.
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 text-arc-slate-400">•</span>
+                  <span>
+                    <span className="font-semibold">
+                      {programToDelete._count?.curriculums ?? 0}
+                    </span>{" "}
+                    curriculum(s) will be{" "}
+                    <span className="font-semibold">unlinked</span> — kept, not deleted.
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 text-arc-slate-400">•</span>
+                  <span>
+                    Reusable subjects, modules, topics, and lessons will{" "}
+                    <span className="font-semibold">not</span> be affected.
+                  </span>
+                </li>
+              </ul>
+            </div>
+          )
+        }
+      />
     </>
   );
 }

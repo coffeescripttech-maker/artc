@@ -40,6 +40,7 @@ interface ProgramCardProps {
       enrollments?: number;
     };
   };
+  onView?: () => void;
   onEdit?: () => void;
   onDuplicate?: () => void;
   onDelete?: () => void;
@@ -53,6 +54,7 @@ const statusConfig: Record<string, { bg: string; text: string; label: string }> 
 
 export function ProgramCard({
   program,
+  onView,
   onEdit,
   onDuplicate,
   onDelete,
@@ -93,7 +95,7 @@ export function ProgramCard({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onEdit} className="cursor-pointer">
+              <DropdownMenuItem onClick={onView} className="cursor-pointer">
                 <Eye className="h-4 w-4 mr-2 text-arc-slate-500" />
                 View Details
               </DropdownMenuItem>

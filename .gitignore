@@ -39,3 +39,7 @@ coverage/
 # Misc
 *.pem
 .cache/
+
+# Uploaded media (local storage; use object storage/CDN in production)
+uploads/
+apps/api/uploads/

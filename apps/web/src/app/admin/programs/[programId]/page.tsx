@@ -24,6 +24,8 @@ import {
   Search,
   Minimize2,
   Maximize2,
+  List,
+  Info,
 } from "lucide-react";
 
 // Types
@@ -101,6 +103,8 @@ interface Topic {
   moduleName?: string;
   subjectId?: string;
   subjectName?: string;
+  curriculumId?: string;
+  curriculumName?: string;
 }
 
 interface Lesson {
@@ -116,6 +120,8 @@ interface Lesson {
   moduleName?: string;
   subjectId?: string;
   subjectName?: string;
+  curriculumId?: string;
+  curriculumName?: string;
 }
 
 interface Question {
@@ -135,6 +141,57 @@ interface Assessment {
   _count?: {
     questions: number;
   };
+}
+
+// Compact hierarchy path (e.g. Curriculum › Subject › Module › Topic)
+function PathTrail({
+  segments,
+  className = "",
+}: {
+  segments: (string | undefined | null)[];
+  className?: string;
+}) {
+  const items = segments.filter((s): s is string => Boolean(s));
+  if (items.length === 0) return null;
+  return (
+    <div className={`flex items-center gap-1 text-xs text-arc-slate-400 min-w-0 ${className}`}>
+      {items.map((seg, i) => (
+        <span key={i} className="flex items-center gap-1 min-w-0">
+          {i > 0 && <ChevronRight className="h-3 w-3 flex-shrink-0 text-arc-slate-300" />}
+          <span className="truncate max-w-[10rem]">{seg}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Info banner for the read-only aggregate tabs, pointing admins to the
+// curriculum where subjects/modules/topics/lessons are actually managed.
+function CurriculumHint({
+  label,
+  hasCurriculum,
+  onOpen,
+}: {
+  label: string;
+  hasCurriculum: boolean;
+  onOpen: () => void;
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-arc-slate-200 bg-arc-slate-50 px-4 py-3 text-sm">
+      <Info className="h-5 w-5 flex-shrink-0 text-arc-orange-500 mt-0.5" />
+      <p className="text-arc-slate-600">
+        This is a read-only view. {label} are managed inside a curriculum.{" "}
+        <button
+          type="button"
+          onClick={onOpen}
+          className="font-medium text-arc-orange-600 hover:underline"
+        >
+          {hasCurriculum ? "Open the curriculum" : "Create a curriculum"}
+        </button>{" "}
+        to add or edit them.
+      </p>
+    </div>
+  );
 }
 
 // Loading fallback for Suspense
@@ -172,6 +229,7 @@ function ProgramOverviewContent() {
   const [curriculums, setCurriculums] = useState<Curriculum[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [modules, setModules] = useState<Module[]>([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
@@ -211,8 +269,8 @@ function ProgramOverviewContent() {
       setExpandedSubjects(new Set());
       setExpandedModules(new Set());
     } else {
-      setExpandedSubjects(new Set(subjects.map(s => s.id)));
-      setExpandedModules(new Set(modules.map(m => m.id)));
+      setExpandedSubjects(new Set(subjects.map((s) => s.id)));
+      setExpandedModules(new Set(modules.map((m) => m.id)));
     }
     setAllExpanded(!allExpanded);
   };
@@ -273,9 +331,11 @@ function ProgramOverviewContent() {
         // Extract subjects, modules, lessons from curriculum hierarchy
         const allSubjects: Subject[] = [];
         const allModules: Module[] = [];
+        const allTopics: Topic[] = [];
         const allLessons: Lesson[] = [];
         const seenSubjectIds = new Set<string>();
         const seenModuleIds = new Set<string>();
+        const seenTopicIds = new Set<string>();
         const seenLessonIds = new Set<string>();
 
         for (const curriculum of curriculumsData as any[]) {
@@ -316,6 +376,25 @@ function ProgramOverviewContent() {
 
                   // Extract topics and lessons from this module
                   for (const topic of module.topics || []) {
+                    if (!seenTopicIds.has(topic.id)) {
+                      seenTopicIds.add(topic.id);
+                      allTopics.push({
+                        id: topic.id,
+                        name: topic.name,
+                        slug: topic.slug,
+                        description: topic.description,
+                        status: topic.status,
+                        _count: { lessons: topic.lessons?.length || 0 },
+                        lessons: topic.lessons,
+                        moduleId: module.id,
+                        moduleName: module.name,
+                        subjectId: subject.id,
+                        subjectName: subject.name,
+                        curriculumId: curriculum.id,
+                        curriculumName: curriculum.name,
+                      });
+                    }
+
                     // Extract lessons from this topic
                     for (const lesson of topic.lessons || []) {
                       if (!seenLessonIds.has(lesson.id)) {
@@ -333,6 +412,8 @@ function ProgramOverviewContent() {
                           moduleName: module.name,
                           subjectId: subject.id,
                           subjectName: subject.name,
+                          curriculumId: curriculum.id,
+                          curriculumName: curriculum.name,
                         });
                       }
                     }
@@ -345,10 +426,12 @@ function ProgramOverviewContent() {
 
         setSubjects(allSubjects);
         setModules(allModules);
+        setTopics(allTopics);
         setLessons(allLessons);
 
         console.log("Extracted subjects:", allSubjects);
         console.log("Extracted modules:", allModules);
+        console.log("Extracted topics:", allTopics);
         console.log("Extracted lessons:", allLessons);
       }
 
@@ -398,6 +481,23 @@ function ProgramOverviewContent() {
     window.history.pushState({}, "", url.toString());
   };
 
+  // Subjects/modules/topics/lessons live INSIDE a curriculum (via CurriculumItem
+  // links). Route the user into the curriculum's subject manager so newly created
+  // content is actually linked to this program instead of becoming an orphan.
+  const handleBuildContent = () => {
+    if (curriculums.length === 0) {
+      // No curriculum yet — one must exist before content can be attached.
+      router.push(`/admin/curriculums/new?programId=${programId}`);
+      return;
+    }
+    if (curriculums.length === 1) {
+      router.push(`/admin/programs/${programId}/curriculum/${curriculums[0].id}?tab=subjects`);
+      return;
+    }
+    // Multiple curriculums — let the user choose which one to build in.
+    handleTabChange("curriculum");
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -424,7 +524,11 @@ function ProgramOverviewContent() {
   }
 
   const stats = [
-    { label: "Curriculums", value: program._count?.curriculums || curriculums.length || 0, icon: Layers },
+    {
+      label: "Curriculums",
+      value: program._count?.curriculums || curriculums.length || 0,
+      icon: Layers,
+    },
     { label: "Enrollments", value: program._count?.enrollments || 0, icon: Users },
     { label: "Assessments", value: program._count?.assessments || 0, icon: Award },
   ];
@@ -434,12 +538,11 @@ function ProgramOverviewContent() {
       <WorkspaceHeader
         title={program.name}
         subtitle={program.description}
-        breadcrumbs={[
-          { label: "Programs", href: "/admin/programs" },
-          { label: program.name },
-        ]}
+        breadcrumbs={[{ label: "Programs", href: "/admin/programs" }, { label: program.name }]}
         badge={program.status}
-        badgeVariant={program.status.toLowerCase() as "published" | "draft" | "archived" | "default"}
+        badgeVariant={
+          program.status.toLowerCase() as "published" | "draft" | "archived" | "default"
+        }
         stats={stats}
         actions={
           <div className="flex items-center gap-2">
@@ -462,6 +565,7 @@ function ProgramOverviewContent() {
           { id: "curriculum", label: "Curriculum", icon: BookOpen },
           { id: "subjects", label: "Subjects", icon: Layers },
           { id: "modules", label: "Modules", icon: FileText },
+          { id: "topics", label: "Topics", icon: List },
           { id: "lessons", label: "Lessons", icon: Play },
           { id: "questions", label: "Questions", icon: HelpCircle },
           { id: "assessments", label: "Assessments", icon: Award },
@@ -470,7 +574,7 @@ function ProgramOverviewContent() {
         onTabChange={handleTabChange}
       />
 
-      <div className="p-6">
+      <div className="p-6 bg-white">
         {error && (
           <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
             <p className="text-yellow-700 text-sm">{error}</p>
@@ -557,7 +661,9 @@ function ProgramOverviewContent() {
           <div className="space-y-4">
             {/* Header with search and controls */}
             <div className="flex items-center justify-between gap-4">
-              <h2 className="text-lg font-semibold text-arc-navy-900">Subjects ({subjects.length})</h2>
+              <h2 className="text-lg font-semibold text-arc-navy-900">
+                Subjects ({subjects.length})
+              </h2>
               <div className="flex items-center gap-2">
                 {/* Search */}
                 <div className="relative">
@@ -572,33 +678,30 @@ function ProgramOverviewContent() {
                 </div>
                 {/* Expand/Collapse All */}
                 <Button variant="outline" size="sm" onClick={toggleAll}>
-                  {allExpanded ? <Minimize2 className="h-4 w-4 mr-1" /> : <Maximize2 className="h-4 w-4 mr-1" />}
+                  {allExpanded ? (
+                    <Minimize2 className="h-4 w-4 mr-1" />
+                  ) : (
+                    <Maximize2 className="h-4 w-4 mr-1" />
+                  )}
                   {allExpanded ? "Collapse All" : "Expand All"}
                 </Button>
-                {/* Add Subject */}
-                <Link href={`/admin/subjects/new?programId=${programId}`}>
-                  <Button variant="accent" size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Subject
-                  </Button>
-                </Link>
               </div>
             </div>
+
+            <CurriculumHint
+              label="Subjects"
+              hasCurriculum={curriculums.length > 0}
+              onOpen={handleBuildContent}
+            />
 
             {/* Empty State */}
             {subjects.length === 0 ? (
               <div className="bg-arc-slate-50 rounded-xl p-8 text-center">
                 <Layers className="h-12 w-12 text-arc-slate-300 mx-auto mb-3" />
                 <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">No Subjects Yet</h3>
-                <p className="text-arc-slate-500 max-w-md mx-auto mb-4">
-                  Create your first subject to start building your curriculum.
+                <p className="text-arc-slate-500 max-w-md mx-auto">
+                  No subjects are linked to this program's curriculum yet.
                 </p>
-                <Link href={`/admin/subjects/new?programId=${programId}`}>
-                  <Button variant="accent" size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Subject
-                  </Button>
-                </Link>
               </div>
             ) : (
               /* Hierarchical List */
@@ -615,12 +718,13 @@ function ProgramOverviewContent() {
 
                 {/* Subject Rows with Modules */}
                 {subjects
-                  .filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .filter((s) => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
                   .map((subject) => {
                     const isExpanded = expandedSubjects.has(subject.id);
                     const isPublished = subject.status === "PUBLISHED";
                     const moduleCount = subject.modules?.length || 0;
-                    const topicCount = subject.modules?.reduce((sum, m) => sum + (m.topics?.length || 0), 0) || 0;
+                    const topicCount =
+                      subject.modules?.reduce((sum, m) => sum + (m.topics?.length || 0), 0) || 0;
 
                     return (
                       <div key={subject.id} className="space-y-1">
@@ -632,7 +736,9 @@ function ProgramOverviewContent() {
                             onClick={() => toggleSubject(subject.id)}
                             className="flex items-center justify-center w-6 h-6 rounded hover:bg-arc-slate-100"
                           >
-                            <ChevronRight className={`h-4 w-4 text-arc-slate-400 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                            <ChevronRight
+                              className={`h-4 w-4 text-arc-slate-400 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                            />
                           </button>
 
                           {/* Subject Icon & Name */}
@@ -644,21 +750,38 @@ function ProgramOverviewContent() {
                               {subject.name.charAt(0)}
                             </div>
                             <div className="min-w-0">
-                              <div className="font-medium text-arc-navy-900 truncate">{subject.name}</div>
-                              {subject.code && (
-                                <div className="text-xs text-arc-slate-500">{subject.code}</div>
-                              )}
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-medium text-arc-navy-900 truncate">
+                                  {subject.name}
+                                </span>
+                                {subject.code && (
+                                  <span className="text-xs text-arc-slate-400 font-mono flex-shrink-0">
+                                    {subject.code}
+                                  </span>
+                                )}
+                              </div>
+                              <PathTrail segments={[subject.curriculumName]} />
                             </div>
                           </div>
 
                           {/* Stats */}
-                          <div className="w-24 text-center text-sm text-arc-slate-600">{moduleCount}</div>
-                          <div className="w-24 text-center text-sm text-arc-slate-600">{topicCount}</div>
+                          <div className="w-24 text-center text-sm text-arc-slate-600">
+                            {moduleCount}
+                          </div>
+                          <div className="w-24 text-center text-sm text-arc-slate-600">
+                            {topicCount}
+                          </div>
 
                           {/* Status */}
                           <div className="w-20 text-center">
                             <Badge
-                              variant={isPublished ? "published" : subject.status === "ARCHIVED" ? "archived" : "draft"}
+                              variant={
+                                isPublished
+                                  ? "published"
+                                  : subject.status === "ARCHIVED"
+                                    ? "archived"
+                                    : "draft"
+                              }
                               className="text-xs"
                             >
                               {subject.status}
@@ -676,89 +799,109 @@ function ProgramOverviewContent() {
                         </div>
 
                         {/* Expanded Modules */}
-                        {isExpanded && subject.modules?.map((module) => {
-                          const isModuleExpanded = expandedModules.has(module.id);
-                          const isModulePublished = module.status === "PUBLISHED";
-                          const topicCount = module.topics?.length || 0;
+                        {isExpanded &&
+                          subject.modules?.map((module) => {
+                            const isModuleExpanded = expandedModules.has(module.id);
+                            const isModulePublished = module.status === "PUBLISHED";
+                            const topicCount = module.topics?.length || 0;
 
-                          return (
-                            <div key={module.id} className="pl-10 space-y-1">
-                              {/* Module Row */}
-                              <div
-                                className={`flex items-center gap-2 px-4 py-2 bg-arc-slate-50 rounded-lg border border-arc-slate-200 hover:border-arc-orange-300 transition-colors ${isModuleExpanded ? "rounded-b-none border-b-0" : ""}`}
-                              >
-                                <button
-                                  onClick={() => toggleModule(module.id)}
-                                  className="flex items-center justify-center w-5 h-5 rounded hover:bg-arc-slate-200"
-                                >
-                                  <ChevronRight className={`h-3.5 w-3.5 text-arc-slate-400 transition-transform ${isModuleExpanded ? "rotate-90" : ""}`} />
-                                </button>
-
-                                {/* Module Name */}
-                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                  <FileText className="h-4 w-4 text-arc-slate-400 flex-shrink-0" />
-                                  <div className="min-w-0">
-                                    <div className="text-sm font-medium text-arc-navy-900 truncate">{module.name}</div>
-                                    {module.description && (
-                                      <div className="text-xs text-arc-slate-500 truncate">{module.description}</div>
-                                    )}
-                                  </div>
-                                </div>
-
-                                {/* Stats */}
-                                <div className="w-24 text-center text-sm text-arc-slate-600">{topicCount}</div>
-                                <div className="w-24"></div>
-
-                                {/* Status */}
-                                <div className="w-20 text-center">
-                                  <Badge
-                                    variant={isModulePublished ? "published" : module.status === "ARCHIVED" ? "archived" : "draft"}
-                                    className="text-xs"
-                                  >
-                                    {module.status}
-                                  </Badge>
-                                </div>
-
-                                {/* Actions */}
-                                <div className="w-20">
-                                  <Link href={`/admin/modules/${module.id}`}>
-                                    <Button variant="ghost" size="sm">
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                  </Link>
-                                </div>
-                              </div>
-
-                              {/* Expanded Topics */}
-                              {isModuleExpanded && module.topics?.map((topic) => (
+                            return (
+                              <div key={module.id} className="pl-10 space-y-1">
+                                {/* Module Row */}
                                 <div
-                                  key={topic.id}
-                                  className="pl-16 flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-arc-slate-100 hover:border-arc-orange-300 transition-colors"
+                                  className={`flex items-center gap-2 px-4 py-2 bg-arc-slate-50 rounded-lg border border-arc-slate-200 hover:border-arc-orange-300 transition-colors ${isModuleExpanded ? "rounded-b-none border-b-0" : ""}`}
                                 >
-                                  <Layers className="h-4 w-4 text-arc-slate-400 flex-shrink-0" />
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-sm text-arc-navy-900 truncate">{topic.name}</div>
-                                    {topic.description && (
-                                      <div className="text-xs text-arc-slate-500 truncate">{topic.description}</div>
-                                    )}
+                                  <button
+                                    onClick={() => toggleModule(module.id)}
+                                    className="flex items-center justify-center w-5 h-5 rounded hover:bg-arc-slate-200"
+                                  >
+                                    <ChevronRight
+                                      className={`h-3.5 w-3.5 text-arc-slate-400 transition-transform ${isModuleExpanded ? "rotate-90" : ""}`}
+                                    />
+                                  </button>
+
+                                  {/* Module Name */}
+                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <FileText className="h-4 w-4 text-arc-slate-400 flex-shrink-0" />
+                                    <div className="min-w-0">
+                                      <div className="text-sm font-medium text-arc-navy-900 truncate">
+                                        {module.name}
+                                      </div>
+                                      {module.description && (
+                                        <div className="text-xs text-arc-slate-500 truncate">
+                                          {module.description}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Stats */}
+                                  <div className="w-24 text-center text-sm text-arc-slate-600">
+                                    {topicCount}
                                   </div>
                                   <div className="w-24"></div>
-                                  <div className="w-24 text-center text-sm text-arc-slate-600">
-                                    {topic._count?.lessons || 0} lessons
+
+                                  {/* Status */}
+                                  <div className="w-20 text-center">
+                                    <Badge
+                                      variant={
+                                        isModulePublished
+                                          ? "published"
+                                          : module.status === "ARCHIVED"
+                                            ? "archived"
+                                            : "draft"
+                                      }
+                                      className="text-xs"
+                                    >
+                                      {module.status}
+                                    </Badge>
                                   </div>
-                                  <div className="w-20"></div>
+
+                                  {/* Actions */}
                                   <div className="w-20">
-                                    <Link href={`/admin/topics/${topic.id}`}>
+                                    <Link href={`/admin/modules/${module.id}`}>
                                       <Button variant="ghost" size="sm">
                                         <Eye className="h-4 w-4" />
                                       </Button>
                                     </Link>
                                   </div>
                                 </div>
-                              ))}
-                            </div>
-                          );
-                        })}
+
+                                {/* Expanded Topics */}
+                                {isModuleExpanded &&
+                                  module.topics?.map((topic) => (
+                                    <div
+                                      key={topic.id}
+                                      className="pl-16 flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-arc-slate-100 hover:border-arc-orange-300 transition-colors"
+                                    >
+                                      <Layers className="h-4 w-4 text-arc-slate-400 flex-shrink-0" />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-sm text-arc-navy-900 truncate">
+                                          {topic.name}
+                                        </div>
+                                        {topic.description && (
+                                          <div className="text-xs text-arc-slate-500 truncate">
+                                            {topic.description}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="w-24"></div>
+                                      <div className="w-24 text-center text-sm text-arc-slate-600">
+                                        {topic._count?.lessons || 0} lessons
+                                      </div>
+                                      <div className="w-20"></div>
+                                      <div className="w-20">
+                                        <Link href={`/admin/topics/${topic.id}`}>
+                                          <Button variant="ghost" size="sm">
+                                            <Eye className="h-4 w-4" />
+                                          </Button>
+                                        </Link>
+                                      </div>
+                                    </div>
+                                  ))}
+                              </div>
+                            );
+                          })}
                       </div>
                     );
                   })}
@@ -771,7 +914,9 @@ function ProgramOverviewContent() {
         {activeTab === "modules" && (
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-4">
-              <h2 className="text-lg font-semibold text-arc-navy-900">Modules ({modules.length})</h2>
+              <h2 className="text-lg font-semibold text-arc-navy-900">
+                Modules ({modules.length})
+              </h2>
               <div className="flex items-center gap-2">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-arc-slate-400" />
@@ -783,40 +928,33 @@ function ProgramOverviewContent() {
                     className="pl-9 pr-4 py-2 border border-arc-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-arc-orange-500 w-64"
                   />
                 </div>
-                <Link href={`/admin/modules/new?programId=${programId}`}>
-                  <Button variant="accent" size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Module
-                  </Button>
-                </Link>
               </div>
             </div>
+
+            <CurriculumHint
+              label="Modules"
+              hasCurriculum={curriculums.length > 0}
+              onOpen={handleBuildContent}
+            />
             {modules.length === 0 ? (
               <div className="bg-arc-slate-50 rounded-xl p-8 text-center">
                 <FileText className="h-12 w-12 text-arc-slate-300 mx-auto mb-3" />
                 <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">No Modules Yet</h3>
-                <p className="text-arc-slate-500 max-w-md mx-auto mb-4">
-                  Create your first module to organize your content.
+                <p className="text-arc-slate-500 max-w-md mx-auto">
+                  No modules are linked to this program's curriculum yet.
                 </p>
-                <Link href={`/admin/modules/new?programId=${programId}`}>
-                  <Button variant="accent" size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Module
-                  </Button>
-                </Link>
               </div>
             ) : (
               <div className="space-y-2">
                 {/* Column Headers */}
                 <div className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-arc-slate-500 bg-arc-slate-50 rounded-lg">
                   <div className="flex-1">Name</div>
-                  <div className="w-32">Subject</div>
                   <div className="w-24 text-center">Topics</div>
                   <div className="w-20 text-center">Status</div>
                   <div className="w-16"></div>
                 </div>
                 {modules
-                  .filter(m => m.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .filter((m) => m.name.toLowerCase().includes(searchQuery.toLowerCase()))
                   .map((module) => {
                     const isPublished = module.status === "PUBLISHED";
                     const topicCount = module.topics?.length || 0;
@@ -827,18 +965,23 @@ function ProgramOverviewContent() {
                       >
                         <FileText className="h-5 w-5 text-arc-slate-400 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-arc-navy-900 truncate">{module.name}</div>
-                          {module.description && (
-                            <div className="text-xs text-arc-slate-500 truncate">{module.description}</div>
-                          )}
+                          <div className="font-medium text-arc-navy-900 truncate">
+                            {module.name}
+                          </div>
+                          <PathTrail segments={[module.curriculumName, module.subjectName]} />
                         </div>
-                        <div className="w-32 text-sm text-arc-slate-600 truncate">
-                          {module.subjectName || "-"}
+                        <div className="w-24 text-center text-sm text-arc-slate-600">
+                          {topicCount}
                         </div>
-                        <div className="w-24 text-center text-sm text-arc-slate-600">{topicCount}</div>
                         <div className="w-20 text-center">
                           <Badge
-                            variant={isPublished ? "published" : module.status === "ARCHIVED" ? "archived" : "draft"}
+                            variant={
+                              isPublished
+                                ? "published"
+                                : module.status === "ARCHIVED"
+                                  ? "archived"
+                                  : "draft"
+                            }
                             className="text-xs"
                           >
                             {module.status}
@@ -859,11 +1002,103 @@ function ProgramOverviewContent() {
           </div>
         )}
 
+        {/* Topics Tab */}
+        {activeTab === "topics" && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-lg font-semibold text-arc-navy-900">Topics ({topics.length})</h2>
+              <div className="flex items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-arc-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search topics..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 pr-4 py-2 border border-arc-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-arc-orange-500 w-64"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <CurriculumHint
+              label="Topics"
+              hasCurriculum={curriculums.length > 0}
+              onOpen={handleBuildContent}
+            />
+            {topics.length === 0 ? (
+              <div className="bg-arc-slate-50 rounded-xl p-8 text-center">
+                <List className="h-12 w-12 text-arc-slate-300 mx-auto mb-3" />
+                <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">No Topics Yet</h3>
+                <p className="text-arc-slate-500 max-w-md mx-auto">
+                  No topics are linked to this program's curriculum yet.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {/* Column Headers */}
+                <div className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-arc-slate-500 bg-arc-slate-50 rounded-lg">
+                  <div className="flex-1">Name</div>
+                  <div className="w-24 text-center">Lessons</div>
+                  <div className="w-20 text-center">Status</div>
+                  <div className="w-16"></div>
+                </div>
+                {topics
+                  .filter((t) => t.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map((topic) => {
+                    const isPublished = topic.status === "PUBLISHED";
+                    const lessonCount = topic.lessons?.length ?? topic._count?.lessons ?? 0;
+                    return (
+                      <div
+                        key={topic.id}
+                        className="flex items-center gap-2 px-4 py-3 bg-white rounded-lg border border-arc-slate-200 hover:border-arc-orange-300 transition-colors"
+                      >
+                        <List className="h-5 w-5 text-arc-slate-400 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-arc-navy-900 truncate">{topic.name}</div>
+                          <PathTrail
+                            segments={[topic.curriculumName, topic.subjectName, topic.moduleName]}
+                          />
+                        </div>
+                        <div className="w-24 text-center text-sm text-arc-slate-600">
+                          {lessonCount}
+                        </div>
+                        <div className="w-20 text-center">
+                          <Badge
+                            variant={
+                              isPublished
+                                ? "published"
+                                : topic.status === "ARCHIVED"
+                                  ? "archived"
+                                  : "draft"
+                            }
+                            className="text-xs"
+                          >
+                            {topic.status}
+                          </Badge>
+                        </div>
+                        <div className="w-16">
+                          <Link href={`/admin/topics/${topic.id}`}>
+                            <Button variant="ghost" size="sm">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Lessons Tab */}
         {activeTab === "lessons" && (
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-4">
-              <h2 className="text-lg font-semibold text-arc-navy-900">Lessons ({lessons.length})</h2>
+              <h2 className="text-lg font-semibold text-arc-navy-900">
+                Lessons ({lessons.length})
+              </h2>
               <div className="flex items-center gap-2">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-arc-slate-400" />
@@ -875,27 +1110,21 @@ function ProgramOverviewContent() {
                     className="pl-9 pr-4 py-2 border border-arc-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-arc-orange-500 w-64"
                   />
                 </div>
-                <Link href={`/admin/lessons/new?programId=${programId}`}>
-                  <Button variant="accent" size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Lesson
-                  </Button>
-                </Link>
               </div>
             </div>
+
+            <CurriculumHint
+              label="Lessons"
+              hasCurriculum={curriculums.length > 0}
+              onOpen={handleBuildContent}
+            />
             {lessons.length === 0 ? (
               <div className="bg-arc-slate-50 rounded-xl p-8 text-center">
                 <Play className="h-12 w-12 text-arc-slate-300 mx-auto mb-3" />
                 <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">No Lessons Yet</h3>
-                <p className="text-arc-slate-500 max-w-md mx-auto mb-4">
-                  Create your first lesson to deliver content to learners.
+                <p className="text-arc-slate-500 max-w-md mx-auto">
+                  No lessons are linked to this program's curriculum yet.
                 </p>
-                <Link href={`/admin/lessons/new?programId=${programId}`}>
-                  <Button variant="accent" size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Lesson
-                  </Button>
-                </Link>
               </div>
             ) : (
               <div className="space-y-2">
@@ -903,12 +1132,11 @@ function ProgramOverviewContent() {
                 <div className="flex items-center gap-2 px-4 py-2 text-xs font-medium text-arc-slate-500 bg-arc-slate-50 rounded-lg">
                   <div className="flex-1">Title</div>
                   <div className="w-28 text-center">Type</div>
-                  <div className="w-32">Path</div>
                   <div className="w-20 text-center">Status</div>
                   <div className="w-16"></div>
                 </div>
                 {lessons
-                  .filter(l => l.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .filter((l) => l.title.toLowerCase().includes(searchQuery.toLowerCase()))
                   .map((lesson) => {
                     const isPublished = lesson.status === "PUBLISHED";
                     return (
@@ -918,31 +1146,40 @@ function ProgramOverviewContent() {
                       >
                         <Play className="h-5 w-5 text-arc-orange-400 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-arc-navy-900 truncate">{lesson.title}</div>
-                          {lesson.durationMinutes && (
-                            <div className="text-xs text-arc-slate-400 flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {lesson.durationMinutes} min
-                            </div>
-                          )}
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-medium text-arc-navy-900 truncate">
+                              {lesson.title}
+                            </span>
+                            {lesson.durationMinutes && (
+                              <span className="text-xs text-arc-slate-400 flex items-center gap-1 flex-shrink-0">
+                                <Clock className="h-3 w-3" />
+                                {lesson.durationMinutes} min
+                              </span>
+                            )}
+                          </div>
+                          <PathTrail
+                            segments={[
+                              lesson.curriculumName,
+                              lesson.subjectName,
+                              lesson.moduleName,
+                              lesson.topicName,
+                            ]}
+                          />
                         </div>
                         <div className="w-28 text-center">
                           <Badge variant="outline" className="text-xs capitalize">
                             {lesson.type?.replace("_", " ").toLowerCase()}
                           </Badge>
                         </div>
-                        <div className="w-32 text-xs text-arc-slate-500 truncate">
-                          {lesson.subjectName && (
-                            <span className="flex items-center gap-1">
-                              {lesson.subjectName}
-                              {lesson.moduleName && <ChevronRight className="h-3 w-3" />}
-                              {lesson.moduleName}
-                            </span>
-                          )}
-                        </div>
                         <div className="w-20 text-center">
                           <Badge
-                            variant={isPublished ? "published" : lesson.status === "ARCHIVED" ? "archived" : "draft"}
+                            variant={
+                              isPublished
+                                ? "published"
+                                : lesson.status === "ARCHIVED"
+                                  ? "archived"
+                                  : "draft"
+                            }
                             className="text-xs"
                           >
                             {lesson.status}
@@ -967,7 +1204,9 @@ function ProgramOverviewContent() {
         {activeTab === "questions" && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-arc-navy-900">Question Bank ({questions.length})</h2>
+              <h2 className="text-lg font-semibold text-arc-navy-900">
+                Question Bank ({questions.length})
+              </h2>
               <Link href={`/admin/question-bank/new?programId=${programId}`}>
                 <Button variant="accent" size="sm">
                   <Plus className="h-4 w-4 mr-2" />
@@ -978,9 +1217,7 @@ function ProgramOverviewContent() {
             {questions.length === 0 ? (
               <div className="bg-arc-slate-50 rounded-xl p-8 text-center">
                 <HelpCircle className="h-12 w-12 text-arc-slate-300 mx-auto mb-3" />
-                <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">
-                  No Questions Yet
-                </h3>
+                <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">No Questions Yet</h3>
                 <p className="text-arc-slate-500 max-w-md mx-auto mb-4">
                   Create your first question to build your question bank.
                 </p>
@@ -999,7 +1236,9 @@ function ProgramOverviewContent() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <p className="text-arc-navy-900 line-clamp-2">
-                            {question.stem.length > 150 ? `${question.stem.substring(0, 150)}...` : question.stem}
+                            {question.stem.length > 150
+                              ? `${question.stem.substring(0, 150)}...`
+                              : question.stem}
                           </p>
                           <div className="flex items-center gap-3 mt-2">
                             <Badge variant="outline" className="text-xs capitalize">
@@ -1007,9 +1246,13 @@ function ProgramOverviewContent() {
                             </Badge>
                             <Badge
                               variant={
-                                question.difficulty === "EASY" ? "success" :
-                                question.difficulty === "MEDIUM" ? "warning" :
-                                question.difficulty === "HARD" ? "alert" : "default"
+                                question.difficulty === "EASY"
+                                  ? "success"
+                                  : question.difficulty === "MEDIUM"
+                                    ? "warning"
+                                    : question.difficulty === "HARD"
+                                      ? "alert"
+                                      : "default"
                               }
                               className="text-xs"
                             >
@@ -1018,7 +1261,13 @@ function ProgramOverviewContent() {
                           </div>
                         </div>
                         <Badge
-                          variant={question.status === "PUBLISHED" ? "published" : question.status === "UNDER_REVIEW" ? "warning" : "draft"}
+                          variant={
+                            question.status === "PUBLISHED"
+                              ? "published"
+                              : question.status === "UNDER_REVIEW"
+                                ? "warning"
+                                : "draft"
+                          }
                           className="text-xs"
                         >
                           {question.status}
@@ -1043,7 +1292,9 @@ function ProgramOverviewContent() {
         {activeTab === "assessments" && (
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-4">
-              <h2 className="text-lg font-semibold text-arc-navy-900">Assessments ({assessments.length})</h2>
+              <h2 className="text-lg font-semibold text-arc-navy-900">
+                Assessments ({assessments.length})
+              </h2>
               <div className="flex items-center gap-2">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-arc-slate-400" />
@@ -1088,7 +1339,7 @@ function ProgramOverviewContent() {
                   <div className="w-16"></div>
                 </div>
                 {assessments
-                  .filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .filter((a) => a.name.toLowerCase().includes(searchQuery.toLowerCase()))
                   .map((assessment) => {
                     const isPublished = assessment.status === "PUBLISHED";
                     return (
@@ -1098,7 +1349,9 @@ function ProgramOverviewContent() {
                       >
                         <Award className="h-5 w-5 text-arc-slate-400 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-arc-navy-900 truncate">{assessment.name}</div>
+                          <div className="font-medium text-arc-navy-900 truncate">
+                            {assessment.name}
+                          </div>
                         </div>
                         <div className="w-28 text-center">
                           <Badge variant="outline" className="text-xs capitalize">
@@ -1110,7 +1363,13 @@ function ProgramOverviewContent() {
                         </div>
                         <div className="w-20 text-center">
                           <Badge
-                            variant={isPublished ? "published" : assessment.status === "ARCHIVED" ? "archived" : "draft"}
+                            variant={
+                              isPublished
+                                ? "published"
+                                : assessment.status === "ARCHIVED"
+                                  ? "archived"
+                                  : "draft"
+                            }
                             className="text-xs"
                           >
                             {assessment.status}

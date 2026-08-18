@@ -31,3 +31,9 @@ export class ValidationError extends ApiError {
     super(message, 400);
   }
 }
+
+export class BadRequestError extends ApiError {
+  constructor(message: string = "Bad request") {
+    super(message, 400);
+  }
+}

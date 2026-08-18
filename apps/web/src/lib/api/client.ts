@@ -159,6 +159,29 @@ export const lessonsApi = {
 };
 
 // ============================================================
+// Progress API (per-learner)
+// ============================================================
+export const progressApi = {
+  getLesson: (lessonId: string) => apiFetch(`/lessons/${lessonId}/progress`),
+  setLesson: (lessonId: string, completed: boolean, token?: string) =>
+    apiFetch(`/lessons/${lessonId}/progress`, {
+      method: "PUT",
+      body: JSON.stringify({ completed }),
+      token,
+    }),
+};
+
+// ============================================================
+// Media API (uploads)
+// ============================================================
+export const mediaApi = {
+  upload: (
+    payload: { contentBase64: string; mimeType: string; filename?: string },
+    token?: string
+  ) => apiFetch("/media", { method: "POST", body: JSON.stringify(payload), token }),
+};
+
+// ============================================================
 // Question Bank API
 // ============================================================
 export const questionsApi = {
@@ -323,6 +346,8 @@ export default {
   topics: topicsApi,
   lessons: lessonsApi,
   questions: questionsApi,
+  progress: progressApi,
+  media: mediaApi,
   assessments: assessmentsApi,
   cet: cetApi,
   programs: programsApi,

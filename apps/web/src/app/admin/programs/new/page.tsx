@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/api";
 import { EDUCATIONAL_STAGES, GRADE_LEVELS } from "@aratc/shared";
-import { DashboardHeader } from "@/components/dashboard";
+import { WorkspaceHeader } from "@/components/admin";
 import {
   Button,
   Card,
@@ -56,7 +56,14 @@ export default function NewProgramPage() {
 
   return (
     <>
-      <DashboardHeader title="Create Program" subtitle="Add a new educational program to the platform" />
+      <WorkspaceHeader
+        title="Create Program"
+        subtitle="Add a new educational program to the platform"
+        breadcrumbs={[
+          { label: "Programs", href: "/admin/programs" },
+          { label: "New Program" },
+        ]}
+      />
 
       <div className="p-6">
         <div className="max-w-2xl mx-auto">

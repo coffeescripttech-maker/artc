@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { DashboardHeader } from "@/components/dashboard";
+import { WorkspaceHeader } from "@/components/admin";
 import { lessonsApi, topicsApi } from "@/lib/api/client";
 import { Button, Input, Card, CardContent } from "@/components/ui";
 import {
@@ -113,7 +113,7 @@ export default function NewLessonPage() {
 
   return (
     <>
-      <DashboardHeader
+      <WorkspaceHeader
         title="Create New Lesson"
         subtitle="Add a lesson to teach within a topic"
         breadcrumbs={[
@@ -122,7 +122,7 @@ export default function NewLessonPage() {
         ]}
       />
 
-      <div className="p-6 max-w-2xl">
+      <div className="p-6 max-w-2xl mx-auto">
         <Link
           href="/admin/lessons"
           className="inline-flex items-center gap-2 text-arc-slate-500 hover:text-arc-slate-700 mb-6"

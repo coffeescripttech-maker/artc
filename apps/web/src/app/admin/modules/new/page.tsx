@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { DashboardHeader } from "@/components/dashboard";
+import { WorkspaceHeader } from "@/components/admin";
 import { modulesApi, subjectsApi } from "@/lib/api/client";
 import { Button, Input, Card, CardContent } from "@/components/ui";
 import {
@@ -82,7 +82,7 @@ export default function NewModulePage() {
 
   return (
     <>
-      <DashboardHeader
+      <WorkspaceHeader
         title="Create New Module"
         subtitle="Add a module to organize topics within a subject"
         breadcrumbs={[
@@ -91,7 +91,7 @@ export default function NewModulePage() {
         ]}
       />
 
-      <div className="p-6 max-w-2xl">
+      <div className="p-6 max-w-2xl mx-auto">
         <Link
           href="/admin/modules"
           className="inline-flex items-center gap-2 text-arc-slate-500 hover:text-arc-slate-700 mb-6"

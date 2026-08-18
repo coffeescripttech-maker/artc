@@ -10,6 +10,8 @@ import {
   reorder,
   bySubject,
   stats,
+  getProgress,
+  setProgress,
 } from "./controller";
 import { authenticate, requireRole } from "../../middleware/auth";
 
@@ -22,6 +24,10 @@ router.get("/topic/:topicId/stats", stats);
 
 // Filter by subject
 router.get("/subject/:subjectId", bySubject);
+
+// Learner progress (authenticated)
+router.get("/:id/progress", authenticate, getProgress);
+router.put("/:id/progress", authenticate, setProgress);
 
 // Protected admin routes
 router.post("/", authenticate, requireRole("content_admin", "super_admin"), create);

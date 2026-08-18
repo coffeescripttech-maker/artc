@@ -78,7 +78,7 @@ export async function createLesson(input: CreateLessonInput) {
       description: input.description,
       type: input.type,
       durationMinutes: input.durationMinutes,
-      content: input.content ? JSON.stringify(input.content) : undefined,
+      content: input.content ?? undefined,
       videoUrl: input.videoUrl,
       orderIndex,
       status: "DRAFT",
@@ -100,7 +100,7 @@ export async function updateLesson(id: string, input: UpdateLessonInput) {
       description: input.description,
       type: input.type,
       durationMinutes: input.durationMinutes,
-      content: input.content ? JSON.stringify(input.content) : undefined,
+      content: input.content ?? undefined,
       videoUrl: input.videoUrl,
       orderIndex: input.orderIndex,
     },
@@ -218,4 +218,66 @@ export async function getLessonStats(topicId: string) {
     totalDuration,
     videoCount,
   };
+}
+
+// ============================================================
+// Lesson progress (per learner)
+// ============================================================
+
+async function getOrCreateLearnerProfile(userId: string) {
+  const existing = await prisma.learnerProfile.findUnique({ where: { userId } });
+  if (existing) return existing;
+  return prisma.learnerProfile.create({ data: { userId } });
+}
+
+export async function getLessonProgress(userId: string, lessonId: string) {
+  const learner = await prisma.learnerProfile.findUnique({ where: { userId } });
+  if (!learner) {
+    return { lessonId, completed: false, completionPercentage: 0, mastery: "NOT_STARTED" };
+  }
+
+  const progress = await prisma.progress.findFirst({
+    where: { learnerId: learner.id, lessonId },
+  });
+
+  return {
+    lessonId,
+    completed: (progress?.completionPercentage ?? 0) >= 100,
+    completionPercentage: progress?.completionPercentage ?? 0,
+    mastery: progress?.mastery ?? "NOT_STARTED",
+  };
+}
+
+export async function setLessonProgress(userId: string, lessonId: string, completed: boolean) {
+  const lesson = await prisma.lesson.findUnique({ where: { id: lessonId } });
+  if (!lesson) {
+    throw new NotFoundError("Lesson not found");
+  }
+
+  const learner = await getOrCreateLearnerProfile(userId);
+
+  const existing = await prisma.progress.findFirst({
+    where: { learnerId: learner.id, lessonId },
+  });
+
+  const data = {
+    completionPercentage: completed ? 100 : 0,
+    mastery: completed ? ("MASTERED" as const) : ("NOT_STARTED" as const),
+    lastActivityAt: new Date(),
+  };
+
+  if (existing) {
+    await prisma.progress.update({ where: { id: existing.id }, data });
+  } else {
+    await prisma.progress.create({
+      data: {
+        learnerId: learner.id,
+        lessonId,
+        topicId: lesson.topicId,
+        ...data,
+      },
+    });
+  }
+
+  return getLessonProgress(userId, lessonId);
 }

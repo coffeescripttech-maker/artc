@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { DashboardHeader } from "@/components/dashboard";
+import { WorkspaceHeader } from "@/components/admin";
 import { assessmentsApi, programsApi, curriculumApi, subjectsApi } from "@/lib/api/client";
 import { Button, Input, Card, CardContent } from "@/components/ui";
 import {
@@ -195,7 +195,7 @@ export default function NewAssessmentPage() {
 
   return (
     <>
-      <DashboardHeader
+      <WorkspaceHeader
         title="Create New Assessment"
         subtitle="Create an assessment or exam for your learners"
         breadcrumbs={[

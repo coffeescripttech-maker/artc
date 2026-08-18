@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { validateRequest } from "../../lib/validate";
+import { validateRequest, getAuthUserId } from "../../lib/validate";
 import {
   listLessons,
   getLessonById,
@@ -11,6 +11,8 @@ import {
   reorderLessons,
   getLessonsBySubject,
   getLessonStats,
+  getLessonProgress,
+  setLessonProgress,
 } from "./service";
 
 export async function list(
@@ -34,6 +36,13 @@ export async function getById(
 ): Promise<void> {
   try {
     const lesson = await getLessonById(req.params.id);
+    // Published lessons are safe to cache on shared caches/CDNs; browsers still
+    // revalidate (max-age=0) so admins see fresh content right after editing.
+    if ((lesson as { status?: string }).status === "PUBLISHED") {
+      res.set("Cache-Control", "public, max-age=0, s-maxage=60, stale-while-revalidate=300");
+    } else {
+      res.set("Cache-Control", "no-store");
+    }
     res.json(lesson);
   } catch (error) {
     next(error);
@@ -149,6 +158,35 @@ export async function stats(
   try {
     const stats = await getLessonStats(req.params.topicId);
     res.json(stats);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getProgress(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = getAuthUserId(req);
+    const progress = await getLessonProgress(userId, req.params.id);
+    res.json(progress);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function setProgress(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = getAuthUserId(req);
+    const completed = Boolean(req.body?.completed);
+    const progress = await setLessonProgress(userId, req.params.id, completed);
+    res.json(progress);
   } catch (error) {
     next(error);
   }

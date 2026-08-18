@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import path from "path";
 import { authRoutes } from "./modules/auth/routes";
 import { programRoutes } from "./modules/programs/routes";
 import { subjectRoutes } from "./modules/subjects/routes";
@@ -11,13 +12,19 @@ import { lessonRoutes } from "./modules/lessons/routes";
 import { questionBankRoutes } from "./modules/question-bank/routes";
 import { assessmentRoutes } from "./modules/assessments/routes";
 import { cetRoutes } from "./modules/cet/routes";
+import { mediaRoutes } from "./modules/media/routes";
+import { UPLOAD_DIR } from "./modules/media/controller";
 import { errorHandler } from "./middleware/error-handler";
 
 const app = express();
 const PORT = process.env.API_PORT || 4000;
 
 app.use(cors());
-app.use(express.json());
+// Larger limit so base64 media uploads fit; content endpoints stay small.
+app.use(express.json({ limit: "20mb" }));
+
+// Serve uploaded media files
+app.use("/uploads", express.static(UPLOAD_DIR));
 
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
@@ -42,6 +49,8 @@ app.use("/api/assessments", assessmentRoutes);
 app.use("/assessments", assessmentRoutes); // Also accessible without /api prefix
 app.use("/api/cet", cetRoutes);
 app.use("/cet", cetRoutes); // Also accessible without /api prefix
+app.use("/api/media", mediaRoutes);
+app.use("/media", mediaRoutes); // Also accessible without /api prefix
 
 app.use(errorHandler);
 

@@ -95,6 +95,12 @@ export default function CurriculumDetailPage() {
     fetchCurriculum();
   }, [curriculumId]);
 
+  // Honor ?tab= deep-links (e.g. arriving from the program page "Add" buttons)
+  useEffect(() => {
+    const tab = new URLSearchParams(window.location.search).get("tab");
+    if (tab) setActiveTab(tab);
+  }, []);
+
   const fetchCurriculum = async () => {
     setIsLoading(true);
     setError(null);

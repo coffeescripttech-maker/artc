@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { DashboardHeader } from "@/components/dashboard";
+import { WorkspaceHeader } from "@/components/admin";
 import { subjectsApi } from "@/lib/api/client";
 import { Button, Input, Card, CardContent } from "@/components/ui";
 import {
@@ -82,7 +82,7 @@ export default function NewSubjectPage() {
 
   return (
     <>
-      <DashboardHeader
+      <WorkspaceHeader
         title="Create New Subject"
         subtitle="Add a reusable subject that can be used across multiple programs"
         breadcrumbs={[
@@ -91,7 +91,7 @@ export default function NewSubjectPage() {
         ]}
       />
 
-      <div className="p-6 max-w-2xl">
+      <div className="p-6 max-w-2xl mx-auto">
         <Link
           href="/admin/subjects"
           className="inline-flex items-center gap-2 text-arc-slate-500 hover:text-arc-slate-700 mb-6"
