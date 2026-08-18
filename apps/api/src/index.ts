@@ -20,8 +20,8 @@ const app = express();
 const PORT = process.env.API_PORT || 4000;
 
 app.use(cors());
-// Larger limit so base64 media uploads fit; content endpoints stay small.
-app.use(express.json({ limit: "20mb" }));
+// Larger limit so base64 media uploads fit (15MB file ≈ 20MB base64); content endpoints stay small.
+app.use(express.json({ limit: "25mb" }));
 
 // Serve uploaded media files
 app.use("/uploads", express.static(UPLOAD_DIR));

@@ -43,6 +43,8 @@ export interface ParagraphBlock {
   id: string;
   type: "paragraph";
   text: string;
+  /** Optional rich HTML (from the editor). `text` is the plain-text fallback. */
+  html?: string;
 }
 export interface ImageBlock {
   id: string;
@@ -64,12 +66,14 @@ export interface ExampleBlock {
   type: "example";
   title?: string;
   text: string;
+  html?: string;
 }
 export interface CalloutBlock {
   id: string;
   type: "callout";
   variant: CalloutVariant;
   text: string;
+  html?: string;
 }
 export interface FormulaBlock {
   id: string;
@@ -129,11 +133,11 @@ const zId = z.string().min(1);
 
 export const lessonBlockSchema = z.discriminatedUnion("type", [
   z.object({ id: zId, type: z.literal("heading"), level: z.union([z.literal(2), z.literal(3)]).default(2), text: z.string().default("") }),
-  z.object({ id: zId, type: z.literal("paragraph"), text: z.string().default("") }),
+  z.object({ id: zId, type: z.literal("paragraph"), text: z.string().default(""), html: z.string().optional() }),
   z.object({ id: zId, type: z.literal("image"), url: z.string().default(""), alt: z.string().optional(), caption: z.string().optional() }),
   z.object({ id: zId, type: z.literal("video"), provider: z.enum(VIDEO_PROVIDERS).default("url"), url: z.string().default(""), thumbnailUrl: z.string().optional(), caption: z.string().optional() }),
-  z.object({ id: zId, type: z.literal("example"), title: z.string().optional(), text: z.string().default("") }),
-  z.object({ id: zId, type: z.literal("callout"), variant: z.enum(CALLOUT_VARIANTS).default("info"), text: z.string().default("") }),
+  z.object({ id: zId, type: z.literal("example"), title: z.string().optional(), text: z.string().default(""), html: z.string().optional() }),
+  z.object({ id: zId, type: z.literal("callout"), variant: z.enum(CALLOUT_VARIANTS).default("info"), text: z.string().default(""), html: z.string().optional() }),
   z.object({ id: zId, type: z.literal("formula"), latex: z.string().default("") }),
   z.object({ id: zId, type: z.literal("divider") }),
   z.object({ id: zId, type: z.literal("resource"), url: z.string().default(""), name: z.string().default("") }),
@@ -205,7 +209,12 @@ function normalizeBlock(raw: unknown): LessonBlock | null {
     case "heading":
       return { id, type: "heading", level: b.level === 3 ? 3 : 2, text: str(b.text) };
     case "paragraph":
-      return { id, type: "paragraph", text: str(b.text ?? b.markdown ?? b.html) };
+      return {
+        id,
+        type: "paragraph",
+        text: str(b.text ?? b.markdown),
+        ...(typeof b.html === "string" ? { html: b.html } : {}),
+      };
     case "image":
       return { id, type: "image", url: str(b.url), alt: str(b.alt), caption: str(b.caption) };
     case "video":
@@ -218,13 +227,20 @@ function normalizeBlock(raw: unknown): LessonBlock | null {
         caption: str(b.caption),
       };
     case "example":
-      return { id, type: "example", title: str(b.title), text: str(b.text ?? b.markdown) };
+      return {
+        id,
+        type: "example",
+        title: str(b.title),
+        text: str(b.text ?? b.markdown),
+        ...(typeof b.html === "string" ? { html: b.html } : {}),
+      };
     case "callout":
       return {
         id,
         type: "callout",
         variant: (CALLOUT_VARIANTS as readonly string[]).includes(str(b.variant)) ? (b.variant as CalloutVariant) : "info",
         text: str(b.text ?? b.markdown),
+        ...(typeof b.html === "string" ? { html: b.html } : {}),
       };
     case "formula":
       return { id, type: "formula", latex: str(b.latex) };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Play,
   FileText,
@@ -60,9 +60,11 @@ function BlockView({ block }: { block: LessonBlock }) {
 
     case "paragraph":
       return (
-        <p className="text-arc-slate-700 leading-relaxed whitespace-pre-wrap">
-          {block.text || <span className="text-arc-slate-300">Empty paragraph</span>}
-        </p>
+        <RichText
+          html={block.html}
+          text={block.text}
+          className="text-arc-slate-700 leading-relaxed"
+        />
       );
 
     case "image":
@@ -94,8 +96,8 @@ function BlockView({ block }: { block: LessonBlock }) {
           <div className="px-4 py-2 bg-arc-slate-50 border-b border-arc-slate-200 text-sm font-semibold text-arc-navy-900">
             {block.title || "Example"}
           </div>
-          <div className="p-4 text-arc-slate-700 whitespace-pre-wrap leading-relaxed">
-            {block.text}
+          <div className="p-4">
+            <RichText html={block.html} text={block.text} className="text-arc-slate-700 leading-relaxed" />
           </div>
         </div>
       );
@@ -110,7 +112,9 @@ function BlockView({ block }: { block: LessonBlock }) {
       return (
         <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${box}`}>
           <Icon className="h-5 w-5 flex-shrink-0 mt-0.5" />
-          <p className="text-sm whitespace-pre-wrap leading-relaxed">{block.text}</p>
+          <div className="text-sm leading-relaxed flex-1 min-w-0">
+            <RichText html={block.html} text={block.text} />
+          </div>
         </div>
       );
     }
@@ -223,6 +227,85 @@ function EmptyMedia({ label }: { label: string }) {
       {label}
     </div>
   );
+}
+
+// ---- Rich text (sanitized HTML with SSR-safe plain-text fallback) ----------
+
+const ALLOWED_TAGS = new Set([
+  "P", "BR", "STRONG", "B", "EM", "I", "U", "S", "H2", "H3", "UL", "OL", "LI", "BLOCKQUOTE", "CODE", "PRE", "A",
+]);
+
+function sanitizeHtml(html: string): string {
+  if (typeof window === "undefined" || typeof DOMParser === "undefined") return "";
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const walk = (node: Node) => {
+    Array.from(node.childNodes).forEach((child) => {
+      if (child.nodeType === 1) {
+        const el = child as HTMLElement;
+        if (!ALLOWED_TAGS.has(el.tagName)) {
+          el.replaceWith(doc.createTextNode(el.textContent || ""));
+          return;
+        }
+        Array.from(el.attributes).forEach((attr) => {
+          const keepHref =
+            el.tagName === "A" &&
+            attr.name.toLowerCase() === "href" &&
+            /^(https?:|mailto:)/i.test(attr.value.trim());
+          if (!keepHref) el.removeAttribute(attr.name);
+        });
+        if (el.tagName === "A") {
+          el.setAttribute("target", "_blank");
+          el.setAttribute("rel", "noopener noreferrer");
+        }
+        walk(el);
+      } else if (child.nodeType === 8) {
+        child.remove();
+      }
+    });
+  };
+  walk(doc.body);
+  return doc.body.innerHTML;
+}
+
+function stripTags(html: string): string {
+  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function hasRich(html?: string): html is string {
+  const h = (html || "").trim();
+  return h !== "" && h !== "<p></p>";
+}
+
+function RichText({
+  html,
+  text,
+  className = "",
+}: {
+  html?: string;
+  text?: string;
+  className?: string;
+}) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  if (hasRich(html)) {
+    // Sanitize only on the client (DOMParser); SSR/first paint uses plain text.
+    if (!mounted) {
+      return <p className={`whitespace-pre-wrap ${className}`}>{text || stripTags(html)}</p>;
+    }
+    return (
+      <div className={`rich-text ${className}`} dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />
+    );
+  }
+
+  if (!text) {
+    return (
+      <p className={className}>
+        <span className="text-arc-slate-300">Empty</span>
+      </p>
+    );
+  }
+  return <p className={`whitespace-pre-wrap ${className}`}>{text}</p>;
 }
 
 export default LessonBlockRenderer;
