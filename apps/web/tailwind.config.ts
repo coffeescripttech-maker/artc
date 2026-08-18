@@ -121,8 +121,9 @@ const config: Config = {
       },
       /* ARC Typography */
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        heading: ["Inter", "system-ui", "sans-serif"],
+        sans: ["var(--font-nunito)", "system-ui", "sans-serif"],
+        heading: ["var(--font-poppins)", "system-ui", "sans-serif"],
+        body: ["var(--font-nunito)", "system-ui", "sans-serif"],
       },
       /* ARC Spacing */
       spacing: {

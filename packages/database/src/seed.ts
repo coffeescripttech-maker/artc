@@ -1,5 +1,10 @@
 import { PrismaClient, ContentStatus, QuestionType, DifficultyLevel } from "@prisma/client";
 import { hash } from "bcryptjs";
+import * as dotenv from "dotenv";
+import path from "path";
+
+// Load .env file
+dotenv.config({ path: path.join(__dirname, "../../.env") });
 
 const prisma = new PrismaClient();
 
@@ -269,6 +274,30 @@ async function main() {
     },
   });
 
+  // Create sample curriculum with all content linked
+  const curriculum = await prisma.curriculum.upsert({
+    where: { slug: "road-to-success-grade-7" },
+    update: {},
+    create: {
+      name: "Road to Success - Grade 7",
+      slug: "road-to-success-grade-7",
+      description: "Complete mathematics curriculum for Grade 7 students following the Philippine curriculum framework.",
+      stage: "BASIC_EDUCATION",
+      gradeLevel: "GRADE_7",
+      programId: program.id,
+      status: "PUBLISHED",
+      orderIndex: 1,
+      items: {
+        create: {
+          subjectId: subject.id,
+          orderIndex: 1,
+          isRequired: true,
+        },
+      },
+    },
+  });
+  console.log(`Created sample curriculum: ${curriculum.name}`);
+
   // Create sample questions
   const questions = [
     {
@@ -329,6 +358,7 @@ async function main() {
   }
 
   console.log(`Created sample program: ${program.name}`);
+  console.log(`Created sample curriculum: ${curriculum.name}`);
   console.log(`Created sample lesson: ${lesson.title}`);
   console.log("Seeding complete.");
 }

@@ -1,0 +1,459 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { WorkspaceHeader, DraggableList, type DraggableItem, QuestionForm } from "@/components/admin";
+import { assessmentsApi, questionsApi } from "@/lib/api/client";
+import { Card, CardContent, Button, Badge } from "@/components/ui";
+import {
+  Plus,
+  GripVertical,
+  Trash2,
+  Save,
+  Send,
+  Check,
+  Settings,
+  Zap,
+  Clock,
+  Target,
+  RefreshCw,
+  ArrowLeft,
+} from "lucide-react";
+
+// Types
+interface Assessment {
+  id: string;
+  name: string;
+  slug?: string;
+  type: string;
+  status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+  description?: string;
+  questionCount?: number;
+  timeLimitMinutes?: number;
+  passingScore?: number;
+  randomizeQuestions?: boolean;
+  showExplanations?: boolean;
+  _count?: {
+    questions: number;
+    attempts: number;
+  };
+}
+
+interface Question {
+  id: string;
+  stem: string;
+  type: string;
+  difficulty: "EASY" | "MEDIUM" | "HARD";
+  score: number;
+}
+
+const mockAssessment: Assessment = {
+  id: "1",
+  name: "Grade 9 Algebra Quiz",
+  slug: "grade-9-algebra-quiz",
+  type: "QUIZ",
+  status: "DRAFT",
+  description: "Quiz covering basic algebraic expressions and linear equations",
+  questionCount: 20,
+  timeLimitMinutes: 30,
+  passingScore: 70,
+  randomizeQuestions: true,
+  showExplanations: true,
+  _count: { questions: 5, attempts: 0 },
+};
+
+const mockQuestions: Question[] = [
+  { id: "1", stem: "What is the value of x in 2x + 5 = 15?", type: "MULTIPLE_CHOICE", difficulty: "EASY", score: 1 },
+  { id: "2", stem: "Solve for y: 3y - 9 = 0", type: "MULTIPLE_CHOICE", difficulty: "EASY", score: 1 },
+  { id: "3", stem: "Which of the following is an algebraic expression?", type: "MULTIPLE_CHOICE", difficulty: "MEDIUM", score: 1 },
+  { id: "4", stem: "Simplify: 4(x + 2) - 3x", type: "MULTIPLE_CHOICE", difficulty: "MEDIUM", score: 1 },
+  { id: "5", stem: "The square root of 144 is 12.", type: "TRUE_FALSE", difficulty: "EASY", score: 1 },
+];
+
+const difficultyColors: Record<string, string> = {
+  EASY: "bg-green-100 text-green-700",
+  MEDIUM: "bg-yellow-100 text-yellow-700",
+  HARD: "bg-red-100 text-red-700",
+};
+
+const difficultyBadgeVariant: Record<string, "success" | "warning" | "error"> = {
+  EASY: "success",
+  MEDIUM: "warning",
+  HARD: "error",
+};
+
+export default function AssessmentBuilderPage() {
+  const params = useParams();
+  const router = useRouter();
+  const assessmentId = params.assessmentId as string;
+  const [assessment, setAssessment] = useState<Assessment | null>(null);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [name, setName] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showQuestionForm, setShowQuestionForm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetchData();
+  }, [assessmentId]);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const [assessmentData, questionsData] = await Promise.all([
+        assessmentsApi.getById(assessmentId).catch(() => null),
+        questionsApi.getByAssessment(assessmentId).catch(() => null),
+      ]);
+
+      if (assessmentData) {
+        setAssessment(assessmentData as Assessment);
+        setName((assessmentData as Assessment).name);
+      } else {
+        setAssessment(mockAssessment);
+        setName(mockAssessment.name);
+      }
+
+      if (questionsData && Array.isArray(questionsData)) {
+        setQuestions(questionsData as Question[]);
+      } else {
+        setQuestions(mockQuestions);
+      }
+    } catch (err) {
+      console.error("Failed to fetch assessment:", err);
+      setError("Failed to load assessment. Using demo data.");
+      setAssessment(mockAssessment);
+      setName(mockAssessment.name);
+      setQuestions(mockQuestions);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const questionItems: DraggableItem[] = questions.map((question) => ({
+    id: question.id,
+    title: question.stem,
+    subtitle: `${question.type.replace("_", " ")} • ${question.score} point${question.score !== 1 ? "s" : ""}`,
+    badge: question.difficulty,
+    badgeVariant: (difficultyBadgeVariant[question.difficulty] || "default") as "success" | "warning" | "error" | "default",
+    onClick: () => console.log("Edit question:", question.id),
+    onEdit: () => console.log("Edit question:", question.id),
+    onDelete: () => handleDeleteQuestion(question.id),
+  }));
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await assessmentsApi.update(assessmentId, { name }, "");
+    } catch (err) {
+      console.error("Failed to save:", err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePublish = async () => {
+    setIsSubmitting(true);
+    try {
+      await assessmentsApi.publish(assessmentId, "");
+      router.push("/admin/assessments");
+    } catch (err) {
+      console.error("Failed to publish:", err);
+      alert("Failed to publish. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAutoGenerate = () => {
+    alert("Auto-generate questions based on topic and difficulty");
+  };
+
+  const handleAddQuestion = async (data: {
+    stem: string;
+    type: string;
+    difficulty: string;
+    options: { id: string; text: string; isCorrect: boolean }[];
+    explanation?: string;
+  }) => {
+    try {
+      const newQuestion = await questionsApi.create(
+        { stem: data.stem, type: data.type, difficulty: data.difficulty, options: data.options, explanation: data.explanation },
+        ""
+      );
+      setQuestions([...questions, newQuestion as Question]);
+      setShowQuestionForm(false);
+    } catch (err) {
+      const newQuestion: Question = {
+        id: Date.now().toString(),
+        stem: data.stem,
+        type: data.type,
+        difficulty: data.difficulty as Question["difficulty"],
+        score: 1,
+      };
+      setQuestions([...questions, newQuestion]);
+      setShowQuestionForm(false);
+    }
+  };
+
+  const handleReorderQuestions = async (reorderedItems: DraggableItem[]) => {
+    const reorderedQuestions = reorderedItems.map((item) => {
+      const question = questions.find((q) => q.id === item.id);
+      return question || null;
+    }).filter(Boolean) as Question[];
+
+    setQuestions(reorderedQuestions);
+    setIsSaving(true);
+    try {
+      await assessmentsApi.reorderQuestions(assessmentId, reorderedItems.map((i) => i.id), "");
+    } catch (err) {
+      console.error("Failed to reorder:", err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteQuestion = async (questionId: string) => {
+    if (!confirm("Are you sure you want to remove this question?")) return;
+    try {
+      await assessmentsApi.removeQuestion(assessmentId, questionId, "");
+      setQuestions(questions.filter((q) => q.id !== questionId));
+    } catch (err) {
+      setQuestions(questions.filter((q) => q.id !== questionId));
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <RefreshCw className="h-8 w-8 animate-spin text-arc-orange-500 mx-auto mb-4" />
+          <p className="text-arc-slate-500">Loading assessment...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!assessment) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-arc-navy-900 mb-2">Assessment not found</h2>
+          <p className="text-arc-slate-500 mb-4">The assessment you're looking for doesn't exist.</p>
+          <Button variant="accent" onClick={() => router.push("/admin/assessments")}>
+            Back to Assessments
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <WorkspaceHeader
+        title="Assessment Builder"
+        subtitle={assessment.description}
+        breadcrumbs={[
+          { label: "Assessments", href: "/admin/assessments" },
+          { label: assessment.name },
+        ]}
+        badge={assessment.status}
+        badgeVariant={assessment.status === "PUBLISHED" ? "success" : assessment.status === "DRAFT" ? "draft" : "default"}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={() => router.push("/admin/assessments")}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleSave} disabled={isSaving}>
+              <Save className="h-4 w-4 mr-2" />
+              {isSaving ? "Saving..." : "Save"}
+            </Button>
+            <Button variant="accent" size="sm" onClick={handlePublish} disabled={isSubmitting}>
+              <Send className="h-4 w-4 mr-2" />
+              Publish
+            </Button>
+          </div>
+        }
+      />
+
+      <div className="p-6">
+        {error && (
+          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-yellow-700 text-sm">{error}</p>
+          </div>
+        )}
+
+        <div className="flex gap-6">
+          {/* Builder Panel */}
+          <div className="flex-1 space-y-6">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Settings className="h-5 w-5 text-arc-slate-500" />
+                  <h2 className="text-lg font-semibold text-arc-navy-900">Assessment Settings</h2>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-arc-navy-900 mb-1">Assessment Name</label>
+                    <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-arc-navy-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-arc-navy-900 mb-1">Type</label>
+                    <select className="w-full h-10 px-3 border border-arc-slate-200 rounded-lg">
+                      <option value="QUIZ">Quiz</option>
+                      <option value="PRACTICE">Practice</option>
+                      <option value="DIAGNOSTIC">Diagnostic</option>
+                      <option value="MOCK_EXAM">Mock Exam</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-arc-navy-900 mb-1">Time Limit (minutes)</label>
+                    <input type="number" defaultValue={assessment.timeLimitMinutes} className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-arc-navy-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-arc-navy-900 mb-1">Passing Score (%)</label>
+                    <input type="number" defaultValue={assessment.passingScore} className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-arc-navy-500" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-semibold text-arc-navy-900">Questions</h2>
+                    <Badge variant="secondary">{questions.length} questions</Badge>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={handleAutoGenerate}>
+                      <Zap className="h-4 w-4 mr-2" />
+                      Auto-Generate
+                    </Button>
+                    <Button variant="accent" size="sm" onClick={() => setShowQuestionForm(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Question
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="bg-arc-slate-50 border border-dashed border-arc-slate-300 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-arc-slate-600 flex items-center gap-2">
+                    <GripVertical className="h-4 w-4" />
+                    Drag questions to reorder them.
+                  </p>
+                </div>
+
+                <DraggableList
+                  items={questionItems}
+                  onReorder={handleReorderQuestions}
+                  renderItem={(item, dragHandleProps) => {
+                    const question = questions.find((q) => q.id === item.id);
+                    if (!question) return null;
+
+                    return (
+                      <div className="flex items-center gap-3 p-4 bg-arc-slate-50 rounded-lg border border-arc-slate-200 hover:border-arc-orange-300 transition-colors cursor-pointer group">
+                        <button {...dragHandleProps} className="cursor-grab active:cursor-grabbing text-arc-slate-400 hover:text-arc-slate-600" onClick={(e) => e.stopPropagation()}>
+                          <GripVertical className="h-5 w-5" />
+                        </button>
+                        <span className="text-sm font-medium text-arc-slate-500 w-6">{questions.findIndex((q) => q.id === question.id) + 1}.</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-arc-navy-900 font-medium truncate">{question.stem}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge className="bg-blue-100 text-blue-700 text-xs">{question.type.replace("_", " ")}</Badge>
+                            <Badge className={`${difficultyColors[question.difficulty]} text-xs`}>{question.difficulty}</Badge>
+                            <span className="text-xs text-arc-slate-500">{question.score} point{question.score !== 1 ? "s" : ""}</span>
+                          </div>
+                        </div>
+                        <button className="p-1.5 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); handleDeleteQuestion(question.id); }}>
+                          <Trash2 className="h-4 w-4 text-red-400" />
+                        </button>
+                      </div>
+                    );
+                  }}
+                />
+
+                {questions.length === 0 && (
+                  <div className="text-center py-12 bg-arc-slate-50 rounded-lg border-2 border-dashed border-arc-slate-200">
+                    <Zap className="h-12 w-12 text-arc-slate-300 mx-auto mb-3" />
+                    <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">No questions yet</h3>
+                    <p className="text-arc-slate-500 mb-4">Add questions manually or auto-generate</p>
+                    <div className="flex items-center justify-center gap-3">
+                      <Button variant="outline" onClick={handleAutoGenerate}><Zap className="h-4 w-4 mr-2" />Auto-Generate</Button>
+                      <Button variant="accent" onClick={() => setShowQuestionForm(true)}><Plus className="h-4 w-4 mr-2" />Add Question</Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Settings Sidebar */}
+          <div className="w-80 space-y-4">
+            <Card>
+              <CardContent className="p-4">
+                <h3 className="font-semibold text-arc-navy-900 mb-4">Settings</h3>
+                <div className="space-y-4">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" defaultChecked={assessment.randomizeQuestions} className="h-4 w-4 rounded border-arc-slate-300 text-arc-orange-500 focus:ring-arc-orange-500" />
+                    <div>
+                      <span className="text-sm font-medium text-arc-navy-900">Randomize Questions</span>
+                      <p className="text-xs text-arc-slate-500">Shuffle question order</p>
+                    </div>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" defaultChecked={assessment.showExplanations} className="h-4 w-4 rounded border-arc-slate-300 text-arc-orange-500 focus:ring-arc-orange-500" />
+                    <div>
+                      <span className="text-sm font-medium text-arc-navy-900">Show Explanations</span>
+                      <p className="text-xs text-arc-slate-500">After submission</p>
+                    </div>
+                  </label>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <h3 className="font-semibold text-arc-navy-900 mb-4">Summary</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-arc-slate-600"><Target className="h-4 w-4" /><span className="text-sm">Questions</span></div>
+                    <span className="font-semibold text-arc-navy-900">{questions.length}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-arc-slate-600"><Clock className="h-4 w-4" /><span className="text-sm">Time Limit</span></div>
+                    <span className="font-semibold text-arc-navy-900">{assessment.timeLimitMinutes} min</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-arc-slate-600"><Check className="h-4 w-4" /><span className="text-sm">Passing Score</span></div>
+                    <span className="font-semibold text-arc-navy-900">{assessment.passingScore}%</span>
+                  </div>
+                  <div className="pt-3 border-t border-arc-slate-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-arc-slate-600">Total Points</span>
+                      <span className="font-bold text-arc-navy-900">{questions.length} pts</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Button variant="outline" className="w-full" onClick={handleAutoGenerate}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Auto-Generate Questions
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <QuestionForm
+        isOpen={showQuestionForm}
+        onClose={() => setShowQuestionForm(false)}
+        onSubmit={handleAddQuestion}
+      />
+    </>
+  );
+}

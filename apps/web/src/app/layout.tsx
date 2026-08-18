@@ -1,9 +1,23 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Poppins, Nunito } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/providers/query-provider";
 
-const inter = Inter({ subsets: ["latin"] });
+// Poppins - for headings, titles, buttons, and emphasis text
+const poppins = Poppins({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-poppins",
+  display: "swap",
+});
+
+// Nunito - for body text
+const nunito = Nunito({
+  subsets: ["latin"],
+  weight: ["400", "600", "700"],
+  variable: "--font-nunito",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "ARATC - Philippine Digital Learning Platform",
@@ -24,8 +38,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html lang="en" className={`${poppins.variable} ${nunito.variable}`}>
+      <body>
         <QueryProvider>{children}</QueryProvider>
       </body>
     </html>

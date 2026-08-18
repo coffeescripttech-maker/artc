@@ -17,9 +17,16 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Menu,
   Bell,
   Search,
+  Layers,
+  Tags,
+  Upload,
+  Zap,
+  Award,
+  Building,
 } from "lucide-react";
 import { cn } from "@aratc/ui";
 import { Avatar, AvatarFallback, Button, Badge } from "@/components/ui";
@@ -70,23 +77,90 @@ const studentNav: NavGroup[] = [
 
 const adminNav: NavGroup[] = [
   {
+    label: "OVERVIEW",
     items: [
-      { label: "Overview", href: "/admin", icon: LayoutDashboard },
-      { label: "Users", href: "/admin/users", icon: Users },
-      { label: "Programs", href: "/admin/programs", icon: BookOpen },
-      { label: "Questions", href: "/admin/questions", icon: FileText },
+      { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
     ],
   },
   {
-    label: "Analytics",
+    label: "PROGRAMS",
+    items: [
+      { label: "All Programs", href: "/admin/programs", icon: GraduationCap },
+      { label: "Curriculums", href: "/admin/curriculums", icon: BookOpen },
+    ],
+  },
+  {
+    label: "CONTENT",
+    items: [
+      { label: "Subjects", href: "/admin/subjects", icon: BookOpen },
+      { label: "Modules", href: "/admin/modules", icon: Layers },
+      { label: "Lessons", href: "/admin/lessons", icon: FileText },
+    ],
+  },
+  {
+    label: "QUESTION BANK",
+    items: [
+      { label: "Questions", href: "/admin/question-bank", icon: FileText },
+      { label: "Categories", href: "/admin/question-bank/categories", icon: Tags },
+      { label: "Import", href: "/admin/question-bank/import", icon: Upload },
+    ],
+  },
+  {
+    label: "ASSESSMENTS",
+    items: [
+      { label: "Quizzes", href: "/admin/assessments?type=quiz", icon: Zap },
+      { label: "Practice Tests", href: "/admin/assessments?type=practice", icon: FileText },
+      { label: "Mock Exams", href: "/admin/assessments?type=mock_exam", icon: Trophy },
+    ],
+  },
+  {
+    label: "CET MANAGEMENT",
+    items: [
+      { label: "Exams", href: "/admin/cet/exams", icon: Award },
+      { label: "Universities", href: "/admin/cet/universities", icon: Building },
+      { label: "Profiles", href: "/admin/cet/profiles", icon: Users },
+    ],
+  },
+  {
+    label: "USERS",
+    items: [
+      { label: "Students", href: "/admin/students", icon: Users },
+      { label: "Parents", href: "/admin/parents", icon: Users },
+    ],
+  },
+  {
+    label: "ANALYTICS",
     items: [
       { label: "Reports", href: "/admin/reports", icon: BarChart3 },
     ],
   },
   {
-    label: "Settings",
+    label: "SETTINGS",
     items: [
       { label: "Settings", href: "/admin/settings", icon: Settings },
+    ],
+  },
+];
+
+const teacherNav: NavGroup[] = [
+  {
+    items: [
+      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+      { label: "My Classes", href: "/dashboard/classes", icon: Users },
+      { label: "Programs", href: "/dashboard/programs", icon: BookOpen },
+      { label: "Questions", href: "/dashboard/questions", icon: FileText },
+    ],
+  },
+  {
+    label: "Analytics",
+    items: [
+      { label: "Class Reports", href: "/dashboard/reports", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Account",
+    items: [
+      { label: "Settings", href: "/dashboard/settings", icon: Settings },
     ],
   },
 ];
@@ -135,7 +209,7 @@ export function Sidebar({ role = "student", children }: SidebarProps) {
     setCollapsed(!collapsed);
   };
 
-  const nav = role === "admin" ? adminNav : studentNav;
+  const nav = role === "admin" ? adminNav : role === "teacher" ? teacherNav : studentNav;
 
   // Get user initials for avatar
   const getInitials = () => {
@@ -330,9 +404,10 @@ export function Sidebar({ role = "student", children }: SidebarProps) {
 interface DashboardHeaderProps {
   title: string;
   subtitle?: string;
+  breadcrumbs?: { label: string; href?: string }[];
 }
 
-export function DashboardHeader({ title, subtitle }: DashboardHeaderProps) {
+export function DashboardHeader({ title, subtitle, breadcrumbs }: DashboardHeaderProps) {
   const { user } = useAuth();
 
   return (
@@ -342,7 +417,26 @@ export function DashboardHeader({ title, subtitle }: DashboardHeaderProps) {
         <Menu className="h-5 w-5 text-arc-slate-600" />
       </button>
 
-      <div>
+      <div className="flex-1">
+        {/* Breadcrumbs */}
+        {breadcrumbs && breadcrumbs.length > 0 && (
+          <nav className="flex items-center gap-1 text-sm mb-1">
+            {breadcrumbs.map((crumb, index) => (
+              <div key={index} className="flex items-center gap-1">
+                {index > 0 && (
+                  <span className="text-arc-slate-400">/</span>
+                )}
+                {crumb.href ? (
+                  <a href={crumb.href} className="text-arc-slate-500 hover:text-arc-orange-600 transition-colors">
+                    {crumb.label}
+                  </a>
+                ) : (
+                  <span className="text-arc-navy-900 font-medium">{crumb.label}</span>
+                )}
+              </div>
+            ))}
+          </nav>
+        )}
         <h1 className="text-xl font-bold text-arc-navy-900">{title}</h1>
         {subtitle && <p className="text-sm text-arc-slate-500">{subtitle}</p>}
       </div>

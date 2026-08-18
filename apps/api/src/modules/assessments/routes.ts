@@ -1,0 +1,48 @@
+import { Router, type IRouter } from "express";
+import {
+  list,
+  getById,
+  getBySlug,
+  create,
+  update,
+  publish,
+  archive,
+  remove,
+  addQ,
+  removeQ,
+  reorder,
+  autoGenerate,
+  start,
+  submit,
+  stats,
+} from "./controller";
+import { authenticate, requireRole } from "../../middleware/auth";
+
+const router: IRouter = Router();
+
+// Public routes (for students taking assessments)
+router.get("/", list);
+router.get("/slug/:slug", getBySlug);
+router.get("/:id", getById);
+router.get("/:id/stats", stats);
+
+// Learner routes (authenticated students)
+router.post("/:id/start", authenticate, start);
+
+// Protected admin routes
+router.post("/", authenticate, requireRole("content_admin", "super_admin"), create);
+router.put("/:id", authenticate, requireRole("content_admin", "super_admin"), update);
+router.patch("/:id/publish", authenticate, requireRole("content_admin", "super_admin"), publish);
+router.patch("/:id/archive", authenticate, requireRole("content_admin", "super_admin"), archive);
+router.delete("/:id", authenticate, requireRole("super_admin"), remove);
+
+// Questions management
+router.post("/:id/questions", authenticate, requireRole("content_admin", "super_admin"), addQ);
+router.put("/:id/questions", authenticate, requireRole("content_admin", "super_admin"), reorder);
+router.delete("/:id/questions/:questionId", authenticate, requireRole("content_admin", "super_admin"), removeQ);
+router.post("/:id/auto-generate", authenticate, requireRole("content_admin", "super_admin"), autoGenerate);
+
+// Attempt submission
+router.post("/attempts/:attemptId/submit", authenticate, submit);
+
+export { router as assessmentRoutes };

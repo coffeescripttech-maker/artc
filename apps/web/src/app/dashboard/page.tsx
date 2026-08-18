@@ -5,6 +5,7 @@ import Link from "next/link";
 import { DashboardHeader } from "@/components/dashboard";
 import { Card, CardHeader, CardTitle, CardContent, Badge, Progress, Button, Avatar, AvatarFallback } from "@/components/ui";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui";
+import { useAuth } from "@/contexts/auth-context";
 import {
   BookOpen,
   Trophy,
@@ -25,6 +26,16 @@ import {
   Sparkles,
   BookMarked,
 } from "lucide-react";
+
+// Get current date formatted
+const getFormattedDate = () => {
+  return new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+};
 
 const recentLessons = [
   { id: 1, title: "Introduction to Quadratic Equations", subject: "Mathematics", progress: 75, duration: "15 min", icon: Calculator },
@@ -59,10 +70,30 @@ const stats = [
 
 export default function DashboardPage() {
   const [selectedTab, setSelectedTab] = useState("overview");
+  const { user, isLoading } = useAuth();
+
+  // Get greeting based on time of day
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  };
+
+  // Get user display name
+  const getUserName = () => {
+    if (isLoading) return "...";
+    if (user?.firstName) return user.firstName;
+    if (user?.email) return user.email.split("@")[0];
+    return "User";
+  };
 
   return (
     <>
-      <DashboardHeader title="Welcome back, Juan!" subtitle="Monday, August 17, 2026" />
+      <DashboardHeader
+        title={`${getGreeting()}, ${getUserName()}!`}
+        subtitle={getFormattedDate()}
+      />
 
       <div className="p-6">
         {/* Quick Stats */}

@@ -25,6 +25,9 @@ const badgeVariants = cva(
         // Alert - Red (Failed, Critical)
         alert: "bg-arc-red-100 text-arc-red-600",
 
+        // Error - Red (alias for alert)
+        error: "bg-red-100 text-red-700",
+
         // Primary (Navy)
         primary: "bg-arc-navy-900 text-white",
 
@@ -32,7 +35,7 @@ const badgeVariants = cva(
         secondary: "bg-arc-slate-100 text-arc-slate-700",
 
         // Success (alias for mastery)
-        success: "bg-arc-green-100 text-arc-green-700",
+        success: "bg-green-100 text-green-700",
 
         // Info
         info: "bg-arc-navy-100 text-arc-navy-700",
@@ -48,6 +51,15 @@ const badgeVariants = cva(
 
         // Featured/Highlighted
         featured: "bg-gradient-to-r from-arc-navy-900 to-arc-navy-700 text-white",
+
+        // Draft status
+        draft: "bg-yellow-100 text-yellow-700",
+
+        // Published status
+        published: "bg-green-100 text-green-700",
+
+        // Archived status
+        archived: "bg-gray-100 text-gray-600",
       },
       size: {
         default: "px-2.5 py-0.5 text-xs",

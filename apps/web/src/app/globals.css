@@ -3,6 +3,9 @@
 @tailwind utilities;
 
 @layer base {
+  /* Font Families - these reference the CSS variables set by Next.js */
+  /* Next.js adds --font-poppins and --font-nunito to the body element */
+
   /* ARC Design System - CSS Variables */
   :root {
     /* Primary - Navy */
@@ -99,7 +102,46 @@
 
   body {
     @apply bg-arc-bg text-arc-text antialiased;
+    font-family: var(--font-nunito), system-ui, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Headings use Poppins */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-poppins), system-ui, sans-serif;
+    font-weight: 600;
+  }
+
+  /* Headings with specific weights */
+  h1 {
+    font-family: var(--font-poppins), system-ui, sans-serif;
+    font-weight: 700;
+  }
+  h2 {
+    font-family: var(--font-poppins), system-ui, sans-serif;
+    font-weight: 600;
+  }
+  h3 {
+    font-family: var(--font-poppins), system-ui, sans-serif;
+    font-weight: 600;
+  }
+  h4, h5, h6 {
+    font-family: var(--font-poppins), system-ui, sans-serif;
+    font-weight: 500;
+  }
+
+  /* Buttons use Poppins SemiBold */
+  button, .btn, button *, .btn * {
+    font-family: var(--font-poppins), system-ui, sans-serif;
+    font-weight: 600;
+  }
+
+  /* Utility classes */
+  .font-heading {
+    font-family: var(--font-poppins), system-ui, sans-serif;
+  }
+  .font-body {
+    font-family: var(--font-nunito), system-ui, sans-serif;
   }
 
   /* Custom Scrollbar */
@@ -126,19 +168,19 @@
 @layer components {
   /* ARC Button Variants */
   .btn-arc-primary {
-    @apply bg-arc-navy-900 text-white hover:bg-arc-navy-700;
+    @apply bg-arc-navy-900 text-white hover:bg-arc-navy-700 font-heading font-semibold;
   }
 
   .btn-arc-accent {
-    @apply bg-arc-orange-500 text-white hover:bg-arc-orange-600;
+    @apply bg-arc-orange-500 text-white hover:bg-arc-orange-600 font-heading font-semibold;
   }
 
   .btn-arc-success {
-    @apply bg-arc-green-500 text-white hover:bg-arc-green-600;
+    @apply bg-arc-green-500 text-white hover:bg-arc-green-600 font-heading font-semibold;
   }
 
   .btn-arc-practice {
-    @apply bg-arc-purple-500 text-white hover:bg-arc-purple-600;
+    @apply bg-arc-purple-500 text-white hover:bg-arc-purple-600 font-heading font-semibold;
   }
 
   /* ARC Badge Variants */

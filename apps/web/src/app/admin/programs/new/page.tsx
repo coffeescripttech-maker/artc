@@ -15,13 +15,6 @@ import {
   CardTitle,
   Input,
   Label,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Textarea,
-  Toaster,
 } from "@/components/ui";
 import { ArrowLeft, Layers } from "lucide-react";
 
@@ -138,49 +131,49 @@ export default function NewProgramPage() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="stage" className="text-sm font-semibold text-arc-navy-900">Educational Stage</Label>
-                    <Select value={stage} onValueChange={setStage}>
-                      <SelectTrigger id="stage" className="border-arc-slate-200 focus:ring-arc-navy-500">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.keys(EDUCATIONAL_STAGES).map((key) => (
-                          <SelectItem key={key} value={key}>
-                            {key.replace(/_/g, " ")}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <select
+                      id="stage"
+                      value={stage}
+                      onChange={(e) => setStage(e.target.value)}
+                      className="w-full h-10 px-3 rounded-lg border border-arc-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-arc-navy-500"
+                    >
+                      {Object.keys(EDUCATIONAL_STAGES).map((key) => (
+                        <option key={key} value={key}>
+                          {key.replace(/_/g, " ")}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="gradeLevel" className="text-sm font-semibold text-arc-navy-900">Grade Level</Label>
-                    <Select value={gradeLevel || "none"} onValueChange={setGradeLevel}>
-                      <SelectTrigger id="gradeLevel" className="border-arc-slate-200 focus:ring-arc-navy-500">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {Object.keys(GRADE_LEVELS).map((key) => (
-                          <SelectItem key={key} value={key}>
-                            {key.replace(/_/g, " ")}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <select
+                      id="gradeLevel"
+                      value={gradeLevel}
+                      onChange={(e) => setGradeLevel(e.target.value)}
+                      className="w-full h-10 px-3 rounded-lg border border-arc-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-arc-navy-500"
+                    >
+                      <option value="">None</option>
+                      {Object.keys(GRADE_LEVELS).map((key) => (
+                        <option key={key} value={key}>
+                          {key.replace(/_/g, " ")}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="status" className="text-sm font-semibold text-arc-navy-900">Status</Label>
-                  <Select value={status} onValueChange={setStatus}>
-                    <SelectTrigger id="status" className="border-arc-slate-200 focus:ring-arc-navy-500">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="DRAFT">Draft</SelectItem>
-                      <SelectItem value="PUBLISHED">Published</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <select
+                    id="status"
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    className="w-full h-10 px-3 rounded-lg border border-arc-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-arc-navy-500"
+                  >
+                    <option value="DRAFT">Draft</option>
+                    <option value="PUBLISHED">Published</option>
+                  </select>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-end gap-3 border-t border-arc-slate-100 bg-arc-slate-50">
@@ -195,7 +188,6 @@ export default function NewProgramPage() {
           </form>
         </div>
       </div>
-      <Toaster />
     </>
   );
 }

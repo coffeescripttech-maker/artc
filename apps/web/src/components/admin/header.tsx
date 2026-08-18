@@ -15,11 +15,11 @@ import {
   DropdownMenuTrigger,
 } from "@aratc/ui";
 import { Bell, LogOut, Menu, Search, Settings, User } from "lucide-react";
-import { AdminBreadcrumbs } from "./breadcrumbs";
-import type { BreadcrumbItem as BreadcrumbItemType } from "./breadcrumbs";
+import { Breadcrumbs } from "./breadcrumbs";
+import type { BreadcrumbItem } from "./breadcrumbs";
 
 interface AdminHeaderProps {
-  breadcrumbs?: BreadcrumbItemType[];
+  breadcrumbs?: BreadcrumbItem[];
   onMobileMenuClick?: () => void;
 }
 
@@ -37,7 +37,7 @@ export function AdminHeader({ breadcrumbs, onMobileMenuClick }: AdminHeaderProps
             <Menu className="h-5 w-5" />
           </Button>
         )}
-        <AdminBreadcrumbs items={breadcrumbs} />
+        <Breadcrumbs items={breadcrumbs} />
       </div>
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" className="h-8 w-8 p-0">

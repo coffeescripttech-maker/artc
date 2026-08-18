@@ -1,5 +1,6 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// ARATC LMS - Scalable CMS Architecture
+// This schema supports reusable subjects, independent question bank,
+// and flexible curriculum management
 
 generator client {
   provider = "prisma-client-js"
@@ -88,7 +89,7 @@ model Session {
 }
 
 // ============================================================
-// Learner Profiles
+// Educational Enums
 // ============================================================
 
 enum EducationalStage {
@@ -120,38 +121,6 @@ enum GradeLevel {
   FOURTH_YEAR
 }
 
-model LearnerProfile {
-  id                  String           @id @default(cuid())
-  userId              String           @unique @map("user_id")
-  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  currentStage        EducationalStage @default(BASIC_EDUCATION) @map("current_stage")
-  currentGradeLevel   GradeLevel?      @map("current_grade_level")
-  currentProgramId    String?          @map("current_program_id")
-  currentProgram      Program?         @relation(fields: [currentProgramId], references: [id])
-  learningGoals       String?          @map("learning_goals")
-  preferredLanguage   String           @default("fil") @map("preferred_language")
-  createdAt           DateTime         @default(now()) @map("created_at")
-  updatedAt           DateTime         @updatedAt @map("updated_at")
-
-  // Relations
-  enrollments  Enrollment[]
-  batchMembers BatchMember[]
-  attempts     Attempt[]
-  progressRecords Progress[]
-
-  @@map("learner_profiles")
-}
-
-// ============================================================
-// Programs, Subjects, Topics & Lessons (Universal Content Model)
-// ============================================================
-
-enum ProgramStatus {
-  DRAFT
-  PUBLISHED
-  ARCHIVED
-}
-
 enum ContentStatus {
   DRAFT
   UNDER_REVIEW
@@ -163,120 +132,9 @@ enum LessonType {
   VIDEO
   ARTICLE
   MIXED
+  ACTIVITY
+  PRACTICE
 }
-
-model Program {
-  id          String           @id @default(cuid())
-  name        String
-  slug        String           @unique
-  description String?          @db.Text
-  stage       EducationalStage
-  gradeLevel  GradeLevel?      @map("grade_level")
-  status      ProgramStatus    @default(DRAFT)
-  imageUrl    String?          @map("image_url")
-  metadata    Json?            // flexible field for program-specific config
-  createdAt   DateTime         @default(now()) @map("created_at")
-  updatedAt   DateTime         @updatedAt @map("updated_at")
-
-  // Relations
-  subjects        Subject[]
-  enrollments     Enrollment[]
-  batches         Batch[]
-  learnerProfiles LearnerProfile[]
-  tests           Test[]
-
-  @@index([stage, status])
-  @@map("programs")
-}
-
-model Subject {
-  id          String        @id @default(cuid())
-  programId   String        @map("program_id")
-  program     Program       @relation(fields: [programId], references: [id], onDelete: Cascade)
-  name        String
-  description String?       @db.Text
-  orderIndex  Int           @default(0) @map("order_index")
-  status      ContentStatus @default(DRAFT)
-  imageUrl    String?       @map("image_url")
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
-
-  // Relations
-  modules Module[]
-  topics  Topic[]
-  tests   Test[]
-
-  @@index([programId])
-  @@map("subjects")
-}
-
-model Module {
-  id          String        @id @default(cuid())
-  subjectId   String        @map("subject_id")
-  subject     Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  name        String
-  description String?       @db.Text
-  orderIndex  Int           @default(0) @map("order_index")
-  status      ContentStatus @default(DRAFT)
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
-
-  // Relations
-  topics Topic[]
-
-  @@index([subjectId])
-  @@map("modules")
-}
-
-model Topic {
-  id          String        @id @default(cuid())
-  subjectId   String        @map("subject_id")
-  subject     Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  moduleId    String?       @map("module_id")
-  module      Module?       @relation(fields: [moduleId], references: [id], onDelete: SetNull)
-  name        String
-  description String?       @db.Text
-  orderIndex  Int           @default(0) @map("order_index")
-  status      ContentStatus @default(DRAFT)
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
-
-  // Relations
-  lessons   Lesson[]
-  questions Question[]
-  progress  Progress[]
-
-  @@index([subjectId])
-  @@index([moduleId])
-  @@map("topics")
-}
-
-model Lesson {
-  id          String        @id @default(cuid())
-  topicId     String        @map("topic_id")
-  topic       Topic         @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  title       String
-  slug        String        @unique
-  description String?       @db.Text
-  type        LessonType    @default(ARTICLE)
-  durationMinutes Int?      @map("duration_minutes")
-  content     Json?         // article content, video metadata, attachments
-  videoUrl    String?       @map("video_url")
-  status      ContentStatus @default(DRAFT)
-  orderIndex  Int           @default(0) @map("order_index")
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
-
-  // Relations
-  progress Progress[]
-
-  @@index([topicId])
-  @@map("lessons")
-}
-
-// ============================================================
-// Question Bank
-// ============================================================
 
 enum QuestionType {
   MULTIPLE_CHOICE
@@ -293,100 +151,22 @@ enum DifficultyLevel {
   HARD
 }
 
-model Question {
-  id            String          @id @default(cuid())
-  topicId       String          @map("topic_id")
-  topic         Topic           @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  type          QuestionType
-  difficulty    DifficultyLevel @default(MEDIUM)
-  stem          String          @db.Text
-  options       Json?           // array of { id, text, isCorrect? }
-  correctAnswer Json            // normalized correct answer data
-  explanation   String?         @db.Text
-  hint          String?         @db.Text
-  tags          String[]
-  status        ContentStatus   @default(DRAFT)
-  authorId      String          @map("author_id")
-  author        User            @relation("QuestionAuthor", fields: [authorId], references: [id])
-  reviewerId    String?         @map("reviewer_id")
-  reviewer      User?           @relation("QuestionReviewer", fields: [reviewerId], references: [id])
-  createdAt     DateTime        @default(now()) @map("created_at")
-  updatedAt     DateTime        @updatedAt @map("updated_at")
-
-  // Relations
-  testQuestions TestQuestion[]
-  attemptAnswers AttemptAnswer[]
-
-  @@index([topicId])
-  @@index([difficulty])
-  @@index([status])
-  @@map("questions")
+enum ExamType {
+  ENTRANCE
+  BOARD
+  CERTIFICATION
+  SCHOLARSHIP
+  INTERNAL
 }
 
-// ============================================================
-// Tests & Assessments (Universal Test Engine)
-// ============================================================
-
-enum TestType {
-  QUICK_QUIZ
-  PRACTICE_TEST
+enum AssessmentType {
+  QUIZ
+  PRACTICE
   DIAGNOSTIC
   MOCK_EXAM
   ASSIGNMENT
-  FINAL_READINESS
+  CET_SIMULATION
 }
-
-enum TestStatus {
-  DRAFT
-  PUBLISHED
-  ARCHIVED
-}
-
-model Test {
-  id                String        @id @default(cuid())
-  programId         String?       @map("program_id")
-  program           Program?      @relation(fields: [programId], references: [id], onDelete: SetNull)
-  subjectId         String?       @map("subject_id")
-  subject           Subject?      @relation(fields: [subjectId], references: [id], onDelete: SetNull)
-  name              String
-  description       String?       @db.Text
-  type              TestType
-  status            TestStatus    @default(DRAFT)
-  timeLimitMinutes  Int?          @map("time_limit_minutes")
-  passingScore      Int?          @map("passing_score") // percentage
-  randomizeQuestions Boolean     @default(false) @map("randomize_questions")
-  showExplanation   Boolean       @default(true) @map("show_explanation")
-  config            Json?         // topic filters, difficulty distribution, etc.
-  createdAt         DateTime      @default(now()) @map("created_at")
-  updatedAt         DateTime      @updatedAt @map("updated_at")
-
-  // Relations
-  testQuestions TestQuestion[]
-  attempts      Attempt[]
-
-  @@index([programId])
-  @@index([subjectId])
-  @@index([type])
-  @@map("tests")
-}
-
-model TestQuestion {
-  id         String   @id @default(cuid())
-  testId     String   @map("test_id")
-  test       Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
-  questionId String   @map("question_id")
-  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  orderIndex Int      @default(0) @map("order_index")
-  score      Int      @default(1)
-
-  @@unique([testId, questionId])
-  @@index([testId])
-  @@map("test_questions")
-}
-
-// ============================================================
-// Attempts & Scoring
-// ============================================================
 
 enum AttemptStatus {
   IN_PROGRESS
@@ -394,51 +174,6 @@ enum AttemptStatus {
   ABANDONED
   TIMED_OUT
 }
-
-model Attempt {
-  id              String        @id @default(cuid())
-  learnerId       String        @map("learner_id")
-  learner         LearnerProfile @relation(fields: [learnerId], references: [id], onDelete: Cascade)
-  testId          String        @map("test_id")
-  test            Test          @relation(fields: [testId], references: [id], onDelete: Cascade)
-  status          AttemptStatus @default(IN_PROGRESS)
-  startedAt       DateTime      @default(now()) @map("started_at")
-  completedAt     DateTime?     @map("completed_at")
-  score           Int?
-  maxScore        Int           @map("max_score")
-  percentage      Float?
-  timeSpentSeconds Int?         @map("time_spent_seconds")
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
-
-  // Relations
-  answers AttemptAnswer[]
-
-  @@index([learnerId])
-  @@index([testId])
-  @@map("attempts")
-}
-
-model AttemptAnswer {
-  id              String    @id @default(cuid())
-  attemptId       String    @map("attempt_id")
-  attempt         Attempt   @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  questionId      String    @map("question_id")
-  question        Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  answer          Json      // student's answer
-  isCorrect       Boolean?  @map("is_correct")
-  score           Int       @default(0)
-  timeSpentSeconds Int?     @map("time_spent_seconds")
-  createdAt       DateTime  @default(now()) @map("created_at")
-
-  @@index([attemptId])
-  @@index([questionId])
-  @@map("attempt_answers")
-}
-
-// ============================================================
-// Progress & Mastery
-// ============================================================
 
 enum MasteryLevel {
   NOT_STARTED
@@ -448,24 +183,495 @@ enum MasteryLevel {
   MASTERED
 }
 
-model Progress {
-  id           String        @id @default(cuid())
-  learnerId    String        @map("learner_id")
-  learner      LearnerProfile @relation(fields: [learnerId], references: [id], onDelete: Cascade)
-  programId    String?       @map("program_id")
-  subjectId    String?       @map("subject_id")
-  topicId      String?       @map("topic_id")
-  lessonId     String?       @map("lesson_id")
-  topic        Topic?        @relation(fields: [topicId], references: [id], onDelete: SetNull)
-  lesson       Lesson?       @relation(fields: [lessonId], references: [id], onDelete: SetNull)
-  mastery      MasteryLevel  @default(NOT_STARTED)
-  completionPercentage Float @default(0) @map("completion_percentage")
-  averageScore Float?        @map("average_score")
-  lastActivityAt DateTime    @default(now()) @map("last_activity_at")
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
+// ============================================================
+// Learner Profiles
+// ============================================================
 
-  @@unique([learnerId, programId, subjectId, topicId, lessonId])
+model LearnerProfile {
+  id                  String           @id @default(cuid())
+  userId              String           @unique @map("user_id")
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  currentStage        EducationalStage @default(BASIC_EDUCATION) @map("current_stage")
+  currentGradeLevel   GradeLevel?      @map("current_grade_level")
+  currentProgramId    String?          @map("current_program_id")
+  currentProgram      Program?         @relation(fields: [currentProgramId], references: [id])
+  currentCurriculumId String?          @map("current_curriculum_id")
+  currentCurriculum   Curriculum?      @relation(fields: [currentCurriculumId], references: [id])
+  learningGoals       String?          @map("learning_goals")
+  preferredLanguage   String           @default("fil") @map("preferred_language")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  enrollments      Enrollment[]
+  batchMembers      BatchMember[]
+  attempts          AssessmentAttempt[]
+  testAttempts      TestAttempt[]
+  progressRecords   Progress[]
+
+  @@map("learner_profiles")
+}
+
+// ============================================================
+// PROGRAM & CURRICULUM STRUCTURE
+// ============================================================
+
+// Program - Top-level container (no content fields)
+enum ProgramStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Program {
+  id          String         @id @default(cuid())
+  name        String
+  slug        String         @unique
+  description String?        @db.Text
+  programType String?        @map("program_type") // e.g., "4-YEAR", "BUCET", "CET-INTENSIVE"
+  status      ProgramStatus  @default(DRAFT)
+  imageUrl    String?        @map("image_url")
+  metadata    Json?         // flexible field for program-specific config
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  curriculums     Curriculum[]
+  enrollments     Enrollment[]
+  batches         Batch[]
+  learnerProfiles LearnerProfile[]
+  targetCets      ProgramCet[]
+  assessments     Assessment[]
+
+  @@index([status])
+  @@map("programs")
+}
+
+// Curriculum - Learning path/version inside a program
+model Curriculum {
+  id          String           @id @default(cuid())
+  name        String           // e.g., "Grade 9 - Foundation", "CET Intensive"
+  slug        String           @unique
+  description String?          @db.Text
+  stage       EducationalStage
+  gradeLevel  GradeLevel?
+  orderIndex  Int              @default(0) @map("order_index")
+  status      ContentStatus    @default(DRAFT)
+  programId   String?          @map("program_id")
+  program     Program?         @relation(fields: [programId], references: [id], onDelete: SetNull)
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  items             CurriculumItem[]
+  learnerProfiles  LearnerProfile[]
+
+  @@index([stage, gradeLevel])
+  @@index([programId])
+  @@map("curriculums")
+}
+
+// CurriculumItem - Connects reusable Subject to Curriculum (many-to-many via junction)
+model CurriculumItem {
+  id           String     @id @default(cuid())
+  curriculumId String     @map("curriculum_id")
+  curriculum   Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  subjectId    String     @map("subject_id")
+  subject      Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  orderIndex   Int        @default(0) @map("order_index")
+  isRequired   Boolean    @default(true) @map("is_required")
+  customName  String?    @map("custom_name") // Override subject name for this curriculum
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  @@unique([curriculumId, subjectId])
+  @@index([curriculumId])
+  @@index([subjectId])
+  @@map("curriculum_items")
+}
+
+// ============================================================
+// REUSABLE SUBJECT (Independent of Programs)
+// ============================================================
+
+model Subject {
+  id          String        @id @default(cuid())
+  name        String
+  slug        String        @unique
+  code        String?       @unique  // e.g., "MATH", "ENG", "SCI"
+  description String?       @db.Text
+  icon        String?       // Icon name or emoji
+  color       String?       // Hex color for UI
+  status      ContentStatus @default(DRAFT)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  curriculumItems    CurriculumItem[]
+  modules           Module[]
+  questions         QuestionBankLink[]  // Questions linked to this subject
+  examCoverages     ExamCoverage[]     // Exam coverage for this subject
+  cetProfiles       CetProfile[]       // CET profiles including this subject
+
+  @@map("subjects")
+}
+
+// ============================================================
+// MODULE (Belongs to Subject)
+// ============================================================
+
+model Module {
+  id          String        @id @default(cuid())
+  subjectId   String        @map("subject_id")
+  subject     Subject       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String        @unique
+  description String?       @db.Text
+  orderIndex  Int           @default(0) @map("order_index")
+  status      ContentStatus @default(DRAFT)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  topics Topic[]
+
+  @@index([subjectId])
+  @@map("modules")
+}
+
+// ============================================================
+// TOPIC (Belongs to Module - Required Module)
+// ============================================================
+
+model Topic {
+  id          String        @id @default(cuid())
+  moduleId    String        @map("module_id")
+  module      Module        @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String        @unique
+  description String?       @db.Text
+  orderIndex  Int           @default(0) @map("order_index")
+  status      ContentStatus @default(DRAFT)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  lessons    Lesson[]
+  questions  QuestionBankLink[]  // Questions linked to this topic
+  progress   Progress[]
+
+  @@index([moduleId])
+  @@map("topics")
+}
+
+// ============================================================
+// LESSON (Leaf learning content)
+// ============================================================
+
+model Lesson {
+  id              String        @id @default(cuid())
+  topicId         String        @map("topic_id")
+  topic           Topic         @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  title           String
+  slug            String        @unique
+  description     String?       @db.Text
+  type            LessonType    @default(ARTICLE)
+  durationMinutes Int?          @map("duration_minutes")
+  content         Json?         // Article content, video metadata, attachments
+  videoUrl        String?       @map("video_url")
+  orderIndex      Int           @default(0) @map("order_index")
+  status          ContentStatus @default(DRAFT)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  progress Progress[]
+
+  @@index([topicId])
+  @@map("lessons")
+}
+
+// ============================================================
+// INDEPENDENT QUESTION BANK
+// ============================================================
+
+model Question {
+  id            String          @id @default(cuid())
+  type          QuestionType
+  difficulty    DifficultyLevel @default(MEDIUM)
+  stem          String          @db.Text
+  options       Json?           // array of { id, text, isCorrect? }
+  correctAnswer  Json            // normalized correct answer data
+  explanation   String?         @db.Text
+  hint          String?         @db.Text
+  tags          String[]         // e.g., ["algebra", "equations", "grade-9"]
+  status        ContentStatus   @default(DRAFT)
+  authorId      String         @map("author_id")
+  author        User            @relation("QuestionAuthor", fields: [authorId], references: [id])
+  reviewerId    String?         @map("reviewer_id")
+  reviewer      User?           @relation("QuestionReviewer", fields: [reviewerId], references: [id])
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  bankLinks     QuestionBankLink[]
+  assessmentQuestions AssessmentQuestion[]
+  attemptAnswers  AttemptAnswer[]
+
+  @@index([difficulty])
+  @@index([status])
+  @@index([type])
+  @@map("questions")
+}
+
+// QuestionBankLink - Polymorphic linking (Question → Subject/Topic/Exam/Assessment)
+model QuestionBankLink {
+  id          String    @id @default(cuid())
+  questionId  String    @map("question_id")
+  question    Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  // Polymorphic links - at least one must be set
+  subjectId   String?   @map("subject_id")
+  topicId     String?   @map("topic_id")
+  examId      String?   @map("exam_id")
+  assessmentId String?  @map("assessment_id")
+
+  weight      Int       @default(1)     // Weight in exams
+  notes       String?   @db.Text        // Notes for this context
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relations
+  subject     Subject?  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  topic       Topic?    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  cetExam     CetExam?  @relation(fields: [examId], references: [id], onDelete: Cascade)
+  assessment  Assessment? @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+  @@index([subjectId])
+  @@index([topicId])
+  @@index([examId])
+  @@index([assessmentId])
+  @@map("question_bank_links")
+}
+
+// ============================================================
+// CET / EXAM MANAGEMENT
+// ============================================================
+
+model CetExam {
+  id              String        @id @default(cuid())
+  name            String        // e.g., "UPCAT 2026", "BUCET", "LET"
+  slug            String        @unique
+  description     String?       @db.Text
+  examType        ExamType
+  conductingBody  String?       @map("conducting_body") // e.g., "University of the Philippines"
+  website         String?
+  status          ContentStatus @default(DRAFT)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  profiles        CetProfile[]
+  programTargets  ProgramCet[]
+  questionLinks   QuestionBankLink[]
+
+  @@map("cet_exams")
+}
+
+model CetProfile {
+  id                    String        @id @default(cuid())
+  cetExamId             String        @map("cet_exam_id")
+  cetExam               CetExam       @relation(fields: [cetExamId], references: [id], onDelete: Cascade)
+  name                  String        // e.g., "Science Track", "General Profile"
+  description           String?
+
+  // Exam configuration
+  subjectDistribution   Json?         @map("subject_distribution") // { subjectId: percentage }
+  totalQuestions        Int?           @map("total_questions")
+  timeLimitMinutes      Int?           @map("time_limit_minutes")
+  passingScore          Int?           @map("passing_score")         // percentage
+  difficultyDistribution Json?         @map("difficulty_distribution") // { EASY: 30, MEDIUM: 50, HARD: 20 }
+
+  status                ContentStatus @default(DRAFT)
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  coverages ExamCoverage[]
+  subjects  Subject[]
+
+  @@index([cetExamId])
+  @@map("cet_profiles")
+}
+
+model ExamCoverage {
+  id              String     @id @default(cuid())
+  cetProfileId    String     @map("cet_profile_id")
+  cetProfile      CetProfile @relation(fields: [cetProfileId], references: [id], onDelete: Cascade)
+  subjectId       String     @map("subject_id")
+  subject         Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  percentage      Float      @default(0)     // e.g., 25 for 25%
+  questionCount  Int?       @map("question_count")
+  topicCoverage   Json?      @map("topic_coverage") // { topicId: percentage }
+  createdAt       DateTime   @default(now()) @map("created_at")
+
+  @@unique([cetProfileId, subjectId])
+  @@index([cetProfileId])
+  @@index([subjectId])
+  @@map("exam_coverages")
+}
+
+// Program → CET mapping
+model ProgramCet {
+  id         String   @id @default(cuid())
+  programId  String   @map("program_id")
+  program    Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+  cetExamId  String   @map("cet_exam_id")
+  cetExam    CetExam  @relation(fields: [cetExamId], references: [id], onDelete: Cascade)
+
+  priority   Int      @default(1)     // 1 = primary target
+  notes      String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@unique([programId, cetExamId])
+  @@index([programId])
+  @@index([cetExamId])
+  @@map("program_cets")
+}
+
+// ============================================================
+// FLEXIBLE ASSESSMENT ENGINE
+// ============================================================
+
+model Assessment {
+  id                   String           @id @default(cuid())
+  name                 String
+  slug                 String           @unique
+  description          String?
+  type                 AssessmentType   @default(QUIZ)
+
+  // Content filtering criteria (not fixed questions)
+  topicIds             String[]         @map("topic_ids")           // Include these topics
+  difficultyLevels     DifficultyLevel[] @map("difficulty_levels")  // Filter by difficulty
+  questionTags         String[]         @map("question_tags")      // Filter by tags
+
+  // Configuration
+  questionCount        Int?              @map("question_count")
+  timeLimitMinutes     Int?              @map("time_limit_minutes")
+  passingScore         Int?              @map("passing_score")     // percentage
+  randomizeQuestions   Boolean           @default(false) @map("randomize_questions")
+  showExplanations     Boolean           @default(true) @map("show_explanations")
+  allowRetake          Boolean           @default(false) @map("allow_retake")
+  maxAttempts          Int?              @default(1) @map("max_attempts")
+
+  scoringConfig        Json?             @map("scoring_config")
+  status               ContentStatus     @default(DRAFT)
+  programId            String?           @map("program_id")
+  program              Program?          @relation(fields: [programId], references: [id], onDelete: SetNull)
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+
+  // Relations
+  questions            AssessmentQuestion[]
+  attempts             AssessmentAttempt[]
+  questionLinks        QuestionBankLink[]
+
+  @@index([programId])
+  @@index([type])
+  @@index([status])
+  @@map("assessments")
+}
+
+model AssessmentQuestion {
+  id             String      @id @default(cuid())
+  assessmentId   String      @map("assessment_id")
+  assessment     Assessment  @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  questionId     String      @map("question_id")
+  question       Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  orderIndex     Int         @default(0) @map("order_index")
+  score          Int         @default(1)
+
+  @@unique([assessmentId, questionId])
+  @@index([assessmentId])
+  @@map("assessment_questions")
+}
+
+// ============================================================
+// ASSESSMENT ATTEMPTS & SCORING
+// ============================================================
+
+model AssessmentAttempt {
+  id               String          @id @default(cuid())
+  learnerId        String          @map("learner_id")
+  learner          LearnerProfile @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  assessmentId     String          @map("assessment_id")
+  assessment       Assessment      @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  status           AttemptStatus   @default(IN_PROGRESS)
+  startedAt        DateTime        @default(now()) @map("started_at")
+  completedAt      DateTime?       @map("completed_at")
+  score            Int?
+  maxScore         Int             @map("max_score")
+  percentage       Float?
+  timeSpentSeconds Int?            @map("time_spent_seconds")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  answers AttemptAnswer[]
+
+  @@index([learnerId])
+  @@index([assessmentId])
+  @@map("assessment_attempts")
+}
+
+model AttemptAnswer {
+  id               String            @id @default(cuid())
+  attemptId        String            @map("attempt_id")
+  attempt          AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId       String            @map("question_id")
+  question         Question          @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  answer           Json              // student's answer
+  isCorrect        Boolean?          @map("is_correct")
+  score            Int               @default(0)
+  timeSpentSeconds Int?              @map("time_spent_seconds")
+  createdAt        DateTime          @default(now()) @map("created_at")
+
+  @@index([attemptId])
+  @@index([questionId])
+  @@map("attempt_answers")
+}
+
+// ============================================================
+// PROGRESS & MASTERY
+// ============================================================
+
+model Progress {
+  id                    String        @id @default(cuid())
+  learnerId             String        @map("learner_id")
+  learner               LearnerProfile @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+
+  // What is being tracked
+  programId             String?       @map("program_id")
+  curriculumId          String?       @map("curriculum_id")
+  subjectId             String?       @map("subject_id")
+  moduleId              String?       @map("module_id")
+  topicId               String?       @map("topic_id")
+  lessonId              String?       @map("lesson_id")
+
+  // Content relations
+  topic                 Topic?        @relation(fields: [topicId], references: [id], onDelete: SetNull)
+  lesson                Lesson?       @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+
+  // Progress data
+  mastery               MasteryLevel  @default(NOT_STARTED)
+  completionPercentage  Float         @default(0) @map("completion_percentage")
+  averageScore          Float?        @map("average_score")
+  attemptsCount         Int           @default(0) @map("attempts_count")
+  lastActivityAt        DateTime      @default(now()) @map("last_activity_at")
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+
+  @@unique([learnerId, programId, curriculumId, subjectId, moduleId, topicId, lessonId])
   @@index([learnerId])
   @@index([topicId])
   @@index([lessonId])
@@ -473,7 +679,91 @@ model Progress {
 }
 
 // ============================================================
-// Batches & Enrollments (Hybrid model)
+// LEGACY MODELS (For backward compatibility - will be deprecated)
+// ============================================================
+
+// Old Program model reference - Subjects were tied to programs
+// Kept for migration reference only
+model ProgramSubject {
+  id         String   @id @default(cuid())
+  programId String   @map("program_id")
+  subjectId String   @map("subject_id")
+  orderIndex Int     @default(0) @map("order_index")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([programId, subjectId])
+  @@map("program_subjects")
+}
+
+// Old Test model - kept for backward compatibility during migration
+enum TestType {
+  QUICK_QUIZ
+  PRACTICE_TEST
+  DIAGNOSTIC
+  MOCK_EXAM
+  ASSIGNMENT
+  FINAL_READINESS
+}
+
+model Test {
+  id                String      @id @default(cuid())
+  programId         String?     @map("program_id")
+  subjectId         String?     @map("subject_id")
+  name              String
+  description       String?     @db.Text
+  type              TestType
+  timeLimitMinutes  Int?        @map("time_limit_minutes")
+  passingScore      Int?        @map("passing_score")
+  randomizeQuestions Boolean    @default(false) @map("randomize_questions")
+  showExplanation   Boolean     @default(true) @map("show_explanation")
+  config            Json?
+  createdAt         DateTime    @default(now()) @map("created_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+
+  testQuestions TestQuestion[]
+  attempts      TestAttempt[]
+
+  @@index([programId])
+  @@index([subjectId])
+  @@map("tests")
+}
+
+model TestQuestion {
+  id         String   @id @default(cuid())
+  testId     String   @map("test_id")
+  test       Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  questionId String   @map("question_id")
+  orderIndex Int      @default(0) @map("order_index")
+  score      Int      @default(1)
+
+  @@unique([testId, questionId])
+  @@index([testId])
+  @@map("test_questions")
+}
+
+model TestAttempt {
+  id               String    @id @default(cuid())
+  learnerId       String    @map("learner_id")
+  learner          LearnerProfile @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  testId           String    @map("test_id")
+  test             Test      @relation(fields: [testId], references: [id], onDelete: Cascade)
+  status           AttemptStatus @default(IN_PROGRESS)
+  startedAt        DateTime  @default(now()) @map("started_at")
+  completedAt      DateTime? @map("completed_at")
+  score            Int?
+  maxScore         Int       @map("max_score")
+  percentage       Float?
+  timeSpentSeconds Int?      @map("time_spent_seconds")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  @@index([learnerId])
+  @@index([testId])
+  @@map("test_attempts")
+}
+
+// ============================================================
+// BATCHES & ENROLLMENTS
 // ============================================================
 
 enum EnrollmentStatus {
@@ -484,16 +774,17 @@ enum EnrollmentStatus {
 }
 
 model Enrollment {
-  id        String          @id @default(cuid())
-  learnerId String          @map("learner_id")
-  learner   LearnerProfile  @relation(fields: [learnerId], references: [id], onDelete: Cascade)
-  programId String          @map("program_id")
-  program   Program         @relation(fields: [programId], references: [id], onDelete: Cascade)
-  status    EnrollmentStatus @default(ACTIVE)
-  startedAt DateTime        @default(now()) @map("started_at")
-  endedAt   DateTime?       @map("ended_at")
-  createdAt DateTime        @default(now()) @map("created_at")
-  updatedAt DateTime        @updatedAt @map("updated_at")
+  id           String           @id @default(cuid())
+  learnerId    String           @map("learner_id")
+  learner      LearnerProfile   @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  programId    String           @map("program_id")
+  program      Program          @relation(fields: [programId], references: [id], onDelete: Cascade)
+  curriculumId String?          @map("curriculum_id")
+  status       EnrollmentStatus @default(ACTIVE)
+  startedAt    DateTime        @default(now()) @map("started_at")
+  endedAt      DateTime?       @map("ended_at")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
 
   @@unique([learnerId, programId])
   @@index([learnerId])
@@ -513,7 +804,6 @@ model Batch {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  // Relations
   members   BatchMember[]
   teachers  BatchTeacher[]
 
@@ -527,7 +817,7 @@ model BatchMember {
   batch     Batch           @relation(fields: [batchId], references: [id], onDelete: Cascade)
   learnerId String          @map("learner_id")
   learner   LearnerProfile  @relation(fields: [learnerId], references: [id], onDelete: Cascade)
-  joinedAt  DateTime        @default(now()) @map("joined_at")
+  joinedAt  DateTime       @default(now()) @map("joined_at")
 
   @@unique([batchId, learnerId])
   @@index([batchId])
@@ -548,7 +838,7 @@ model BatchTeacher {
 }
 
 // ============================================================
-// Subscriptions & Payments (placeholder for future B2C)
+// SUBSCRIPTIONS & PAYMENTS (placeholder for future B2C)
 // ============================================================
 
 enum SubscriptionStatus {

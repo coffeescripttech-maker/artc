@@ -5,13 +5,17 @@ import { NotFoundError } from "../../lib/errors";
 
 type CreateProgramInput = z.infer<typeof createProgramSchema>;
 
-export async function listPrograms() {
+export async function listPrograms(args?: { status?: "DRAFT" | "PUBLISHED" | "ARCHIVED" }) {
   return prisma.program.findMany({
-    where: { status: "PUBLISHED" },
+    where: args?.status ? { status: args.status } : undefined,
     orderBy: { createdAt: "desc" },
     include: {
       _count: {
-        select: { subjects: true },
+        select: {
+          curriculums: true,
+          enrollments: true,
+          assessments: true,
+        },
       },
     },
   });
@@ -21,29 +25,50 @@ export async function getProgramBySlug(slug: string) {
   const program = await prisma.program.findUnique({
     where: { slug },
     include: {
-      subjects: {
+      curriculums: {
+        where: { status: "PUBLISHED" },
         orderBy: { orderIndex: "asc" },
         include: {
-          modules: {
+          items: {
             orderBy: { orderIndex: "asc" },
             include: {
-              topics: {
-                orderBy: { orderIndex: "asc" },
+              subject: {
                 include: {
-                  lessons: {
+                  modules: {
                     where: { status: "PUBLISHED" },
                     orderBy: { orderIndex: "asc" },
-                    select: {
-                      id: true,
-                      title: true,
-                      slug: true,
-                      durationMinutes: true,
+                    include: {
+                      topics: {
+                        where: { status: "PUBLISHED" },
+                        orderBy: { orderIndex: "asc" },
+                        include: {
+                          lessons: {
+                            where: { status: "PUBLISHED" },
+                            orderBy: { orderIndex: "asc" },
+                            select: {
+                              id: true,
+                              title: true,
+                              slug: true,
+                              durationMinutes: true,
+                            },
+                          },
+                        },
+                      },
                     },
                   },
                 },
               },
             },
           },
+        },
+      },
+      assessments: {
+        where: { status: "PUBLISHED" },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          type: true,
         },
       },
     },
@@ -62,8 +87,7 @@ export async function createProgram(input: CreateProgramInput) {
       name: input.name,
       slug: input.slug,
       description: input.description,
-      stage: input.stage,
-      gradeLevel: input.gradeLevel,
+      programType: input.programType,
       status: "DRAFT",
     },
   });
@@ -80,7 +104,8 @@ export async function updateProgram(id: string, input: Partial<CreateProgramInpu
     data: {
       name: input.name,
       description: input.description,
-      gradeLevel: input.gradeLevel,
+      programType: input.programType,
+      imageUrl: input.imageUrl,
     },
   });
 }

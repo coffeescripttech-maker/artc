@@ -18,6 +18,7 @@ import {
   Clock,
   Target,
   TrendingUp,
+  TrendingDown,
   CheckCircle,
   XCircle,
   Play,

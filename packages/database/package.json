@@ -4,13 +4,17 @@
   "private": true,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "prisma": {
+    "seed": "tsx src/seed.ts"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "db:generate": "dotenv -e ../../.env -- prisma generate --schema=./prisma/schema.prisma",
     "db:migrate": "dotenv -e ../../.env -- prisma migrate dev --schema=./prisma/schema.prisma",
     "db:deploy": "dotenv -e ../../.env -- prisma migrate deploy --schema=./prisma/schema.prisma",
-    "db:seed": "dotenv -e ../../.env -- tsx src/seed.ts",
+    "db:seed": "npx dotenv-cli tsx src/seed.ts",
+    "db:reset-passwords": "npx dotenv-cli tsx src/reset-passwords.ts",
     "db:studio": "dotenv -e ../../.env -- prisma studio --schema=./prisma/schema.prisma",
     "typecheck": "tsc --noEmit"
   },
