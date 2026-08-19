@@ -1,0 +1,14 @@
+
+> @aratc/database@0.0.1 typecheck C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\packages\database
+> tsc --noEmit
+
+src/reset-passwords.ts(3,25): error TS2307: Cannot find module 'dotenv' or its corresponding type declarations.
+src/seed.ts(3,25): error TS2307: Cannot find module 'dotenv' or its corresponding type declarations.
+src/seed.ts(195,7): error TS2353: Object literal may only specify known properties, and 'stage' does not exist in type '(Without<ProgramCreateInput, ProgramUncheckedCreateInput> & ProgramUncheckedCreateInput) | (Without<...> & ProgramCreateInput)'.
+src/seed.ts(208,7): error TS2353: Object literal may only specify known properties, and 'programId' does not exist in type '(Without<SubjectCreateInput, SubjectUncheckedCreateInput> & SubjectUncheckedCreateInput) | (Without<...> & SubjectCreateInput)'.
+src/seed.ts(219,5): error TS2322: Type '{ id: string; subjectId: string; name: string; description: string; orderIndex: number; status: "PUBLISHED"; }' is not assignable to type '(Without<ModuleCreateInput, ModuleUncheckedCreateInput> & ModuleUncheckedCreateInput) | (Without<...> & ModuleCreateInput)'.
+  Type '{ id: string; subjectId: string; name: string; description: string; orderIndex: number; status: "PUBLISHED"; }' is not assignable to type 'Without<ModuleCreateInput, ModuleUncheckedCreateInput> & ModuleUncheckedCreateInput'.
+    Property 'slug' is missing in type '{ id: string; subjectId: string; name: string; description: string; orderIndex: number; status: "PUBLISHED"; }' but required in type 'ModuleUncheckedCreateInput'.
+src/seed.ts(234,7): error TS2353: Object literal may only specify known properties, and 'subjectId' does not exist in type 'Without<TopicCreateInput, TopicUncheckedCreateInput> & TopicUncheckedCreateInput'.
+src/seed.ts(347,9): error TS2353: Object literal may only specify known properties, and 'topicId' does not exist in type 'Without<QuestionCreateInput, QuestionUncheckedCreateInput> & QuestionUncheckedCreateInput'.
+ ELIFECYCLE  Command failed with exit code 2.

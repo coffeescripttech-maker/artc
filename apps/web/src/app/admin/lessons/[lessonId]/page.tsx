@@ -3,11 +3,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { WorkspaceHeader, WorkspaceTabs } from "@/components/admin";
+import { WorkspaceHeader, WorkspaceTabs, DraggableList } from "@/components/admin";
 import { LessonCanvas } from "@/components/admin/lesson-canvas";
 import { BlockProperties } from "@/components/admin/block-properties";
 import { BlockLibrary } from "@/components/admin/lesson-block-library";
 import { BlockPicker } from "@/components/admin/block-picker";
+import { LessonTemplates } from "@/components/admin/lesson-templates";
 import { LessonBlockRenderer } from "@/components/lesson/block-renderer";
 import { lessonsApi } from "@/lib/api/client";
 import { Button, Badge, Input } from "@/components/ui";
@@ -34,6 +35,12 @@ import {
   FileText,
   List,
   Plus,
+  Undo2,
+  Redo2,
+  GripVertical,
+  Monitor,
+  Tablet,
+  Smartphone,
   Settings as SettingsIcon,
 } from "lucide-react";
 
@@ -116,6 +123,19 @@ function blockSnippet(block: LessonBlock): string {
   }
 }
 
+function isTextEntry(): boolean {
+  const el = typeof document !== "undefined" ? (document.activeElement as HTMLElement | null) : null;
+  if (!el) return false;
+  const tag = el.tagName;
+  return (
+    el.isContentEditable ||
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    !!el.closest(".ProseMirror")
+  );
+}
+
 export default function LessonEditorPage() {
   const params = useParams();
   const lessonId = params.lessonId as string;
@@ -135,6 +155,17 @@ export default function LessonEditorPage() {
     open: false,
     afterId: null,
   });
+  const [undoStack, setUndoStack] = useState<LessonBlock[][]>([]);
+  const [redoStack, setRedoStack] = useState<LessonBlock[][]>([]);
+  const [previewDevice, setPreviewDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
+  const [recovered, setRecovered] = useState<{
+    title: string;
+    description: string;
+    type: string;
+    duration: string;
+    blocks: LessonBlock[];
+    at: number;
+  } | null>(null);
 
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
@@ -174,9 +205,29 @@ export default function LessonEditorPage() {
         setDuration(loaded.duration);
         setStatus(data.status);
         setBlocks(loaded.blocks);
+        setUndoStack([]);
+        setRedoStack([]);
         lastSavedRef.current = makeSnapshot(loaded);
         hydratedRef.current = true;
         setSaveStatus("saved");
+        try {
+          const raw = localStorage.getItem(`arc:lesson-draft:${lessonId}`);
+          if (raw) {
+            const d = JSON.parse(raw);
+            const draftSnap = makeSnapshot({
+              title: d?.title ?? "",
+              description: d?.description ?? "",
+              type: d?.type ?? "",
+              duration: d?.duration ?? "",
+              blocks: Array.isArray(d?.blocks) ? d.blocks : [],
+            });
+            if (d && draftSnap !== makeSnapshot(loaded)) {
+              if (active) setRecovered(d);
+            } else {
+              localStorage.removeItem(`arc:lesson-draft:${lessonId}`);
+            }
+          }
+        } catch {}
       } catch (err) {
         console.error("Failed to load lesson:", err);
         if (active) setLoadError("Failed to load this lesson.");
@@ -211,10 +262,19 @@ export default function LessonEditorPage() {
       lastSavedRef.current = snapshot;
       setLastSavedAt(new Date());
       setSaveStatus("saved");
+      try {
+        localStorage.removeItem(`arc:lesson-draft:${lessonId}`);
+      } catch {}
       return true;
     } catch (err) {
       console.error("Failed to save lesson:", err);
       setSaveStatus("error");
+      try {
+        localStorage.setItem(
+          `arc:lesson-draft:${lessonId}`,
+          JSON.stringify({ title, description, type, duration, blocks, at: Date.now() })
+        );
+      } catch {}
       return false;
     }
   };
@@ -258,9 +318,34 @@ export default function LessonEditorPage() {
     }
   };
 
+  // --- Block history (undo/redo for structural ops) ---
+  const commit = (next: LessonBlock[]) => {
+    setUndoStack((s) => [...s.slice(-49), blocks]);
+    setRedoStack([]);
+    setBlocks(next);
+  };
+
+  const undo = () => {
+    if (undoStack.length === 0) return;
+    const prev = undoStack[undoStack.length - 1];
+    setRedoStack((r) => [...r.slice(-49), blocks]);
+    setUndoStack((s) => s.slice(0, -1));
+    setBlocks(prev);
+    setSelectedBlockId((cur) => (cur && prev.some((b) => b.id === cur) ? cur : null));
+  };
+
+  const redo = () => {
+    if (redoStack.length === 0) return;
+    const next = redoStack[redoStack.length - 1];
+    setUndoStack((s) => [...s.slice(-49), blocks]);
+    setRedoStack((r) => r.slice(0, -1));
+    setBlocks(next);
+    setSelectedBlockId((cur) => (cur && next.some((b) => b.id === cur) ? cur : null));
+  };
+
   const addBlock = (t: BlockType) => {
     const nb = createBlock(t);
-    setBlocks((prev) => [...prev, nb]);
+    commit([...blocks, nb]);
     setSelectedBlockId(nb.id);
     setActiveTab("content");
   };
@@ -270,23 +355,48 @@ export default function LessonEditorPage() {
   const insertBlockAt = (t: BlockType, afterId: string | null) => {
     const nb = createBlock(t);
     const idx = afterId ? blocks.findIndex((b) => b.id === afterId) : -1;
-    if (idx < 0) {
-      setBlocks([...blocks, nb]);
-    } else {
-      const next = [...blocks];
-      next.splice(idx + 1, 0, nb);
-      setBlocks(next);
-    }
+    const next = [...blocks];
+    if (idx < 0) next.push(nb);
+    else next.splice(idx + 1, 0, nb);
+    commit(next);
     setSelectedBlockId(nb.id);
     setBlockPicker({ open: false, afterId: null });
     setActiveTab("content");
   };
 
+  const applyTemplate = (templateBlocks: LessonBlock[]) => {
+    commit(templateBlocks);
+    setSelectedBlockId(templateBlocks[0]?.id ?? null);
+    setActiveTab("content");
+  };
+
+  const restoreDraft = () => {
+    if (!recovered) return;
+    setTitle(recovered.title);
+    setDescription(recovered.description);
+    setType(recovered.type);
+    setDuration(recovered.duration);
+    setBlocks(recovered.blocks);
+    setSelectedBlockId(null);
+    setUndoStack([]);
+    setRedoStack([]);
+    setRecovered(null);
+    setSaveStatus("unsaved");
+  };
+
+  const dismissDraft = () => {
+    try {
+      localStorage.removeItem(`arc:lesson-draft:${lessonId}`);
+    } catch {}
+    setRecovered(null);
+  };
+
+  // Text/field edits stay out of block history (Tiptap & inputs have native undo).
   const updateBlock = (id: string, patch: Record<string, unknown>) =>
     setBlocks(blocks.map((b) => (b.id === id ? ({ ...b, ...patch } as LessonBlock) : b)));
 
   const removeBlock = (id: string) => {
-    setBlocks(blocks.filter((b) => b.id !== id));
+    commit(blocks.filter((b) => b.id !== id));
     if (selectedBlockId === id) setSelectedBlockId(null);
   };
 
@@ -296,7 +406,7 @@ export default function LessonEditorPage() {
     const copy = { ...blocks[idx], id: generateBlockId() } as LessonBlock;
     const next = [...blocks];
     next.splice(idx + 1, 0, copy);
-    setBlocks(next);
+    commit(next);
     setSelectedBlockId(copy.id);
   };
 
@@ -306,12 +416,14 @@ export default function LessonEditorPage() {
     if (idx < 0 || target < 0 || target >= blocks.length) return;
     const next = [...blocks];
     [next[idx], next[target]] = [next[target], next[idx]];
-    setBlocks(next);
+    commit(next);
   };
 
+  const reorderBlocks = (next: LessonBlock[]) => commit(next);
+
   const convertBlock = (id: string, toType: BlockType) => {
-    const HTML_TYPES = ["paragraph", "example", "callout"];
-    setBlocks(
+    const HTML_TYPES = ["paragraph", "example", "callout", "keypoint"];
+    commit(
       blocks.map((b) => {
         if (b.id !== id) return b;
         const text = "text" in b ? (b as { text?: string }).text ?? "" : "";
@@ -326,6 +438,31 @@ export default function LessonEditorPage() {
       })
     );
   };
+
+  // Keyboard shortcuts: Ctrl/Cmd+S save, Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z / Ctrl+Y redo.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      if (key === "s") {
+        e.preventDefault();
+        void handleManualSave();
+      } else if (key === "z") {
+        if (isTextEntry()) return; // let Tiptap / inputs handle text undo
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+      } else if (key === "y") {
+        if (isTextEntry()) return;
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [undoStack, redoStack, blocks, title, description, type, duration]);
 
   if (isLoading) {
     return (
@@ -470,8 +607,9 @@ export default function LessonEditorPage() {
 
   return (
     <>
-      {/* Sticky header + tabs */}
-      <div className="sticky top-0 z-30">
+      <div className="flex flex-col h-dvh">
+      {/* Header + tabs */}
+      <div className="shrink-0">
         <WorkspaceHeader
           title="Edit Lesson"
           breadcrumbs={breadcrumbs}
@@ -479,6 +617,26 @@ export default function LessonEditorPage() {
           badgeVariant={status.toLowerCase() as "published" | "draft" | "archived" | "default"}
           actions={
             <>
+              <div className="flex items-center gap-0.5 mr-1">
+                <button
+                  type="button"
+                  onClick={undo}
+                  disabled={undoStack.length === 0}
+                  title="Undo (Ctrl+Z)"
+                  className="p-1.5 rounded hover:bg-arc-slate-100 text-arc-slate-500 disabled:opacity-40"
+                >
+                  <Undo2 className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={redo}
+                  disabled={redoStack.length === 0}
+                  title="Redo (Ctrl+Shift+Z)"
+                  className="p-1.5 rounded hover:bg-arc-slate-100 text-arc-slate-500 disabled:opacity-40"
+                >
+                  <Redo2 className="h-4 w-4" />
+                </button>
+              </div>
               {saveIndicator}
               <Link href={`/dashboard/lessons/${lessonId}`} target="_blank" rel="noopener noreferrer">
                 <Button variant="outline" size="sm">
@@ -501,32 +659,54 @@ export default function LessonEditorPage() {
         />
       </div>
 
+      {recovered && (
+        <div className="shrink-0 bg-yellow-50 border-b border-yellow-200 px-6 py-2 flex items-center justify-between gap-3">
+          <span className="text-sm text-yellow-800">
+            Recovered unsaved changes from your last session
+            {recovered.at ? ` (${timeAgo(new Date(recovered.at))})` : ""}.
+          </span>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Button variant="outline" size="sm" onClick={restoreDraft}>
+              Restore
+            </Button>
+            <Button variant="ghost" size="sm" onClick={dismissDraft}>
+              Dismiss
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Scrolling body */}
+      <div className="flex-1 min-h-0">
       {/* CONTENT TAB: three-column editor */}
       {activeTab === "content" && (
-        <div className="flex items-stretch min-h-[calc(100vh-9.5rem)]">
+        <div className="flex h-full">
           {/* Left: Block Library */}
-          <aside className="w-60 shrink-0 border-r border-arc-slate-200 bg-white p-4 pb-28 overflow-y-auto">
+          <aside className="w-60 shrink-0 border-r border-arc-slate-200 bg-white p-4 overflow-y-auto">
             <BlockLibrary onAdd={addBlock} />
           </aside>
 
           {/* Center: Canvas */}
-          <main className="flex-1 min-w-0 bg-arc-slate-50 p-6 pb-28 overflow-y-auto">
+          <main className="flex-1 min-w-0 bg-arc-slate-50 p-6 overflow-y-auto">
             <div className="max-w-3xl mx-auto">
               <div className="mb-6">
                 <h1 className="text-3xl font-bold text-arc-navy-900">{title || "Untitled Lesson"}</h1>
                 {description && <p className="text-arc-slate-600 mt-2">{description}</p>}
               </div>
-              <LessonCanvas
-                blocks={blocks}
-                selectedId={selectedBlockId}
-                onSelect={setSelectedBlockId}
-                onReorder={setBlocks}
-                onDuplicate={duplicateBlock}
-                onMove={moveBlock}
-                onDelete={removeBlock}
-                onConvert={convertBlock}
-              />
-
+              {blocks.length === 0 ? (
+                <LessonTemplates onApply={applyTemplate} />
+              ) : (
+                <LessonCanvas
+                  blocks={blocks}
+                  selectedId={selectedBlockId}
+                  onSelect={setSelectedBlockId}
+                  onReorder={reorderBlocks}
+                  onDuplicate={duplicateBlock}
+                  onMove={moveBlock}
+                  onDelete={removeBlock}
+                  onConvert={convertBlock}
+                />
+              )}
               {/* Add content */}
               <div className="mt-4 flex items-center gap-3">
                 <div className="flex-1 h-px bg-arc-slate-200" />
@@ -544,7 +724,7 @@ export default function LessonEditorPage() {
           </main>
 
           {/* Right: Properties (contextual) */}
-          <aside className="w-80 shrink-0 border-l border-arc-slate-200 bg-white p-5 pb-28 overflow-y-auto">
+          <aside className="w-80 shrink-0 border-l border-arc-slate-200 bg-white p-5 overflow-y-auto">
             {selectedBlock ? (
               <BlockProperties
                 key={selectedBlock.id}
@@ -568,43 +748,68 @@ export default function LessonEditorPage() {
 
       {/* STRUCTURE TAB: outline */}
       {activeTab === "structure" && (
-        <div className="p-6 pb-28">
+        <div className="h-full overflow-y-auto p-6">
           <div className="max-w-2xl mx-auto">
             <h2 className="text-lg font-semibold text-arc-navy-900 mb-4">Lesson Structure</h2>
             {blocks.length === 0 ? (
               <p className="text-sm text-arc-slate-500">No blocks yet. Add content in the Content tab.</p>
             ) : (
-              <ol className="space-y-2">
-                {blocks.map((block, i) => (
-                  <li
-                    key={block.id}
-                    className="flex items-center gap-3 rounded-lg border border-arc-slate-200 bg-white px-4 py-3"
-                  >
-                    <span className="text-sm font-mono text-arc-slate-400 w-6">
-                      {String(i + 1).padStart(2, "0")}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs font-medium uppercase tracking-wide text-arc-slate-400">
-                        {BLOCK_LABELS[block.type]}
+              <>
+                <p className="text-xs text-arc-slate-400 mb-3">
+                  Drag to reorder. Click a block to edit it in the Content tab.
+                </p>
+                <DraggableList
+                  items={blocks.map((b) => ({ id: b.id, title: BLOCK_LABELS[b.type] }))}
+                  onReorder={(reordered) => {
+                    const map = new Map(blocks.map((b) => [b.id, b]));
+                    reorderBlocks(
+                      reordered.map((i) => map.get(i.id)).filter((b): b is LessonBlock => !!b)
+                    );
+                  }}
+                  renderItem={(item, dragHandleProps) => {
+                    const idx = blocks.findIndex((b) => b.id === item.id);
+                    const block = blocks[idx];
+                    if (!block) return null;
+                    return (
+                      <div className="flex items-center gap-3 rounded-lg border border-arc-slate-200 bg-white px-3 py-2.5 hover:border-arc-orange-300 transition-colors">
+                        <button
+                          {...dragHandleProps}
+                          className="cursor-grab active:cursor-grabbing p-1 text-arc-slate-300 hover:text-arc-slate-500"
+                          title="Drag to reorder"
+                        >
+                          <GripVertical className="h-4 w-4" />
+                        </button>
+                        <span className="text-sm font-mono text-arc-slate-400 w-6">
+                          {String(idx + 1).padStart(2, "0")}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedBlockId(block.id);
+                            setActiveTab("content");
+                          }}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <div className="text-xs font-medium uppercase tracking-wide text-arc-slate-400">
+                            {BLOCK_LABELS[block.type]}
+                          </div>
+                          <div className="text-sm text-arc-navy-900 truncate">
+                            {blockSnippet(block) || <span className="text-arc-slate-300">Empty</span>}
+                          </div>
+                        </button>
                       </div>
-                      <div className="text-sm text-arc-navy-900 truncate">
-                        {blockSnippet(block) || <span className="text-arc-slate-300">Empty</span>}
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ol>
+                    );
+                  }}
+                />
+              </>
             )}
-            <p className="text-xs text-arc-slate-400 mt-4">
-              Drag-to-reorder here is coming soon. For now, reorder in the Content tab.
-            </p>
           </div>
         </div>
       )}
 
       {/* SETTINGS TAB */}
       {activeTab === "settings" && (
-        <div className="p-6 pb-28">
+        <div className="h-full overflow-y-auto p-6">
           <div className="max-w-2xl mx-auto bg-white rounded-2xl border border-arc-slate-200 p-6">
             <h2 className="text-lg font-semibold text-arc-navy-900 mb-4">Lesson Settings</h2>
             {renderLessonSettings()}
@@ -614,8 +819,42 @@ export default function LessonEditorPage() {
 
       {/* PREVIEW TAB */}
       {activeTab === "preview" && (
-        <div className="p-6 pb-28 bg-arc-slate-50 min-h-[calc(100vh-9.5rem)]">
-          <div className="max-w-3xl mx-auto bg-white rounded-2xl border border-arc-slate-200 p-6 sm:p-8">
+        <div className="h-full overflow-y-auto p-6 bg-arc-slate-50">
+          <div className="flex items-center justify-center gap-1 mb-4">
+            {([
+              { id: "desktop", icon: Monitor, label: "Desktop" },
+              { id: "tablet", icon: Tablet, label: "Tablet" },
+              { id: "mobile", icon: Smartphone, label: "Mobile" },
+            ] as const).map((d) => {
+              const Icon = d.icon;
+              const active = previewDevice === d.id;
+              return (
+                <button
+                  key={d.id}
+                  type="button"
+                  onClick={() => setPreviewDevice(d.id)}
+                  title={d.label}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                    active
+                      ? "border-arc-orange-300 bg-arc-orange-50 text-arc-orange-600"
+                      : "border-arc-slate-200 bg-white text-arc-slate-500 hover:text-arc-navy-900"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="hidden sm:inline">{d.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div
+            className={`mx-auto bg-white rounded-2xl border border-arc-slate-200 p-6 sm:p-8 transition-all ${
+              previewDevice === "mobile"
+                ? "max-w-[390px]"
+                : previewDevice === "tablet"
+                  ? "max-w-[768px]"
+                  : "max-w-3xl"
+            }`}
+          >
             <Badge className="mb-2 bg-arc-slate-100 text-arc-slate-600">{typeLabels[type] || type}</Badge>
             <h1 className="text-3xl font-bold text-arc-navy-900">{title || "Untitled Lesson"}</h1>
             {description && <p className="text-arc-slate-600 mt-2">{description}</p>}
@@ -631,9 +870,10 @@ export default function LessonEditorPage() {
           </div>
         </div>
       )}
+      </div>
 
-      {/* Sticky Save Bar (unchanged position) */}
-      <div className="fixed bottom-0 left-0 right-0 border-t border-arc-slate-200 bg-white shadow-lg z-40 lg:ml-64">
+      {/* Save bar (pinned to the bottom of the editor column) */}
+      <div className="shrink-0 border-t border-arc-slate-200 bg-white">
         <div className="px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {saveStatus === "saved" && (
@@ -659,7 +899,14 @@ export default function LessonEditorPage() {
             {saveStatus === "error" && (
               <>
                 <AlertCircle className="h-4 w-4 text-red-500" />
-                <span className="text-sm text-red-600 font-medium">Save failed — retry</span>
+                <span className="text-sm text-red-600 font-medium">Save failed</span>
+                <button
+                  type="button"
+                  onClick={handleManualSave}
+                  className="text-sm font-medium text-arc-orange-600 hover:underline"
+                >
+                  Retry
+                </button>
               </>
             )}
           </div>
@@ -683,6 +930,7 @@ export default function LessonEditorPage() {
             )}
           </div>
         </div>
+      </div>
       </div>
       <BlockPicker
         open={blockPicker.open}

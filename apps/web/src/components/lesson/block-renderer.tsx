@@ -8,6 +8,9 @@ import {
   Lightbulb,
   AlertTriangle,
   ExternalLink,
+  CheckSquare,
+  Square,
+  Star,
 } from "lucide-react";
 import {
   type LessonBlock,
@@ -147,6 +150,46 @@ function BlockView({ block }: { block: LessonBlock }) {
         <EmptyMedia label="Resource URL not set" />
       );
 
+    case "checklist":
+      return <ChecklistView items={block.items} />;
+
+    case "keypoint":
+      return (
+        <div className="flex items-start gap-3 rounded-lg border border-arc-orange-200 bg-arc-orange-50 px-4 py-3">
+          <Star className="h-5 w-5 flex-shrink-0 mt-0.5 text-arc-orange-500" />
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-arc-orange-600 mb-0.5">
+              Key Point
+            </div>
+            <div className="text-arc-navy-900">
+              <RichText html={block.html} text={block.text} />
+            </div>
+          </div>
+        </div>
+      );
+
+    case "link":
+      return block.url ? (
+        <a
+          href={block.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 rounded-lg border border-arc-slate-200 bg-white px-4 py-3 hover:border-arc-orange-300 transition-colors"
+        >
+          <div className="h-9 w-9 rounded-lg bg-arc-slate-100 text-arc-slate-600 flex items-center justify-center flex-shrink-0">
+            <ExternalLink className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium text-arc-navy-900 truncate">{block.label || block.url}</div>
+            {block.description && (
+              <div className="text-xs text-arc-slate-500 truncate">{block.description}</div>
+            )}
+          </div>
+        </a>
+      ) : (
+        <EmptyMedia label="Link URL not set" />
+      );
+
     case "question":
       return (
         <div className="rounded-lg border border-dashed border-arc-slate-300 bg-arc-slate-50 px-4 py-3 text-sm text-arc-slate-500">
@@ -226,6 +269,38 @@ function EmptyMedia({ label }: { label: string }) {
     <div className="rounded-lg border border-dashed border-arc-slate-300 bg-arc-slate-50 px-4 py-6 text-center text-sm text-arc-slate-400">
       {label}
     </div>
+  );
+}
+
+function ChecklistView({ items }: { items: { id: string; text: string }[] }) {
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  if (!items || items.length === 0) {
+    return <EmptyMedia label="No checklist items yet" />;
+  }
+  return (
+    <ul className="space-y-1.5">
+      {items.map((it) => {
+        const isOn = !!checked[it.id];
+        return (
+          <li key={it.id}>
+            <button
+              type="button"
+              onClick={() => setChecked((c) => ({ ...c, [it.id]: !c[it.id] }))}
+              className="flex items-start gap-2.5 text-left w-full group"
+            >
+              {isOn ? (
+                <CheckSquare className="h-5 w-5 text-arc-orange-500 flex-shrink-0 mt-0.5" />
+              ) : (
+                <Square className="h-5 w-5 text-arc-slate-300 flex-shrink-0 mt-0.5 group-hover:text-arc-slate-400" />
+              )}
+              <span className={`text-arc-slate-700 ${isOn ? "line-through text-arc-slate-400" : ""}`}>
+                {it.text || <span className="text-arc-slate-300">Item</span>}
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

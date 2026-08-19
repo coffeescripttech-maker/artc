@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Upload, Loader2 } from "lucide-react";
-import { type LessonBlock, resolveVideo } from "@aratc/shared";
+import { Upload, Loader2, Plus, X } from "lucide-react";
+import { type LessonBlock, resolveVideo, generateBlockId } from "@aratc/shared";
 import { mediaApi } from "@/lib/api/client";
 import { prepareImageForUpload, fileToUploadPayload } from "@/lib/image";
 import { RichTextEditor } from "./rich-text-editor";
@@ -139,6 +139,16 @@ export function BlockFields({
         </div>
       );
 
+    case "keypoint":
+      return (
+        <RichTextEditor
+          value={block.html || textToHtml(block.text)}
+          onChange={(html, text) => onUpdate({ html, text })}
+          placeholder="Key point…"
+          onSlash={onSlash}
+        />
+      );
+
     case "formula":
       return (
         <textarea
@@ -152,6 +162,33 @@ export function BlockFields({
 
     case "resource":
       return <ResourceFields block={block} onUpdate={onUpdate} />;
+
+    case "checklist":
+      return <ChecklistFields block={block} onUpdate={onUpdate} />;
+
+    case "link":
+      return (
+        <div className="space-y-2">
+          <input
+            value={block.label}
+            onChange={(e) => onUpdate({ label: e.target.value })}
+            placeholder="Link label"
+            className={`${inputClass} font-medium`}
+          />
+          <input
+            value={block.url}
+            onChange={(e) => onUpdate({ url: e.target.value })}
+            placeholder="https://…"
+            className={inputClass}
+          />
+          <input
+            value={block.description || ""}
+            onChange={(e) => onUpdate({ description: e.target.value })}
+            placeholder="Description (optional)"
+            className={inputClass}
+          />
+        </div>
+      );
 
     case "divider":
       return <p className="text-sm text-arc-slate-500">A horizontal divider. No settings.</p>;
@@ -304,6 +341,50 @@ function ResourceFields({
         className={inputClass}
       />
       {err && <p className="text-xs text-red-500">{err}</p>}
+    </div>
+  );
+}
+
+function ChecklistFields({
+  block,
+  onUpdate,
+}: {
+  block: Extract<LessonBlock, { type: "checklist" }>;
+  onUpdate: (patch: Record<string, unknown>) => void;
+}) {
+  const items = block.items;
+  const setItems = (next: { id: string; text: string }[]) => onUpdate({ items: next });
+
+  return (
+    <div className="space-y-2">
+      {items.map((it, i) => (
+        <div key={it.id} className="flex items-center gap-2">
+          <input
+            value={it.text}
+            onChange={(e) =>
+              setItems(items.map((x) => (x.id === it.id ? { ...x, text: e.target.value } : x)))
+            }
+            placeholder={`Item ${i + 1}`}
+            className={inputClass}
+          />
+          <button
+            type="button"
+            onClick={() => setItems(items.filter((x) => x.id !== it.id))}
+            title="Remove item"
+            className="p-1.5 rounded hover:bg-red-50 text-red-400 flex-shrink-0"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => setItems([...items, { id: generateBlockId(), text: "" }])}
+        className="flex items-center gap-1.5 text-sm text-arc-slate-600 hover:text-arc-orange-600"
+      >
+        <Plus className="h-4 w-4" />
+        Add item
+      </button>
     </div>
   );
 }

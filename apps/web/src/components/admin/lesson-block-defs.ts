@@ -11,6 +11,9 @@ import {
   Minus,
   HelpCircle,
   ClipboardList,
+  Star,
+  ListChecks,
+  Link2,
 } from "lucide-react";
 import type { BlockType } from "@aratc/shared";
 
@@ -44,12 +47,15 @@ export const BLOCK_GROUPS: BlockGroup[] = [
       { key: "example", label: "Example", icon: BookOpen, type: "example" },
       { key: "formula", label: "Formula", icon: Sigma, type: "formula" },
       { key: "callout", label: "Callout", icon: Info, type: "callout" },
+      { key: "keypoint", label: "Key Point", icon: Star, type: "keypoint" },
+      { key: "checklist", label: "Checklist", icon: ListChecks, type: "checklist" },
     ],
   },
   {
     title: "Resources",
     items: [
       { key: "resource", label: "Resource", icon: Paperclip, type: "resource" },
+      { key: "link", label: "Link", icon: Link2, type: "link" },
       { key: "divider", label: "Divider", icon: Minus, type: "divider" },
     ],
   },

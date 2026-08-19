@@ -13,17 +13,19 @@ import {
   Heading,
   BookOpen,
   Info,
+  Star,
 } from "lucide-react";
 import { type LessonBlock, type BlockType, BLOCK_LABELS } from "@aratc/shared";
 import { DraggableList, type DraggableItem } from "./draggable-list";
 import { LessonBlockRenderer } from "@/components/lesson/block-renderer";
 
-const TEXT_FAMILY: BlockType[] = ["paragraph", "heading", "example", "callout"];
+const TEXT_FAMILY: BlockType[] = ["paragraph", "heading", "example", "callout", "keypoint"];
 const convertIcons: Partial<Record<BlockType, React.ElementType>> = {
   paragraph: Type,
   heading: Heading,
   example: BookOpen,
   callout: Info,
+  keypoint: Star,
 };
 
 interface LessonCanvasProps {

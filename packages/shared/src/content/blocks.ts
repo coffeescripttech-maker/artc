@@ -20,6 +20,9 @@ export const BLOCK_TYPES = {
   FORMULA: "formula",
   DIVIDER: "divider",
   RESOURCE: "resource",
+  CHECKLIST: "checklist",
+  KEYPOINT: "keypoint",
+  LINK: "link",
   QUESTION: "question",
 } as const;
 
@@ -90,6 +93,28 @@ export interface ResourceBlock {
   url: string;
   name: string;
 }
+export interface ChecklistItem {
+  id: string;
+  text: string;
+}
+export interface ChecklistBlock {
+  id: string;
+  type: "checklist";
+  items: ChecklistItem[];
+}
+export interface KeyPointBlock {
+  id: string;
+  type: "keypoint";
+  text: string;
+  html?: string;
+}
+export interface LinkBlock {
+  id: string;
+  type: "link";
+  url: string;
+  label: string;
+  description?: string;
+}
 /** Question/practice blocks reference the question bank (resolved later). */
 export interface QuestionBlock {
   id: string;
@@ -107,6 +132,9 @@ export type LessonBlock =
   | FormulaBlock
   | DividerBlock
   | ResourceBlock
+  | ChecklistBlock
+  | KeyPointBlock
+  | LinkBlock
   | QuestionBlock;
 
 export interface LessonContent {
@@ -124,6 +152,9 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   formula: "Formula",
   divider: "Divider",
   resource: "Resource",
+  checklist: "Checklist",
+  keypoint: "Key Point",
+  link: "Link",
   question: "Question",
 };
 
@@ -141,6 +172,9 @@ export const lessonBlockSchema = z.discriminatedUnion("type", [
   z.object({ id: zId, type: z.literal("formula"), latex: z.string().default("") }),
   z.object({ id: zId, type: z.literal("divider") }),
   z.object({ id: zId, type: z.literal("resource"), url: z.string().default(""), name: z.string().default("") }),
+  z.object({ id: zId, type: z.literal("checklist"), items: z.array(z.object({ id: zId, text: z.string().default("") })).default([]) }),
+  z.object({ id: zId, type: z.literal("keypoint"), text: z.string().default(""), html: z.string().optional() }),
+  z.object({ id: zId, type: z.literal("link"), url: z.string().default(""), label: z.string().default(""), description: z.string().optional() }),
   z.object({ id: zId, type: z.literal("question"), questionId: z.string().default("") }),
 ]);
 
@@ -182,6 +216,12 @@ export function createBlock(type: BlockType): LessonBlock {
       return { id, type: "divider" };
     case "resource":
       return { id, type: "resource", url: "", name: "" };
+    case "checklist":
+      return { id, type: "checklist", items: [{ id: generateBlockId(), text: "" }] };
+    case "keypoint":
+      return { id, type: "keypoint", text: "" };
+    case "link":
+      return { id, type: "link", url: "", label: "", description: "" };
     case "question":
       return { id, type: "question", questionId: "" };
     default:
@@ -248,6 +288,23 @@ function normalizeBlock(raw: unknown): LessonBlock | null {
       return { id, type: "divider" };
     case "resource":
       return { id, type: "resource", url: str(b.url), name: str(b.name) };
+    case "checklist": {
+      const rawItems = Array.isArray(b.items) ? b.items : [];
+      const items = rawItems.map((it) => {
+        const o = (it && typeof it === "object" ? it : {}) as Record<string, unknown>;
+        return { id: typeof o.id === "string" && o.id ? o.id : generateBlockId(), text: str(o.text) };
+      });
+      return { id, type: "checklist", items };
+    }
+    case "keypoint":
+      return {
+        id,
+        type: "keypoint",
+        text: str(b.text ?? b.markdown),
+        ...(typeof b.html === "string" ? { html: b.html } : {}),
+      };
+    case "link":
+      return { id, type: "link", url: str(b.url), label: str(b.label ?? b.name), description: str(b.description) };
     case "question":
       return { id, type: "question", questionId: str(b.questionId) };
     default:
