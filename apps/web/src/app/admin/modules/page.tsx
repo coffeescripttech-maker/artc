@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { DashboardHeader } from "@/components/dashboard";
 import { modulesApi, subjectsApi } from "@/lib/api/client";
 import { Card, CardContent, Button, Badge, Input } from "@/components/ui";
+import { toast } from "@/lib/toast";
 import {
   Layers,
   Plus,
@@ -62,6 +63,7 @@ export default function ModulesPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("all");
+  const [isPublishing, setIsPublishing] = useState(false);
 
   // Fetch modules on mount
   useEffect(() => {
@@ -117,7 +119,47 @@ export default function ModulesPage() {
       setModules(modules.filter((m) => m.id !== moduleId));
     } catch (err) {
       console.error("Failed to delete module:", err);
-      alert("Failed to delete module. Please try again.");
+      toast.error("Failed to delete module. Please try again.");
+    }
+  };
+
+  const handleToggleModuleStatus = async (moduleId: string, currentStatus: string) => {
+    const newStatus = currentStatus === "PUBLISHED" ? "DRAFT" : "PUBLISHED";
+
+    try {
+      if (newStatus === "PUBLISHED") {
+        await modulesApi.publish(moduleId);
+      } else {
+        await modulesApi.archive(moduleId);
+      }
+      setModules(modules.map((m) =>
+        m.id === moduleId ? { ...m, status: newStatus as Module["status"] } : m
+      ));
+      toast.success(`Module ${newStatus === "PUBLISHED" ? "published" : "unpublished"}`);
+    } catch (err) {
+      console.error("Failed to toggle module status:", err);
+      toast.error("Failed to update module status");
+    }
+  };
+
+  const handlePublishAllModules = async () => {
+    const draftModules = modules.filter((m) => m.status !== "PUBLISHED");
+    if (draftModules.length === 0) return;
+
+    setIsPublishing(true);
+    try {
+      await Promise.all(
+        draftModules.map((m) => modulesApi.publish(m.id))
+      );
+      setModules(modules.map((m) =>
+        m.status !== "PUBLISHED" ? { ...m, status: "PUBLISHED" as Module["status"] } : m
+      ));
+      toast.success(`Published ${draftModules.length} modules`);
+    } catch (err) {
+      console.error("Failed to publish modules:", err);
+      toast.error("Failed to publish modules");
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -178,6 +220,29 @@ export default function ModulesPage() {
             Create Module
           </Button>
         </div>
+
+        {/* Publish All Banner */}
+        {modules.filter((m) => m.status !== "PUBLISHED").length > 0 && !isLoading && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
+            <span className="text-amber-800 text-sm">
+              {modules.filter((m) => m.status !== "PUBLISHED").length} module(s) are in draft
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePublishAllModules}
+              disabled={isPublishing}
+              className="border-amber-300 text-amber-800 hover:bg-amber-100"
+            >
+              {isPublishing ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Layers className="h-4 w-4 mr-2" />
+              )}
+              {isPublishing ? "Publishing..." : "Publish All"}
+            </Button>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid gap-4 mb-6 md:grid-cols-4">
@@ -311,11 +376,16 @@ export default function ModulesPage() {
                           {module._count?.lessons || 0}
                         </td>
                         <td className="px-4 py-3">
-                          <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[module.status]}`}
+                          <button
+                            className="cursor-pointer hover:opacity-80 transition-opacity"
+                            onClick={() => handleToggleModuleStatus(module.id, module.status)}
                           >
-                            {module.status.replace("_", " ")}
-                          </span>
+                            {module.status === "PUBLISHED" ? (
+                              <Badge variant="success" className="cursor-pointer">{module.status}</Badge>
+                            ) : (
+                              <Badge className="bg-yellow-100 text-yellow-700 cursor-pointer">{module.status}</Badge>
+                            )}
+                          </button>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">

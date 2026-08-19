@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { WorkspaceHeader, DraggableList, type DraggableItem, QuestionForm } from "@/components/admin";
+import { WorkspaceHeader, DraggableList, type DraggableItem, QuestionForm, TopicPicker } from "@/components/admin";
 import { assessmentsApi, questionsApi } from "@/lib/api/client";
-import { Card, CardContent, Button, Badge } from "@/components/ui";
+import { Card, CardContent, Button, Badge, Input } from "@/components/ui";
+import { toast } from "@/lib/toast";
 import {
   Plus,
   GripVertical,
@@ -18,6 +19,8 @@ import {
   Target,
   RefreshCw,
   ArrowLeft,
+  X,
+  ChevronDown,
 } from "lucide-react";
 
 // Types
@@ -29,6 +32,7 @@ interface Assessment {
   status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   description?: string;
   questionCount?: number;
+  topicIds?: string[];
   timeLimitMinutes?: number;
   passingScore?: number;
   masteryThreshold?: number;
@@ -108,6 +112,11 @@ export default function AssessmentBuilderPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [showQuestionForm, setShowQuestionForm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showAutoGenerate, setShowAutoGenerate] = useState(false);
+  const [selectedTopicIds, setSelectedTopicIds] = useState<string[]>([]);
+  const [autoGenQuestionCount, setAutoGenQuestionCount] = useState("10");
+  const [autoGenDifficulty, setAutoGenDifficulty] = useState<"ALL" | "EASY" | "MEDIUM" | "HARD">("ALL");
+  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -135,9 +144,16 @@ export default function AssessmentBuilderPage() {
       setShowExplanations(a.showExplanations !== false);
       setAllowRetake(!!a.allowRetake);
       setMaxAttempts(a.maxAttempts != null ? String(a.maxAttempts) : "");
+      setSelectedTopicIds(a.topicIds || []);
 
       if (questionsData && Array.isArray(questionsData)) {
-        setQuestions(questionsData as Question[]);
+        // API returns AssessmentQuestion objects with nested question - extract the question data
+        const extracted = (questionsData as any[]).map((aq: any) => ({
+          ...aq.question,
+          score: aq.score,
+          orderIndex: aq.orderIndex,
+        }));
+        setQuestions(extracted as Question[]);
       } else {
         setQuestions(mockQuestions);
       }
@@ -182,6 +198,8 @@ export default function AssessmentBuilderPage() {
         showExplanations,
         allowRetake,
         maxAttempts: num(maxAttempts),
+        topicIds: selectedTopicIds,
+        questionCount: selectedTopicIds.length > 0 ? parseInt(autoGenQuestionCount) || 10 : undefined,
       });
     } catch (err) {
       console.error("Failed to save:", err);
@@ -197,14 +215,51 @@ export default function AssessmentBuilderPage() {
       router.push("/admin/assessments");
     } catch (err) {
       console.error("Failed to publish:", err);
-      alert("Failed to publish. Please try again.");
+      toast.error("Failed to publish. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleAutoGenerate = () => {
-    alert("Auto-generate questions based on topic and difficulty");
+    setShowAutoGenerate(true);
+  };
+
+  const handleConfirmAutoGenerate = async () => {
+    if (selectedTopicIds.length === 0) {
+      toast.error("Please select at least one topic");
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const difficultyLevels = autoGenDifficulty === "ALL" ? undefined : [autoGenDifficulty];
+
+      const result = await assessmentsApi.autoGenerate(assessmentId, {
+        topicIds: selectedTopicIds,
+        questionCount: parseInt(autoGenQuestionCount) || 10,
+        difficultyLevels,
+      });
+
+      // Refresh questions list
+      const questionsData = await questionsApi.getByAssessment(assessmentId) as any[];
+      if (questionsData && Array.isArray(questionsData)) {
+        const extracted = questionsData.map((aq: any) => ({
+          ...aq.question,
+          score: aq.score,
+          orderIndex: aq.orderIndex,
+        }));
+        setQuestions(extracted);
+      }
+
+      setShowAutoGenerate(false);
+      toast.success(`Added ${Array.isArray(result) ? result.length : 0} questions to the assessment`);
+    } catch (err) {
+      console.error("Failed to auto-generate:", err);
+      toast.error("Failed to generate questions. Please try again.");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleAddQuestion = async (data: {
@@ -212,16 +267,28 @@ export default function AssessmentBuilderPage() {
     type: string;
     difficulty: string;
     options: { id: string; text: string; isCorrect: boolean }[];
+    correctAnswer?: unknown;
     explanation?: string;
+    topicIds?: string[];
   }) => {
     try {
+      // First create the question in the question bank
       const newQuestion = await questionsApi.create(
-        { stem: data.stem, type: data.type, difficulty: data.difficulty, options: data.options, explanation: data.explanation },
-        ""
+        { stem: data.stem, type: data.type, difficulty: data.difficulty, options: data.options, correctAnswer: data.correctAnswer, explanation: data.explanation, topicIds: data.topicIds }
       );
-      setQuestions([...questions, newQuestion as Question]);
+
+      // Then link it to this assessment
+      const createdQ = newQuestion as Question;
+      try {
+        await assessmentsApi.addQuestion(assessmentId, { questionId: createdQ.id, score: 1 });
+      } catch (linkErr) {
+        console.error("Failed to link question to assessment:", linkErr);
+      }
+
+      setQuestions([...questions, { ...createdQ, score: 1 }]);
       setShowQuestionForm(false);
     } catch (err) {
+      // Fallback to local state for demo
       const newQuestion: Question = {
         id: Date.now().toString(),
         stem: data.stem,
@@ -243,7 +310,7 @@ export default function AssessmentBuilderPage() {
     setQuestions(reorderedQuestions);
     setIsSaving(true);
     try {
-      await assessmentsApi.reorderQuestions(assessmentId, reorderedItems.map((i) => i.id), "");
+      await assessmentsApi.reorderQuestions(assessmentId, reorderedItems.map((i) => i.id));
     } catch (err) {
       console.error("Failed to reorder:", err);
     } finally {
@@ -254,7 +321,7 @@ export default function AssessmentBuilderPage() {
   const handleDeleteQuestion = async (questionId: string) => {
     if (!confirm("Are you sure you want to remove this question?")) return;
     try {
-      await assessmentsApi.removeQuestion(assessmentId, questionId, "");
+      await assessmentsApi.removeQuestion(assessmentId, questionId);
       setQuestions(questions.filter((q) => q.id !== questionId));
     } catch (err) {
       setQuestions(questions.filter((q) => q.id !== questionId));
@@ -515,6 +582,114 @@ export default function AssessmentBuilderPage() {
         onClose={() => setShowQuestionForm(false)}
         onSubmit={handleAddQuestion}
       />
+
+      {/* Auto-Generate Modal */}
+      {showAutoGenerate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-arc-navy-950/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-arc-slate-200">
+              <div>
+                <h2 className="text-lg font-bold text-arc-navy-900">Auto-Generate Questions</h2>
+                <p className="text-sm text-arc-slate-500">Select topics and generate questions automatically</p>
+              </div>
+              <button onClick={() => setShowAutoGenerate(false)} className="p-2 rounded-lg hover:bg-arc-slate-100">
+                <X className="h-5 w-5 text-arc-slate-500" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Topic Selection */}
+              <div>
+                <label className="block text-sm font-medium text-arc-navy-900 mb-2">
+                  Select Topics
+                </label>
+                <TopicPicker
+                  selectedTopicIds={selectedTopicIds}
+                  onChange={setSelectedTopicIds}
+                />
+              </div>
+
+              {/* Question Count */}
+              <div>
+                <label className="block text-sm font-medium text-arc-navy-900 mb-2">
+                  Number of Questions
+                </label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={autoGenQuestionCount}
+                  onChange={(e) => setAutoGenQuestionCount(e.target.value)}
+                  placeholder="Enter number of questions"
+                />
+                <p className="text-xs text-arc-slate-500 mt-1">
+                  Maximum questions that can be generated from selected topics
+                </p>
+              </div>
+
+              {/* Difficulty Distribution */}
+              <div>
+                <label className="block text-sm font-medium text-arc-navy-900 mb-2">
+                  Difficulty Level
+                </label>
+                <div className="flex gap-2">
+                  {(["ALL", "EASY", "MEDIUM", "HARD"] as const).map((level) => (
+                    <button
+                      key={level}
+                      onClick={() => setAutoGenDifficulty(level)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        autoGenDifficulty === level
+                          ? level === "ALL"
+                            ? "bg-arc-navy-900 text-white"
+                            : level === "EASY"
+                            ? "bg-green-500 text-white"
+                            : level === "MEDIUM"
+                            ? "bg-yellow-500 text-white"
+                            : "bg-red-500 text-white"
+                          : "bg-arc-slate-100 text-arc-slate-600 hover:bg-arc-slate-200"
+                      }`}
+                    >
+                      {level === "ALL" ? "All Levels" : level.charAt(0) + level.slice(1).toLowerCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Info Box */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-700">
+                  <strong>How it works:</strong> The system will pull questions from the question bank
+                  that are linked to your selected topics. Questions will be randomly selected and
+                  shuffled. Each attempt will draw a fresh sample.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 px-6 py-4 border-t border-arc-slate-200 bg-arc-slate-50">
+              <Button variant="outline" onClick={() => setShowAutoGenerate(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="accent"
+                onClick={handleConfirmAutoGenerate}
+                disabled={isGenerating || selectedTopicIds.length === 0}
+              >
+                {isGenerating ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-4 w-4 mr-2" />
+                    Generate Questions
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

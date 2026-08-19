@@ -11,6 +11,7 @@ import { topicRoutes } from "./modules/topics/routes";
 import { lessonRoutes } from "./modules/lessons/routes";
 import { questionBankRoutes } from "./modules/question-bank/routes";
 import { assessmentRoutes } from "./modules/assessments/routes";
+import { passageRoutes } from "./modules/passages/routes";
 import { cetRoutes } from "./modules/cet/routes";
 import { mediaRoutes } from "./modules/media/routes";
 import { UPLOAD_DIR } from "./modules/media/controller";
@@ -48,6 +49,8 @@ app.use("/api/questions", questionBankRoutes);
 app.use("/questions", questionBankRoutes); // Also accessible without /api prefix
 app.use("/api/assessments", assessmentRoutes);
 app.use("/assessments", assessmentRoutes); // Also accessible without /api prefix
+app.use("/api/passages", passageRoutes);
+app.use("/passages", passageRoutes); // Also accessible without /api prefix
 app.use("/api/cet", cetRoutes);
 app.use("/cet", cetRoutes); // Also accessible without /api prefix
 app.use("/api/media", mediaRoutes);

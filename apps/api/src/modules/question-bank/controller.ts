@@ -60,7 +60,7 @@ export async function create(
   try {
     const { createQuestionSchema } = await import("./schemas");
     const input = validateRequest(createQuestionSchema, req.body);
-    const question = await createQuestion(input, req.user!.id);
+    const question = await createQuestion(input, req.userId!);
     res.status(201).json(question);
   } catch (error) {
     next(error);
@@ -93,7 +93,7 @@ export async function review(
       res.status(400).json({ error: "Status must be PUBLISHED or UNDER_REVIEW" });
       return;
     }
-    const question = await reviewQuestion(req.params.id, req.user!.id, status);
+    const question = await reviewQuestion(req.params.id, req.userId!, status);
     res.json(question);
   } catch (error) {
     next(error);

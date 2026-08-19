@@ -87,6 +87,28 @@ export function gradeAnswer(
       return JSON.stringify(ca) === JSON.stringify(answer);
     }
 
+    case "ORDERING": {
+      // correctAnswer: ["id1", "id2", "id3"] - correct sequence of option IDs
+      const ca = parseJson<string[]>(question.correctAnswer);
+      const given = Array.isArray(answer) ? answer.map(String) : [];
+      if (!Array.isArray(ca) || ca.length === 0) return null;
+      if (ca.length !== given.length) return false;
+      // All items must match in exact order
+      return ca.every((id, i) => id === given[i]);
+    }
+
+    case "NUMERIC": {
+      // correctAnswer: number OR { value: number, tolerance?: number }
+      const ca = parseJson<{ value: number; tolerance?: number } | number>(question.correctAnswer);
+      const numAnswer = Number(answer);
+      if (isNaN(numAnswer)) return false;
+      if (typeof ca === "number") {
+        return Math.abs(numAnswer - ca) < 0.0001; // tolerance for floating point
+      }
+      const tolerance = ca.tolerance ?? 0.0001;
+      return Math.abs(numAnswer - ca.value) <= tolerance;
+    }
+
     case "ESSAY":
     default:
       return null; // manual grading / unsupported → not auto-scored

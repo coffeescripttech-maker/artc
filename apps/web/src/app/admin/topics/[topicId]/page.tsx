@@ -6,6 +6,7 @@ import Link from "next/link";
 import { WorkspaceHeader, DraggableList, type DraggableItem, LessonForm } from "@/components/admin";
 import { topicsApi, lessonsApi } from "@/lib/api/client";
 import { Card, CardContent, Button, Badge } from "@/components/ui";
+import { toast } from "@/lib/toast";
 import {
   Plus,
   GripVertical,
@@ -90,6 +91,7 @@ export default function TopicDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [showLessonForm, setShowLessonForm] = useState(false);
 
   // Fetch topic and lessons
@@ -159,6 +161,46 @@ export default function TopicDetailPage() {
       setLessons(lessons.filter((l) => l.id !== lessonId));
     } catch (err) {
       setLessons(lessons.filter((l) => l.id !== lessonId));
+    }
+  };
+
+  const handleToggleLessonStatus = async (lessonId: string, currentStatus: string) => {
+    const newStatus = currentStatus === "PUBLISHED" ? "DRAFT" : "PUBLISHED";
+
+    try {
+      if (newStatus === "PUBLISHED") {
+        await lessonsApi.publish(lessonId);
+      } else {
+        await lessonsApi.archive(lessonId);
+      }
+      setLessons(lessons.map((l) =>
+        l.id === lessonId ? { ...l, status: newStatus as Lesson["status"] } : l
+      ));
+      toast.success(`Lesson ${newStatus === "PUBLISHED" ? "published" : "unpublished"}`);
+    } catch (err) {
+      console.error("Failed to toggle lesson status:", err);
+      toast.error("Failed to update lesson status");
+    }
+  };
+
+  const handlePublishAllLessons = async () => {
+    const draftLessons = lessons.filter((l) => l.status !== "PUBLISHED");
+    if (draftLessons.length === 0) return;
+
+    setIsPublishing(true);
+    try {
+      await Promise.all(
+        draftLessons.map((l) => lessonsApi.publish(l.id))
+      );
+      setLessons(lessons.map((l) =>
+        l.status !== "PUBLISHED" ? { ...l, status: "PUBLISHED" as const } : l
+      ));
+      toast.success(`Published ${draftLessons.length} lessons`);
+    } catch (err) {
+      console.error("Failed to publish lessons:", err);
+      toast.error("Failed to publish lessons");
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -257,10 +299,35 @@ export default function TopicDetailPage() {
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold text-arc-navy-900">Lessons</h2>
             <Badge variant="secondary">{lessons.length} lessons</Badge>
+            {lessons.filter((l) => l.status !== "PUBLISHED").length > 0 && (
+              <Badge className="bg-amber-100 text-amber-700">
+                {lessons.filter((l) => l.status !== "PUBLISHED").length} draft
+              </Badge>
+            )}
             {isSaving && (
               <span className="text-sm text-arc-slate-500 animate-pulse">Saving order...</span>
             )}
           </div>
+          {lessons.filter((l) => l.status !== "PUBLISHED").length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePublishAllLessons}
+              disabled={isPublishing}
+            >
+              {isPublishing ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Publishing...
+                </>
+              ) : (
+                <>
+                  <Video className="h-4 w-4 mr-2" />
+                  Publish All ({lessons.filter((l) => l.status !== "PUBLISHED").length})
+                </>
+              )}
+            </Button>
+          )}
         </div>
 
         {/* Drag-and-drop hint */}
@@ -328,6 +395,19 @@ export default function TopicDetailPage() {
                     )}
 
                     <div className="flex items-center gap-1">
+                      <button
+                        className="px-2 py-1 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleLessonStatus(lesson.id, lesson.status);
+                        }}
+                      >
+                        {lesson.status === "PUBLISHED" ? (
+                          <Badge variant="success" className="cursor-pointer">Published</Badge>
+                        ) : (
+                          <Badge className="bg-yellow-100 text-yellow-700 cursor-pointer">Draft</Badge>
+                        )}
+                      </button>
                       <Link href={`/admin/lessons/${lesson.id}`}>
                         <Button variant="ghost" size="sm">
                           <Eye className="h-4 w-4" />

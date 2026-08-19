@@ -63,7 +63,7 @@ const studentNav: NavGroup[] = [
   {
     label: "Progress",
     items: [
-      { label: "My Progress", href: "/dashboard/progress", icon: GraduationCap },
+      { label: "My Progress", href: "/dashboard/progression", icon: GraduationCap },
       { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
       { label: "Achievements", href: "/dashboard/achievements", icon: Trophy, badge: "New" },
     ],
@@ -103,6 +103,7 @@ const adminNav: NavGroup[] = [
     label: "QUESTION BANK",
     items: [
       { label: "Questions", href: "/admin/question-bank", icon: FileText },
+      { label: "Passages", href: "/admin/passages", icon: BookOpen },
       { label: "Categories", href: "/admin/question-bank/categories", icon: Tags },
       { label: "Import", href: "/admin/question-bank/import", icon: Upload },
     ],

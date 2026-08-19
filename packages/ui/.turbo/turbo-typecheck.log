@@ -2,3 +2,45 @@
 > @aratc/ui@0.0.1 typecheck C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\packages\ui
 > tsc --noEmit
 
+
+
+#
+# Fatal error in , line 0
+# Fatal process out of memory: Zone
+#
+#
+#
+#FailureMessage Object: 000000C76E5F5890
+
+
+#
+# Fatal error in , line 0
+# ----- Native stack trace -----
+
+Fatal process out of memory: Zone
+#
+#
+#
+#FailureMessage Object: 000000C76DDF5C60
+----- Native stack trace -----
+
+ 1: 00007FF72298A62B 
+ 2: 00007FF72287CE9F 
+ 3: 00007FF72379A022 
+ 4: 00007FF72335DEF3 
+ 5: 00007FF722E40914 
+ 6: 00007FF722C67670 
+ 7: 00007FF7238BEDD2 
+ 8: 00007FF7238B1DBE 
+ 9: 00007FF72385A27F 
+10: 00007FF723866751 
+11: 00007FF723860BDF 
+12: 00007FF72385BB6A 
+13: 00007FF7232CC701 
+14: 00007FF723299621 
+15: 00007FF72287F97D 
+16: 00007FF7229DE28D 
+17: 00007FF723BBD630 
+18: 00007FFA649DE957 
+19: 00007FFA660C427C 
+ ELIFECYCLE  Command failed with exit code 2147483651.

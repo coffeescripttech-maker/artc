@@ -24,9 +24,23 @@ export const QUESTION_TYPES = {
   FILL_IN_THE_BLANK: "FILL_IN_THE_BLANK",
   MATCHING: "MATCHING",
   ESSAY: "ESSAY",
+  ORDERING: "ORDERING",
+  NUMERIC: "NUMERIC",
 } as const;
 
 export type QuestionType = (typeof QUESTION_TYPES)[keyof typeof QUESTION_TYPES];
+
+/** Question type metadata for UI display */
+export const QUESTION_TYPE_META: Record<QuestionType, { label: string; description: string; autoGradable: boolean }> = {
+  MULTIPLE_CHOICE: { label: "Multiple Choice", description: "Select one answer from options", autoGradable: true },
+  TRUE_FALSE: { label: "True/False", description: "Select true or false", autoGradable: true },
+  MULTIPLE_SELECT: { label: "Multiple Select", description: "Select all that apply", autoGradable: true },
+  FILL_IN_THE_BLANK: { label: "Fill in the Blank", description: "Type the answer", autoGradable: true },
+  MATCHING: { label: "Matching", description: "Match items correctly", autoGradable: true },
+  ESSAY: { label: "Essay", description: "Write a response", autoGradable: false },
+  ORDERING: { label: "Ordering", description: "Arrange items in correct sequence", autoGradable: true },
+  NUMERIC: { label: "Numeric", description: "Enter a number answer", autoGradable: true },
+};
 
 export const DIFFICULTY_LEVELS = {
   EASY: "EASY",

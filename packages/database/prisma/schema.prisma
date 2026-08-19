@@ -143,6 +143,8 @@ enum QuestionType {
   FILL_IN_THE_BLANK
   MATCHING
   ESSAY
+  ORDERING
+  NUMERIC
 }
 
 enum DifficultyLevel {
@@ -210,6 +212,7 @@ model LearnerProfile {
   attempts          AssessmentAttempt[]
   testAttempts      TestAttempt[]
   progressRecords   Progress[]
+  questionExposures QuestionExposure[]
 
   @@index([organizationId])
   @@map("learner_profiles")
@@ -422,6 +425,26 @@ model Lesson {
 }
 
 // ============================================================
+// PASSAGES / READING COMPREHENSION (Phase 3)
+// ============================================================
+
+model Passage {
+  id        String    @id @default(cuid())
+  title     String
+  content   String    @db.Text
+  sourceUrl String?   @map("source_url")
+  status    ContentStatus @default(DRAFT)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  questions Question[]
+  bankLinks QuestionBankLink[]
+
+  @@map("passages")
+}
+
+// ============================================================
 // INDEPENDENT QUESTION BANK
 // ============================================================
 
@@ -440,6 +463,8 @@ model Question {
   author        User            @relation("QuestionAuthor", fields: [authorId], references: [id])
   reviewerId    String?         @map("reviewer_id")
   reviewer      User?           @relation("QuestionReviewer", fields: [reviewerId], references: [id])
+  passageId     String?         @map("passage_id")
+  passage       Passage?        @relation(fields: [passageId], references: [id], onDelete: SetNull)
   createdAt     DateTime        @default(now()) @map("created_at")
   updatedAt     DateTime        @updatedAt @map("updated_at")
 
@@ -447,10 +472,12 @@ model Question {
   bankLinks     QuestionBankLink[]
   assessmentQuestions AssessmentQuestion[]
   attemptAnswers  AttemptAnswer[]
+  exposures      QuestionExposure[]
 
   @@index([difficulty])
   @@index([status])
   @@index([type])
+  @@index([passageId])
   @@map("questions")
 }
 
@@ -465,6 +492,7 @@ model QuestionBankLink {
   topicId     String?   @map("topic_id")
   examId      String?   @map("exam_id")
   assessmentId String?  @map("assessment_id")
+  passageId   String?   @map("passage_id")
 
   weight      Int       @default(1)     // Weight in exams
   notes       String?   @db.Text        // Notes for this context
@@ -475,12 +503,14 @@ model QuestionBankLink {
   topic       Topic?    @relation(fields: [topicId], references: [id], onDelete: Cascade)
   cetExam     CetExam?  @relation(fields: [examId], references: [id], onDelete: Cascade)
   assessment  Assessment? @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  passage     Passage?  @relation(fields: [passageId], references: [id], onDelete: Cascade)
 
   @@index([questionId])
   @@index([subjectId])
   @@index([topicId])
   @@index([examId])
   @@index([assessmentId])
+  @@index([passageId])
   @@map("question_bank_links")
 }
 
@@ -675,6 +705,24 @@ model AttemptAnswer {
   @@index([attemptId])
   @@index([questionId])
   @@map("attempt_answers")
+}
+
+// ============================================================
+// QUESTION EXPOSURE TRACKING (Anti-memorization, Phase 3)
+// ============================================================
+
+model QuestionExposure {
+  id         String   @id @default(cuid())
+  questionId String   @map("question_id")
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  learnerId  String   @map("learner_id")
+  learner    LearnerProfile @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  seenCount  Int      @default(1) @map("seen_count")
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+
+  @@unique([questionId, learnerId])
+  @@index([learnerId])
+  @@map("question_exposures")
 }
 
 // ============================================================

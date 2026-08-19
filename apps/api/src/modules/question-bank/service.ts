@@ -67,19 +67,35 @@ export async function getQuestionById(id: string) {
 }
 
 export async function createQuestion(input: CreateQuestionInput, authorId: string) {
-  return prisma.question.create({
-    data: {
-      type: input.type,
-      difficulty: input.difficulty,
-      stem: input.stem,
-      options: input.options ? JSON.stringify(input.options) : undefined,
-      correctAnswer: typeof input.correctAnswer === "string" ? input.correctAnswer : JSON.stringify(input.correctAnswer),
-      explanation: input.explanation,
-      hint: input.hint,
-      tags: input.tags ?? [],
-      authorId,
-      status: "DRAFT",
-    },
+  // Create question and topic links in a transaction
+  return prisma.$transaction(async (tx) => {
+    const question = await tx.question.create({
+      data: {
+        type: input.type,
+        difficulty: input.difficulty,
+        stem: input.stem,
+        options: input.options ? JSON.stringify(input.options) : undefined,
+        correctAnswer: typeof input.correctAnswer === "string" ? input.correctAnswer : JSON.stringify(input.correctAnswer),
+        explanation: input.explanation,
+        hint: input.hint,
+        tags: input.tags ?? [],
+        authorId,
+        status: "DRAFT",
+      },
+    });
+
+    // Link to topics if provided
+    if (input.topicIds && input.topicIds.length > 0) {
+      await tx.questionBankLink.createMany({
+        data: input.topicIds.map((topicId) => ({
+          questionId: question.id,
+          topicId,
+          weight: 1,
+        })),
+      });
+    }
+
+    return question;
   });
 }
 
@@ -263,7 +279,7 @@ export async function getQuestionsByExam(examId: string) {
 }
 
 export async function getQuestionsByAssessment(assessmentId: string) {
-  return prisma.questionBankLink.findMany({
+  return prisma.assessmentQuestion.findMany({
     where: { assessmentId },
     include: {
       question: {
@@ -272,7 +288,7 @@ export async function getQuestionsByAssessment(assessmentId: string) {
         },
       },
     },
-    orderBy: { question: { createdAt: "desc" } },
+    orderBy: { orderIndex: "asc" },
   });
 }
 

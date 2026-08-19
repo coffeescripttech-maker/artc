@@ -6,6 +6,7 @@ import Link from "next/link";
 import { WorkspaceHeader, DraggableList, type DraggableItem, ModuleForm } from "@/components/admin";
 import { subjectsApi, modulesApi } from "@/lib/api/client";
 import { Card, CardContent, Button, Badge } from "@/components/ui";
+import { toast } from "@/lib/toast";
 import {
   Plus,
   BookOpen,
@@ -17,6 +18,7 @@ import {
   ArrowRight,
   GripVertical,
   RefreshCw,
+  Send,
 } from "lucide-react";
 
 // Types
@@ -83,6 +85,7 @@ export default function SubjectDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [showModuleForm, setShowModuleForm] = useState(false);
 
   // Fetch subject and modules
@@ -201,6 +204,46 @@ export default function SubjectDetailPage() {
     }
   };
 
+  const handlePublishAllModules = async () => {
+    const draftModules = modules.filter((m) => m.status !== "PUBLISHED");
+    if (draftModules.length === 0) return;
+
+    setIsPublishing(true);
+    try {
+      await Promise.all(
+        draftModules.map((m) => modulesApi.publish(m.id))
+      );
+      setModules(modules.map((m) =>
+        m.status !== "PUBLISHED" ? { ...m, status: "PUBLISHED" as const } : m
+      ));
+      toast.success(`Published ${draftModules.length} modules`);
+    } catch (err) {
+      console.error("Failed to publish modules:", err);
+      toast.error("Failed to publish modules");
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  const handleToggleModuleStatus = async (moduleId: string, currentStatus: string) => {
+    const newStatus = currentStatus === "PUBLISHED" ? "DRAFT" : "PUBLISHED";
+
+    try {
+      if (newStatus === "PUBLISHED") {
+        await modulesApi.publish(moduleId);
+      } else {
+        await modulesApi.archive(moduleId);
+      }
+      setModules(modules.map((m) =>
+        m.id === moduleId ? { ...m, status: newStatus as Module["status"] } : m
+      ));
+      toast.success(`Module ${newStatus === "PUBLISHED" ? "published" : "unpublished"}`);
+    } catch (err) {
+      console.error("Failed to toggle module status:", err);
+      toast.error("Failed to update module status");
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -264,14 +307,32 @@ export default function SubjectDetailPage() {
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold text-arc-navy-900">Modules</h2>
             <Badge variant="secondary">{modules.length} modules</Badge>
+            {modules.filter((m) => m.status !== "PUBLISHED").length > 0 && (
+              <Badge className="bg-amber-100 text-amber-700">
+                {modules.filter((m) => m.status !== "PUBLISHED").length} draft
+              </Badge>
+            )}
             {isSaving && (
               <span className="text-sm text-arc-slate-500 animate-pulse">Saving order...</span>
             )}
           </div>
-          <Button variant="accent" size="sm" onClick={() => setShowModuleForm(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Module
-          </Button>
+          <div className="flex items-center gap-2">
+            {modules.filter((m) => m.status !== "PUBLISHED").length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePublishAllModules}
+                disabled={isPublishing}
+              >
+                <Send className="h-4 w-4 mr-2" />
+                {isPublishing ? "Publishing..." : "Publish All"}
+              </Button>
+            )}
+            <Button variant="accent" size="sm" onClick={() => setShowModuleForm(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Module
+            </Button>
+          </div>
         </div>
 
         <div className="bg-arc-slate-50 border border-dashed border-arc-slate-300 rounded-lg p-3 mb-4">
@@ -318,6 +379,19 @@ export default function SubjectDetailPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <button
+                        className="px-2 py-1 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleModuleStatus(module.id, module.status);
+                        }}
+                      >
+                        {module.status === "PUBLISHED" ? (
+                          <Badge variant="success" className="cursor-pointer">Published</Badge>
+                        ) : (
+                          <Badge className="bg-yellow-100 text-yellow-700 cursor-pointer">Draft</Badge>
+                        )}
+                      </button>
                       <Link href={`/admin/modules/${module.id}`}>
                         <Button variant="ghost" size="sm">
                           Manage

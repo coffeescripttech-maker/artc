@@ -6,6 +6,7 @@ import Link from "next/link";
 import { WorkspaceHeader, DraggableList, type DraggableItem, TopicForm } from "@/components/admin";
 import { modulesApi, topicsApi } from "@/lib/api/client";
 import { Card, CardContent, Button, Badge } from "@/components/ui";
+import { toast } from "@/lib/toast";
 import {
   Plus,
   GripVertical,
@@ -16,6 +17,7 @@ import {
   Video,
   FileCheck,
   RefreshCw,
+  Send,
 } from "lucide-react";
 
 // Types
@@ -72,6 +74,7 @@ export default function ModuleDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [showTopicForm, setShowTopicForm] = useState(false);
 
   // Fetch module and topics
@@ -186,6 +189,46 @@ export default function ModuleDetailPage() {
     }
   };
 
+  const handlePublishAllTopics = async () => {
+    const draftTopics = topics.filter((t) => t.status !== "PUBLISHED");
+    if (draftTopics.length === 0) return;
+
+    setIsPublishing(true);
+    try {
+      await Promise.all(
+        draftTopics.map((t) => topicsApi.publish(t.id))
+      );
+      setTopics(topics.map((t) =>
+        t.status !== "PUBLISHED" ? { ...t, status: "PUBLISHED" as const } : t
+      ));
+      toast.success(`Published ${draftTopics.length} topics`);
+    } catch (err) {
+      console.error("Failed to publish topics:", err);
+      toast.error("Failed to publish topics");
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  const handleToggleTopicStatus = async (topicId: string, currentStatus: string) => {
+    const newStatus = currentStatus === "PUBLISHED" ? "DRAFT" : "PUBLISHED";
+
+    try {
+      if (newStatus === "PUBLISHED") {
+        await topicsApi.publish(topicId);
+      } else {
+        await topicsApi.archive(topicId);
+      }
+      setTopics(topics.map((t) =>
+        t.id === topicId ? { ...t, status: newStatus as const } : t
+      ));
+      toast.success(`Topic ${newStatus === "PUBLISHED" ? "published" : "unpublished"}`);
+    } catch (err) {
+      console.error("Failed to toggle topic status:", err);
+      toast.error("Failed to update topic status");
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -248,10 +291,26 @@ export default function ModuleDetailPage() {
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold text-arc-navy-900">Topics</h2>
             <Badge variant="secondary">{topics.length} topics</Badge>
+            {topics.filter((t) => t.status !== "PUBLISHED").length > 0 && (
+              <Badge className="bg-amber-100 text-amber-700">
+                {topics.filter((t) => t.status !== "PUBLISHED").length} draft
+              </Badge>
+            )}
             {isSaving && (
               <span className="text-sm text-arc-slate-500 animate-pulse">Saving order...</span>
             )}
           </div>
+          {topics.filter((t) => t.status !== "PUBLISHED").length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePublishAllTopics}
+              disabled={isPublishing}
+            >
+              <Send className="h-4 w-4 mr-2" />
+              {isPublishing ? "Publishing..." : "Publish All"}
+            </Button>
+          )}
         </div>
 
         {/* Drag-and-drop hint */}
@@ -301,6 +360,19 @@ export default function ModuleDetailPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <button
+                        className="px-2 py-1 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleTopicStatus(topic.id, topic.status);
+                        }}
+                      >
+                        {topic.status === "PUBLISHED" ? (
+                          <Badge variant="success" className="cursor-pointer">Published</Badge>
+                        ) : (
+                          <Badge className="bg-yellow-100 text-yellow-700 cursor-pointer">Draft</Badge>
+                        )}
+                      </button>
                       <Link href={`/admin/topics/${topic.id}`}>
                         <Button variant="ghost" size="sm">
                           View Lessons

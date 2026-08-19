@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { WorkspaceHeader, QuestionForm } from "@/components/admin";
 import { questionsApi } from "@/lib/api/client";
 import { Card, CardContent, Button, Badge, Input } from "@/components/ui";
+import { toast } from "@/lib/toast";
 import {
   Plus,
   Search,
@@ -42,8 +43,12 @@ const mockQuestions: Question[] = [
 const typeConfig: Record<string, { label: string; color: string }> = {
   MULTIPLE_CHOICE: { label: "Multiple Choice", color: "bg-blue-100 text-blue-700" },
   TRUE_FALSE: { label: "True/False", color: "bg-green-100 text-green-700" },
-  ESSAY: { label: "Essay", color: "bg-purple-100 text-purple-700" },
+  MULTIPLE_SELECT: { label: "Multiple Select", color: "bg-cyan-100 text-cyan-700" },
   FILL_IN_THE_BLANK: { label: "Fill in Blank", color: "bg-orange-100 text-orange-700" },
+  MATCHING: { label: "Matching", color: "bg-pink-100 text-pink-700" },
+  ORDERING: { label: "Ordering", color: "bg-indigo-100 text-indigo-700" },
+  NUMERIC: { label: "Numeric", color: "bg-teal-100 text-teal-700" },
+  ESSAY: { label: "Essay", color: "bg-purple-100 text-purple-700" },
 };
 
 const difficultyConfig: Record<string, { color: string }> = {
@@ -96,7 +101,9 @@ export default function QuestionBankPage() {
     type: string;
     difficulty: string;
     options: { id: string; text: string; isCorrect: boolean }[];
+    correctAnswer?: unknown;
     explanation?: string;
+    topicIds?: string[];
   }) => {
     try {
       const newQuestion = await questionsApi.create(
@@ -106,11 +113,13 @@ export default function QuestionBankPage() {
           difficulty: data.difficulty,
           options: data.options,
           explanation: data.explanation,
-        },
-        "" // Token would come from auth context
+          correctAnswer: data.correctAnswer,
+          topicIds: data.topicIds,
+        }
       );
       setQuestions([newQuestion as Question, ...questions]);
       setShowQuestionForm(false);
+      toast.success("Question created successfully");
     } catch (err) {
       // Fallback to local state for demo
       const newQuestion: Question = {
@@ -124,6 +133,7 @@ export default function QuestionBankPage() {
       };
       setQuestions([newQuestion, ...questions]);
       setShowQuestionForm(false);
+      toast.success("Question created (demo mode)");
     }
   };
 
@@ -241,6 +251,11 @@ export default function QuestionBankPage() {
             <option value="all">All Types</option>
             <option value="MULTIPLE_CHOICE">Multiple Choice</option>
             <option value="TRUE_FALSE">True/False</option>
+            <option value="MULTIPLE_SELECT">Multiple Select</option>
+            <option value="FILL_IN_THE_BLANK">Fill in Blank</option>
+            <option value="MATCHING">Matching</option>
+            <option value="ORDERING">Ordering</option>
+            <option value="NUMERIC">Numeric</option>
             <option value="ESSAY">Essay</option>
           </select>
 

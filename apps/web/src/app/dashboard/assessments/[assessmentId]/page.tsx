@@ -31,6 +31,12 @@ interface PlayerQuestion {
   stem: string;
   hint?: string | null;
   options: PlayerOption[];
+  passageId?: string;
+}
+interface PlayerPassage {
+  id: string;
+  title: string;
+  content: string;
 }
 interface PlayerAssessment {
   id: string;
@@ -46,6 +52,7 @@ interface StartResponse {
   attempt: { id: string; maxScore: number };
   assessment: PlayerAssessment;
   questions: PlayerQuestion[];
+  passages?: PlayerPassage[];
 }
 interface SubmitResult {
   score?: number;
@@ -78,6 +85,7 @@ export default function AssessmentPlayerPage() {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SubmitResult | null>(null);
+  const [questionStartTime, setQuestionStartTime] = useState<Record<string, number>>({});
 
   const answersRef = useRef(answers);
   answersRef.current = answers;
@@ -120,10 +128,12 @@ export default function AssessmentPlayerPage() {
     submittedRef.current = true;
     setSubmitting(true);
     try {
-      const payload = Object.entries(answersRef.current).map(([questionId, answer]) => ({
-        questionId,
-        answer,
-      }));
+      const now = Date.now();
+      const payload = Object.entries(answersRef.current).map(([questionId, answer]) => {
+        const startTime = questionStartTime[questionId];
+        const timeSpentSeconds = startTime ? Math.round((now - startTime) / 1000) : undefined;
+        return { questionId, answer, timeSpentSeconds };
+      });
       const res = (await assessmentsApi.submit(data.attempt.id, payload)) as SubmitResult;
       setResult(res);
     } catch (err) {
@@ -333,6 +343,24 @@ export default function AssessmentPlayerPage() {
             </div>
 
             <div className="bg-white rounded-2xl border border-arc-slate-200 p-6">
+              {/* Passage content (if linked) */}
+              {q.passageId && data.passages && (
+                (() => {
+                  const passage = data.passages.find((p) => p.id === q.passageId);
+                  return passage ? (
+                    <div className="mb-4 p-4 bg-arc-slate-50 rounded-lg border border-arc-slate-200">
+                      <p className="text-xs font-semibold text-arc-slate-500 uppercase tracking-wide mb-2">
+                        Read the passage below:
+                      </p>
+                      <h4 className="font-semibold text-arc-navy-900 mb-2">{passage.title}</h4>
+                      <p className="text-sm text-arc-slate-700 whitespace-pre-wrap leading-relaxed">
+                        {passage.content}
+                      </p>
+                    </div>
+                  ) : null;
+                })()
+              )}
+
               <p className="text-lg font-medium text-arc-navy-900 whitespace-pre-wrap">{q.stem}</p>
 
               <div className="mt-5">
@@ -378,6 +406,7 @@ function QuestionInput({
   value: unknown;
   onChange: (value: unknown) => void;
 }) {
+  // FILL_IN_THE_BLANK
   if (q.type === "FILL_IN_THE_BLANK") {
     return (
       <input
@@ -389,12 +418,103 @@ function QuestionInput({
     );
   }
 
+  // NUMERIC
+  if (q.type === "NUMERIC") {
+    return (
+      <div className="space-y-2">
+        <input
+          type="number"
+          step="any"
+          value={typeof value === "number" ? value : ""}
+          onChange={(e) => onChange(e.target.value === "" ? "" : parseFloat(e.target.value))}
+          placeholder="Enter a number…"
+          className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-arc-orange-500"
+        />
+        <p className="text-xs text-arc-slate-500">
+          Accepts decimals. Use tolerance for approximate answers.
+        </p>
+      </div>
+    );
+  }
+
+  // ORDERING - arrange items in sequence
+  if (q.type === "ORDERING") {
+    const currentOrder = Array.isArray(value) ? (value as string[]) : q.options.map((o) => o.id);
+    const items = q.options.length > 0 ? q.options : [];
+
+    const moveUp = (index: number) => {
+      if (index === 0) return;
+      const newOrder = [...currentOrder];
+      [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
+      onChange(newOrder);
+    };
+
+    const moveDown = (index: number) => {
+      if (index === currentOrder.length - 1) return;
+      const newOrder = [...currentOrder];
+      [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+      onChange(newOrder);
+    };
+
+    if (items.length === 0) {
+      return (
+        <div className="text-sm text-arc-slate-500 italic">
+          No items to arrange for this question.
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-2">
+        <p className="text-sm text-arc-slate-600 mb-3">
+          Click arrows to arrange items in the correct order:
+        </p>
+        <div className="space-y-2">
+          {currentOrder.map((id, index) => {
+            const item = items.find((o) => o.id === id);
+            if (!item) return null;
+            return (
+              <div key={id} className="flex items-center gap-2">
+                <span className="h-7 w-7 rounded-full bg-arc-slate-100 flex items-center justify-center text-xs font-semibold text-arc-slate-600 shrink-0">
+                  {index + 1}
+                </span>
+                <div className="flex-1 px-3 py-2 bg-arc-slate-50 border border-arc-slate-200 rounded-lg text-sm text-arc-navy-900">
+                  {item.text}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <button
+                    type="button"
+                    onClick={() => moveUp(index)}
+                    disabled={index === 0}
+                    className="h-5 w-5 rounded text-arc-slate-400 hover:text-arc-slate-600 disabled:opacity-30"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveDown(index)}
+                    disabled={index === currentOrder.length - 1}
+                    className="h-5 w-5 rounded text-arc-slate-400 hover:text-arc-slate-600 disabled:opacity-30"
+                  >
+                    ▼
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // MULTIPLE_SELECT
   if (q.type === "MULTIPLE_SELECT") {
     const arr = Array.isArray(value) ? (value as string[]) : [];
     const toggle = (id: string) =>
       onChange(arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]);
     return (
       <div className="space-y-2">
+        <p className="text-xs text-arc-slate-500 mb-2">Select all that apply</p>
         {q.options.map((o) => {
           const on = arr.includes(o.id);
           return (
@@ -417,6 +537,54 @@ function QuestionInput({
             </button>
           );
         })}
+      </div>
+    );
+  }
+
+  // MATCHING (similar to single select for now)
+  if (q.type === "MATCHING") {
+    return (
+      <div className="space-y-2">
+        {q.options.map((o) => {
+          const on = value === o.id;
+          return (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => onChange(o.id)}
+              className={`w-full flex items-center gap-3 text-left rounded-lg border px-4 py-3 transition-colors ${
+                on ? "border-arc-orange-400 bg-arc-orange-50" : "border-arc-slate-200 hover:border-arc-slate-300"
+              }`}
+            >
+              <span
+                className={`h-5 w-5 rounded border flex items-center justify-center flex-shrink-0 ${
+                  on ? "border-arc-orange-500" : "border-arc-slate-300"
+                }`}
+              >
+                {on && <span className="h-2.5 w-2.5 rounded-full bg-arc-orange-500" />}
+              </span>
+              <span className="text-arc-navy-900">{o.text}</span>
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // ESSAY
+  if (q.type === "ESSAY") {
+    return (
+      <div className="space-y-2">
+        <textarea
+          value={typeof value === "string" ? value : ""}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Type your response…"
+          rows={6}
+          className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-arc-orange-500 resize-none"
+        />
+        <p className="text-xs text-arc-slate-500">
+          This question will be reviewed by an instructor.
+        </p>
       </div>
     );
   }

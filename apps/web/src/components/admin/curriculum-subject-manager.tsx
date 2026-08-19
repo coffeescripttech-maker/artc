@@ -34,7 +34,7 @@ import {
   ArrowRight,
   GripHorizontal,
 } from "lucide-react";
-import { curriculumApi, subjectsApi, modulesApi, topicsApi } from "@/lib/api/client";
+import { curriculumApi, subjectsApi, modulesApi, topicsApi, lessonsApi } from "@/lib/api/client";
 import { useRouter } from "next/navigation";
 
 interface Subject {
@@ -129,6 +129,7 @@ export function CurriculumSubjectManager({
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showExistingPicker, setShowExistingPicker] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Quick add modals
@@ -530,6 +531,150 @@ export function CurriculumSubjectManager({
     }
   };
 
+  const handleToggleSubjectStatus = async (item: CurriculumItem) => {
+    const newStatus = item.subject.status === "PUBLISHED" ? "DRAFT" : "PUBLISHED";
+    const action = newStatus === "PUBLISHED" ? "publish" : "unpublish";
+
+    try {
+      // Update the subject via subjects API
+      await subjectsApi.update(item.subject.id, { status: newStatus });
+
+      // Update local state
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === item.id
+            ? { ...i, subject: { ...i.subject, status: newStatus } }
+            : i
+        )
+      );
+      showToast.success(`Subject ${action}d`);
+    } catch (err) {
+      console.error("Failed to toggle subject status:", err);
+      showToast.error(`Failed to ${action} subject`);
+    }
+  };
+
+  const handlePublishAllSubjects = async () => {
+    const draftSubjects = items.filter((i) => i.subject.status !== "PUBLISHED");
+    if (draftSubjects.length === 0) return;
+
+    setIsPublishing(true);
+    try {
+      await Promise.all(
+        draftSubjects.map((i) => subjectsApi.publish(i.subject.id))
+      );
+      setItems((prev) =>
+        prev.map((i) =>
+          i.subject.status !== "PUBLISHED"
+            ? { ...i, subject: { ...i.subject, status: "PUBLISHED" } }
+            : i
+        )
+      );
+      showToast.success(`Published ${draftSubjects.length} subjects`);
+    } catch (err) {
+      console.error("Failed to publish subjects:", err);
+      showToast.error("Failed to publish subjects");
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
+  // Toggle individual module status
+  const handleToggleModuleStatus = async (moduleId: string, currentStatus: string) => {
+    const newStatus = currentStatus === "PUBLISHED" ? "DRAFT" : "PUBLISHED";
+    const action = newStatus === "PUBLISHED" ? "publish" : "unpublish";
+
+    try {
+      if (newStatus === "PUBLISHED") {
+        await modulesApi.publish(moduleId);
+      } else {
+        await modulesApi.archive(moduleId);
+      }
+      setItems((prev) =>
+        prev.map((item) => ({
+          ...item,
+          subject: {
+            ...item.subject,
+            modules: item.subject.modules?.map((m) =>
+              m.id === moduleId ? { ...m, status: newStatus } : m
+            ),
+          },
+        }))
+      );
+      showToast.success(`Module ${action}d`);
+    } catch (err) {
+      console.error("Failed to toggle module status:", err);
+      showToast.error(`Failed to ${action} module`);
+    }
+  };
+
+  // Toggle individual topic status
+  const handleToggleTopicStatus = async (topicId: string, currentStatus: string) => {
+    const newStatus = currentStatus === "PUBLISHED" ? "DRAFT" : "PUBLISHED";
+    const action = newStatus === "PUBLISHED" ? "publish" : "unpublish";
+
+    try {
+      if (newStatus === "PUBLISHED") {
+        await topicsApi.publish(topicId);
+      } else {
+        await topicsApi.archive(topicId);
+      }
+      setItems((prev) =>
+        prev.map((item) => ({
+          ...item,
+          subject: {
+            ...item.subject,
+            modules: item.subject.modules?.map((m) => ({
+              ...m,
+              topics: m.topics?.map((t) =>
+                t.id === topicId ? { ...t, status: newStatus } : t
+              ),
+            })),
+          },
+        }))
+      );
+      showToast.success(`Topic ${action}d`);
+    } catch (err) {
+      console.error("Failed to toggle topic status:", err);
+      showToast.error(`Failed to ${action} topic`);
+    }
+  };
+
+  // Toggle individual lesson status
+  const handleToggleLessonStatus = async (lessonId: string, currentStatus: string) => {
+    const newStatus = currentStatus === "PUBLISHED" ? "DRAFT" : "PUBLISHED";
+    const action = newStatus === "PUBLISHED" ? "publish" : "unpublish";
+
+    try {
+      if (newStatus === "PUBLISHED") {
+        await lessonsApi.publish(lessonId);
+      } else {
+        await lessonsApi.archive(lessonId);
+      }
+      setItems((prev) =>
+        prev.map((item) => ({
+          ...item,
+          subject: {
+            ...item.subject,
+            modules: item.subject.modules?.map((m) => ({
+              ...m,
+              topics: m.topics?.map((t) => ({
+                ...t,
+                lessons: t.lessons?.map((l) =>
+                  l.id === lessonId ? { ...l, status: newStatus } : l
+                ),
+              })),
+            })),
+          },
+        }))
+      );
+      showToast.success(`Lesson ${action}d`);
+    } catch (err) {
+      console.error("Failed to toggle lesson status:", err);
+      showToast.error(`Failed to ${action} lesson`);
+    }
+  };
+
   const refreshItems = async () => {
     setIsLoading(true);
     try {
@@ -622,6 +767,26 @@ export function CurriculumSubjectManager({
               </>
             )}
           </Button>
+          {items.filter(i => i.subject.status !== "PUBLISHED").length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePublishAllSubjects}
+              disabled={isPublishing}
+            >
+              {isPublishing ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                  Publishing...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 mr-1" />
+                  Publish All ({items.filter(i => i.subject.status !== "PUBLISHED").length})
+                </>
+              )}
+            </Button>
+          )}
           <Button variant="accent" onClick={() => setShowAddModal(true)}>
             <Plus className="h-4 w-4 mr-2" />
             Add Subject
@@ -786,6 +951,13 @@ export function CurriculumSubjectManager({
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleToggleSubjectStatus(item)} title={item.subject.status === "PUBLISHED" ? "Unpublish" : "Publish"}>
+                          {item.subject.status === "PUBLISHED" ? (
+                            <Badge variant="success" className="text-xs cursor-pointer">Published</Badge>
+                          ) : (
+                            <Badge className="bg-yellow-100 text-yellow-700 text-xs cursor-pointer">Draft</Badge>
+                          )}
+                        </Button>
                         <Button variant="ghost" size="sm" onClick={() => router.push(`/admin/subjects/${item.subject.id}`)} title="View">
                           <ExternalLink className="h-4 w-4" />
                         </Button>
@@ -884,6 +1056,17 @@ export function CurriculumSubjectManager({
                                     </div>
 
                                     <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => handleToggleModuleStatus(module.id, module.status)}
+                                        className="px-2 py-1 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
+                                        title={module.status === "PUBLISHED" ? "Unpublish" : "Publish"}
+                                      >
+                                        {module.status === "PUBLISHED" ? (
+                                          <Badge variant="success" className="text-xs cursor-pointer">Published</Badge>
+                                        ) : (
+                                          <Badge className="bg-yellow-100 text-yellow-700 text-xs cursor-pointer">Draft</Badge>
+                                        )}
+                                      </button>
                                       <Button variant="ghost" size="sm" onClick={() => setQuickAddModule(module.id)} title="Add Topic">
                                         <FileText className="h-4 w-4" />
                                       </Button>
@@ -973,7 +1156,17 @@ export function CurriculumSubjectManager({
                                                     >
                                                       {topic.name}
                                                     </span>
-                                                    <StatusBadge status={topic.status} />
+                                                    <button
+                                                      onClick={() => handleToggleTopicStatus(topic.id, topic.status)}
+                                                      className="px-1.5 py-0.5 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
+                                                      title={topic.status === "PUBLISHED" ? "Unpublish" : "Publish"}
+                                                    >
+                                                      {topic.status === "PUBLISHED" ? (
+                                                        <Badge variant="success" className="text-xs cursor-pointer">Published</Badge>
+                                                      ) : (
+                                                        <Badge className="bg-yellow-100 text-yellow-700 text-xs cursor-pointer">Draft</Badge>
+                                                      )}
+                                                    </button>
                                                     <Badge variant="outline" className="text-xs">
                                                       {lessons.length} lesson{lessons.length !== 1 ? "s" : ""}
                                                     </Badge>
@@ -1007,6 +1200,17 @@ export function CurriculumSubjectManager({
                                                         <Play className="h-3 w-3 text-arc-purple-400" />
                                                         <span className="flex-1 text-arc-slate-600">{lesson.title}</span>
                                                         <Badge variant="secondary" className="text-xs">{lesson.type || "VIDEO"}</Badge>
+                                                        <button
+                                                          onClick={() => handleToggleLessonStatus(lesson.id, lesson.status || "DRAFT")}
+                                                          className="px-1.5 py-0.5 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
+                                                          title={lesson.status === "PUBLISHED" ? "Unpublish" : "Publish"}
+                                                        >
+                                                          {lesson.status === "PUBLISHED" ? (
+                                                            <Badge variant="success" className="text-xs cursor-pointer">Published</Badge>
+                                                          ) : (
+                                                            <Badge className="bg-yellow-100 text-yellow-700 text-xs cursor-pointer">Draft</Badge>
+                                                          )}
+                                                        </button>
                                                         <Button variant="ghost" size="sm" onClick={() => router.push(`/admin/lessons/${lesson.id}`)} className="h-5 w-5 p-0">
                                                           <ExternalLink className="h-2 w-2" />
                                                         </Button>

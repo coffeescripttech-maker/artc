@@ -1,3 +1,10 @@
+/**
+ * Mastery band helper functions (legacy - prefer mastery-constants.ts)
+ * @deprecated Use `mastery-constants.ts` instead
+ */
+
+export { MASTERY_BANDS, MASTERY_BAND_CLASSES, MASTERY_BAND_ICONS, DEFAULT_MASTERY_GATE, getMasteryBand } from "./mastery-constants";
+
 export interface MasteryBand {
   label: string;
   cls: string;
@@ -6,6 +13,7 @@ export interface MasteryBand {
 /**
  * Maps a score percentage to an ARC mastery band. The `gate` is the mastery
  * threshold (e.g. 95). Framed as progress, not pass/fail.
+ * @deprecated Use getMasteryBand from mastery-constants.ts
  */
 export function masteryBand(pct: number, gate = 95): MasteryBand {
   if (pct >= gate) return { label: "Mastered", cls: "bg-green-100 text-green-700" };

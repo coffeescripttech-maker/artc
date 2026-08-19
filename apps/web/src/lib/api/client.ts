@@ -342,6 +342,26 @@ export const programsApi = {
     apiFetch(`/programs/${id}`, { method: "DELETE", token }),
 };
 
+// ============================================================
+// Passages API
+// ============================================================
+export const passagesApi = {
+  list: (token?: string) =>
+    apiFetch("/passages", { token }),
+  getById: (id: string, token?: string) =>
+    apiFetch(`/passages/${id}`, { token }),
+  create: (data: any, token?: string) =>
+    apiFetch("/passages", { method: "POST", body: JSON.stringify(data), token }),
+  update: (id: string, data: any, token?: string) =>
+    apiFetch(`/passages/${id}`, { method: "PUT", body: JSON.stringify(data), token }),
+  publish: (id: string, token?: string) =>
+    apiFetch(`/passages/${id}/publish`, { method: "PATCH", token }),
+  archive: (id: string, token?: string) =>
+    apiFetch(`/passages/${id}/archive`, { method: "PATCH", token }),
+  delete: (id: string, token?: string) =>
+    apiFetch(`/passages/${id}`, { method: "DELETE", token }),
+};
+
 export default {
   subjects: subjectsApi,
   curriculum: curriculumApi,
@@ -354,4 +374,5 @@ export default {
   assessments: assessmentsApi,
   cet: cetApi,
   programs: programsApi,
+  passages: passagesApi,
 };

@@ -11,6 +11,7 @@ export { ConfirmModal } from "./confirm-modal";
 export { WizardBreadcrumbs, ContextIndicator } from "./wizard-breadcrumbs";
 export { CurriculumSubjectManager } from "./curriculum-subject-manager";
 export { EntitySearchPicker } from "./entity-search-picker";
+export { TopicPicker, TopicPickerCompact } from "./topic-picker";
 
 // Admin form components
 export * from "./forms";

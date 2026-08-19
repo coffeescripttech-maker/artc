@@ -18,6 +18,7 @@ export const createQuestionSchema = z.object({
   explanation: z.string().optional(),
   hint: z.string().optional(),
   tags: z.array(z.string()).optional(),
+  topicIds: z.array(z.string()).optional(), // Link to topics
 });
 
 export const updateQuestionSchema = createQuestionSchema.partial();

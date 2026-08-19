@@ -1,8 +1,30 @@
 import { prisma } from "@aratc/database";
 import { ForbiddenError } from "../../lib/errors";
 
-// Default mastery gate (configurable per program/org later).
-const DEFAULT_GATE = 95;
+// Default mastery gate - used when not configured per program/curriculum
+export const DEFAULT_GATE = 95;
+
+/**
+ * Get mastery gate for a program. Reads from Program.metadata.requireMasteryToUnlock
+ * or falls back to DEFAULT_GATE.
+ */
+export async function getMasteryGate(programId: string | null | undefined): Promise<number> {
+  if (!programId) return DEFAULT_GATE;
+
+  const program = await prisma.program.findUnique({
+    where: { id: programId },
+    select: { metadata: true },
+  });
+
+  if (program?.metadata && typeof program.metadata === "object") {
+    const meta = program.metadata as Record<string, unknown>;
+    if (typeof meta.requireMasteryToUnlock === "number" && meta.requireMasteryToUnlock > 0) {
+      return meta.requireMasteryToUnlock;
+    }
+  }
+
+  return DEFAULT_GATE;
+}
 
 async function resolveProgramId(userId: string, programId?: string): Promise<string | null> {
   const learner = await prisma.learnerProfile.findUnique({ where: { userId } });
@@ -34,7 +56,8 @@ async function resolveProgramId(userId: string, programId?: string): Promise<str
  */
 export async function getProgression(userId: string, programId?: string) {
   const progId = await resolveProgramId(userId, programId);
-  if (!progId) return { program: null, gate: DEFAULT_GATE, grades: [] };
+  const gate = await getMasteryGate(progId);
+  if (!progId) return { program: null, gate, grades: [] };
 
   const program = await prisma.program.findUnique({
     where: { id: progId },
@@ -56,7 +79,7 @@ export async function getProgression(userId: string, programId?: string) {
       },
     },
   });
-  if (!program) return { program: null, gate: DEFAULT_GATE, grades: [] };
+  if (!program) return { program: null, gate, grades: [] };
 
   const learner = await prisma.learnerProfile.findUnique({ where: { userId } });
   const progressRows = learner
@@ -67,7 +90,6 @@ export async function getProgression(userId: string, programId?: string) {
     : [];
   const byTopic = new Map(progressRows.map((p) => [p.topicId as string, p]));
 
-  const gate = DEFAULT_GATE;
   let prevMastered = true; // first grade is always unlocked
 
   const grades = program.curriculums.map((cur) => {
