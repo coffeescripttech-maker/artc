@@ -15,6 +15,7 @@ import {
   start,
   submit,
   stats,
+  myAttempts,
 } from "./controller";
 import { authenticate, requireRole } from "../../middleware/auth";
 
@@ -22,6 +23,7 @@ const router: IRouter = Router();
 
 // Public routes (for students taking assessments)
 router.get("/", list);
+router.get("/me/attempts", authenticate, myAttempts);
 router.get("/slug/:slug", getBySlug);
 router.get("/:id", getById);
 router.get("/:id/stats", stats);

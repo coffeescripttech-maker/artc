@@ -55,6 +55,7 @@ const studentNav: NavGroup[] = [
     items: [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { label: "My Programs", href: "/dashboard/programs", icon: BookOpen },
+      { label: "Assessments", href: "/dashboard/assessments", icon: Zap },
       { label: "Practice", href: "/dashboard/practice", icon: FileText },
       { label: "Mock Exams", href: "/dashboard/exams", icon: Trophy },
     ],
@@ -62,6 +63,7 @@ const studentNav: NavGroup[] = [
   {
     label: "Progress",
     items: [
+      { label: "My Progress", href: "/dashboard/progress", icon: GraduationCap },
       { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
       { label: "Achievements", href: "/dashboard/achievements", icon: Trophy, badge: "New" },
     ],

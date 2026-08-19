@@ -10,6 +10,7 @@ export const createQuestionSchema = z.object({
       z.object({
         id: z.string(),
         text: z.string(),
+        isCorrect: z.boolean().optional(),
       })
     )
     .optional(),

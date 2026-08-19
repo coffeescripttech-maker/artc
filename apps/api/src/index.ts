@@ -14,6 +14,7 @@ import { assessmentRoutes } from "./modules/assessments/routes";
 import { cetRoutes } from "./modules/cet/routes";
 import { mediaRoutes } from "./modules/media/routes";
 import { UPLOAD_DIR } from "./modules/media/controller";
+import { progressionRoutes } from "./modules/progression/routes";
 import { errorHandler } from "./middleware/error-handler";
 
 const app = express();
@@ -51,6 +52,8 @@ app.use("/api/cet", cetRoutes);
 app.use("/cet", cetRoutes); // Also accessible without /api prefix
 app.use("/api/media", mediaRoutes);
 app.use("/media", mediaRoutes); // Also accessible without /api prefix
+app.use("/api/progression", progressionRoutes);
+app.use("/progression", progressionRoutes); // Also accessible without /api prefix
 
 app.use(errorHandler);
 

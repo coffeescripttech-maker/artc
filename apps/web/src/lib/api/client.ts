@@ -169,6 +169,8 @@ export const progressApi = {
       body: JSON.stringify({ completed }),
       token,
     }),
+  progression: (programId?: string) =>
+    apiFetch(`/progression${programId ? `?programId=${programId}` : ""}`),
 };
 
 // ============================================================
@@ -261,6 +263,7 @@ export const assessmentsApi = {
     apiFetch(`/assessments/${assessmentId}/start`, { method: "POST", token }),
   submit: (attemptId: string, answers: any[], token?: string) =>
     apiFetch(`/assessments/attempts/${attemptId}/submit`, { method: "POST", body: JSON.stringify({ answers }), token }),
+  myAttempts: () => apiFetch(`/assessments/me/attempts`),
 };
 
 // ============================================================

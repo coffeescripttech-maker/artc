@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import { validateRequest } from "../../lib/validate";
+import { validateRequest, getAuthUserId } from "../../lib/validate";
 import {
   listAssessments,
   getAssessmentById,
@@ -16,6 +16,7 @@ import {
   startAttempt,
   submitAttempt,
   getAssessmentStats,
+  getMyAttempts,
 } from "./service";
 
 export async function list(
@@ -194,14 +195,29 @@ export async function autoGenerate(
 }
 
 // Learner operations
+export async function myAttempts(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = getAuthUserId(req);
+    const attempts = await getMyAttempts(userId);
+    res.json(attempts);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function start(
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
   try {
-    const attempt = await startAttempt(req.params.id, req.user!.id);
-    res.status(201).json(attempt);
+    const userId = getAuthUserId(req);
+    const result = await startAttempt(req.params.id, userId);
+    res.status(201).json(result);
   } catch (error) {
     next(error);
   }

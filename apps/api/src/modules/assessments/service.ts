@@ -2,6 +2,8 @@ import { prisma } from "@aratc/database";
 import { createAssessmentSchema } from "./schemas";
 import { NotFoundError, BadRequestError } from "../../lib/errors";
 import type { CreateAssessmentInput, UpdateAssessmentInput, AddQuestionInput, AutoGenerateInput } from "./schemas";
+import { gradeAnswer, getOptions, shuffle } from "./grading";
+import { assertAssessmentUnlocked } from "../progression/service";
 
 export async function listAssessments(filters?: {
   programId?: string;
@@ -109,7 +111,9 @@ export async function createAssessment(input: CreateAssessmentInput) {
       questionCount: input.questionCount,
       timeLimitMinutes: input.timeLimitMinutes,
       passingScore: input.passingScore,
+      masteryThreshold: input.masteryThreshold,
       randomizeQuestions: input.randomizeQuestions,
+      randomizeChoices: input.randomizeChoices,
       showExplanations: input.showExplanations,
       allowRetake: input.allowRetake,
       maxAttempts: input.maxAttempts ?? 1,
@@ -139,7 +143,9 @@ export async function updateAssessment(id: string, input: UpdateAssessmentInput)
       questionCount: input.questionCount,
       timeLimitMinutes: input.timeLimitMinutes,
       passingScore: input.passingScore,
+      masteryThreshold: input.masteryThreshold,
       randomizeQuestions: input.randomizeQuestions,
+      randomizeChoices: input.randomizeChoices,
       showExplanations: input.showExplanations,
       allowRetake: input.allowRetake,
       maxAttempts: input.maxAttempts,
@@ -158,8 +164,15 @@ export async function publishAssessment(id: string) {
     throw new NotFoundError("Assessment not found");
   }
 
-  if (existing._count.questions === 0) {
-    throw new BadRequestError("Cannot publish an assessment with no questions");
+  const hasPool =
+    !!existing.questionCount &&
+    ((existing.topicIds?.length ?? 0) > 0 ||
+      (existing.questionTags?.length ?? 0) > 0 ||
+      (existing.difficultyLevels?.length ?? 0) > 0);
+  if (existing._count.questions === 0 && !hasPool) {
+    throw new BadRequestError(
+      "Cannot publish: add questions, or set a question pool (topics/tags + question count)."
+    );
   }
 
   return prisma.assessment.update({
@@ -334,83 +347,149 @@ export async function autoGenerateQuestions(assessmentId: string, input: AutoGen
 }
 
 // Learner attempts
-export async function startAttempt(assessmentId: string, learnerId: string) {
+async function getOrCreateLearnerProfile(userId: string) {
+  const existing = await prisma.learnerProfile.findUnique({ where: { userId } });
+  if (existing) return existing;
+  return prisma.learnerProfile.create({ data: { userId } });
+}
+
+export async function startAttempt(assessmentId: string, userId: string) {
   const assessment = await prisma.assessment.findUnique({
     where: { id: assessmentId },
-    include: { _count: { select: { questions: true } } },
+    include: {
+      questions: {
+        orderBy: { orderIndex: "asc" },
+        include: { question: true },
+      },
+    },
   });
 
   if (!assessment) {
     throw new NotFoundError("Assessment not found");
   }
-
   if (assessment.status !== "PUBLISHED") {
     throw new BadRequestError("Assessment is not published");
   }
 
-  // Check max attempts
-  const existingAttempts = await prisma.assessmentAttempt.count({
-    where: { assessmentId, learnerId },
+  const learner = await getOrCreateLearnerProfile(userId);
+
+  // Progression gate: block if this assessment's level is locked for the learner.
+  await assertAssessmentUnlocked(userId, {
+    topicIds: assessment.topicIds,
+    programId: assessment.programId,
   });
 
-  if (assessment.maxAttempts && existingAttempts >= assessment.maxAttempts) {
+  const existingAttempts = await prisma.assessmentAttempt.count({
+    where: { assessmentId, learnerId: learner.id },
+  });
+  if (!assessment.allowRetake && assessment.maxAttempts && existingAttempts >= assessment.maxAttempts) {
     throw new BadRequestError("Maximum attempts reached");
   }
 
-  return prisma.assessmentAttempt.create({
+  // Variant/served question set. If the assessment defines a question pool
+  // (count + topics/tags/difficulty), draw a fresh random sample each attempt
+  // (anti-memorization); otherwise use the fixed AssessmentQuestion set.
+  let served = assessment.questions.map((aq) => aq.question);
+  const hasPool =
+    !!assessment.questionCount &&
+    ((assessment.topicIds?.length ?? 0) > 0 ||
+      (assessment.questionTags?.length ?? 0) > 0 ||
+      (assessment.difficultyLevels?.length ?? 0) > 0);
+  if (hasPool) {
+    const where: any = { status: "PUBLISHED" };
+    if (assessment.topicIds?.length) where.bankLinks = { some: { topicId: { in: assessment.topicIds } } };
+    if (assessment.difficultyLevels?.length) where.difficulty = { in: assessment.difficultyLevels };
+    if (assessment.questionTags?.length) where.tags = { hasSome: assessment.questionTags };
+    const pool = await prisma.question.findMany({ where });
+    if (pool.length > 0) {
+      served = shuffle(pool).slice(0, assessment.questionCount!);
+    }
+  }
+  if (assessment.randomizeQuestions) served = shuffle(served);
+
+  const attempt = await prisma.assessmentAttempt.create({
     data: {
       assessmentId,
-      learnerId,
-      maxScore: assessment._count.questions,
+      learnerId: learner.id,
+      maxScore: served.length,
       status: "IN_PROGRESS",
     },
   });
+
+  // SAFE payload for the player: strip isCorrect / correctAnswer / explanation.
+  const questions = served.map((q) => {
+    let opts = getOptions(q).map((o) => ({ id: o.id, text: o.text }));
+    if (assessment.randomizeChoices) opts = shuffle(opts);
+    return {
+      id: q.id,
+      type: q.type,
+      difficulty: q.difficulty,
+      stem: q.stem,
+      hint: q.hint,
+      options: opts,
+    };
+  });
+
+  return {
+    attempt,
+    assessment: {
+      id: assessment.id,
+      name: assessment.name,
+      type: assessment.type,
+      timeLimitMinutes: assessment.timeLimitMinutes,
+      showExplanations: assessment.showExplanations,
+      passingScore: assessment.passingScore,
+      masteryThreshold: assessment.masteryThreshold,
+      allowRetake: assessment.allowRetake,
+    },
+    questions,
+  };
 }
 
-export async function submitAttempt(attemptId: string, answers: { questionId: string; answer: any }[]) {
+export async function submitAttempt(
+  attemptId: string,
+  answers: { questionId: string; answer: unknown }[]
+) {
   const attempt = await prisma.assessmentAttempt.findUnique({
     where: { id: attemptId },
-    include: { assessment: true, answers: true },
+    include: { assessment: true },
   });
 
   if (!attempt) {
     throw new NotFoundError("Attempt not found");
   }
-
   if (attempt.status !== "IN_PROGRESS") {
     throw new BadRequestError("Attempt already completed");
   }
 
-  // Calculate score
   let correctCount = 0;
-  const answerResults = [];
+  const ops: any[] = [];
 
   for (const { questionId, answer } of answers) {
     const question = await prisma.question.findUnique({ where: { id: questionId } });
     if (!question) continue;
 
-    const isCorrect = JSON.stringify(answer) === question.correctAnswer;
-    if (isCorrect) correctCount++;
+    const result = gradeAnswer(question, answer); // true | false | null (manual)
+    if (result === true) correctCount++;
 
-    answerResults.push(
+    ops.push(
       prisma.attemptAnswer.create({
         data: {
           attemptId,
           questionId,
-          answer: JSON.stringify(answer),
-          isCorrect,
-          score: isCorrect ? 1 : 0,
+          answer: (answer ?? null) as any, // store the raw answer object (no double-encoding)
+          isCorrect: result,
+          score: result === true ? 1 : 0,
         },
       })
     );
   }
 
-  await prisma.$transaction(answerResults);
+  await prisma.$transaction(ops);
 
   const percentage = attempt.maxScore > 0 ? (correctCount / attempt.maxScore) * 100 : 0;
-  const passed = percentage >= (attempt.assessment.passingScore ?? 0);
 
-  return prisma.assessmentAttempt.update({
+  const completed = await prisma.assessmentAttempt.update({
     where: { id: attemptId },
     data: {
       status: "COMPLETED",
@@ -419,9 +498,49 @@ export async function submitAttempt(attemptId: string, answers: { questionId: st
       percentage,
     },
     include: {
-      answers: { include: { question: { select: { id: true, stem: true, explanation: true } } } },
+      answers: {
+        include: {
+          question: { select: { id: true, stem: true, explanation: true, type: true } },
+        },
+      },
     },
   });
+
+  // Phase 2 — persist mastery to Progress for each topic this assessment targets.
+  const gate = attempt.assessment.masteryThreshold ?? attempt.assessment.passingScore ?? 75;
+  const topicIds = ((attempt.assessment.topicIds as string[]) ?? []).filter(Boolean);
+  for (const topicId of topicIds) {
+    const existing = await prisma.progress.findFirst({
+      where: { learnerId: attempt.learnerId, topicId, lessonId: null },
+    });
+    const best = Math.max(existing?.completionPercentage ?? 0, percentage);
+    const mastery = (best >= gate ? "MASTERED" : percentage >= 70 ? "PRACTICING" : "LEARNING") as any;
+    if (existing) {
+      await prisma.progress.update({
+        where: { id: existing.id },
+        data: {
+          completionPercentage: best,
+          averageScore: percentage,
+          mastery,
+          attemptsCount: existing.attemptsCount + 1,
+          lastActivityAt: new Date(),
+        },
+      });
+    } else {
+      await prisma.progress.create({
+        data: {
+          learnerId: attempt.learnerId,
+          topicId,
+          completionPercentage: percentage,
+          averageScore: percentage,
+          mastery,
+          attemptsCount: 1,
+        },
+      });
+    }
+  }
+
+  return completed;
 }
 
 // Stats
@@ -463,4 +582,23 @@ export async function getAssessmentStats(id: string) {
           100
         : 0,
   };
+}
+
+// A learner's own attempts (for "my assessments" list + progress).
+export async function getMyAttempts(userId: string) {
+  const learner = await prisma.learnerProfile.findUnique({ where: { userId } });
+  if (!learner) return [];
+  return prisma.assessmentAttempt.findMany({
+    where: { learnerId: learner.id },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      assessmentId: true,
+      status: true,
+      percentage: true,
+      score: true,
+      maxScore: true,
+      completedAt: true,
+    },
+  });
 }

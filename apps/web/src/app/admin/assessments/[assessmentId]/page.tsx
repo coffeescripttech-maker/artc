@@ -31,8 +31,12 @@ interface Assessment {
   questionCount?: number;
   timeLimitMinutes?: number;
   passingScore?: number;
+  masteryThreshold?: number;
   randomizeQuestions?: boolean;
+  randomizeChoices?: boolean;
   showExplanations?: boolean;
+  allowRetake?: boolean;
+  maxAttempts?: number;
   _count?: {
     questions: number;
     attempts: number;
@@ -89,6 +93,16 @@ export default function AssessmentBuilderPage() {
   const [assessment, setAssessment] = useState<Assessment | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [name, setName] = useState("");
+  const [type, setType] = useState("QUIZ");
+  const [description, setDescription] = useState("");
+  const [timeLimit, setTimeLimit] = useState("");
+  const [passingScore, setPassingScore] = useState("");
+  const [masteryThreshold, setMasteryThreshold] = useState("");
+  const [randomizeQuestions, setRandomizeQuestions] = useState(false);
+  const [randomizeChoices, setRandomizeChoices] = useState(false);
+  const [showExplanations, setShowExplanations] = useState(true);
+  const [allowRetake, setAllowRetake] = useState(false);
+  const [maxAttempts, setMaxAttempts] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -108,13 +122,19 @@ export default function AssessmentBuilderPage() {
         questionsApi.getByAssessment(assessmentId).catch(() => null),
       ]);
 
-      if (assessmentData) {
-        setAssessment(assessmentData as Assessment);
-        setName((assessmentData as Assessment).name);
-      } else {
-        setAssessment(mockAssessment);
-        setName(mockAssessment.name);
-      }
+      const a = ((assessmentData as Assessment) || mockAssessment) as Assessment;
+      setAssessment(a);
+      setName(a.name);
+      setType(a.type || "QUIZ");
+      setDescription(a.description || "");
+      setTimeLimit(a.timeLimitMinutes != null ? String(a.timeLimitMinutes) : "");
+      setPassingScore(a.passingScore != null ? String(a.passingScore) : "");
+      setMasteryThreshold(a.masteryThreshold != null ? String(a.masteryThreshold) : "");
+      setRandomizeQuestions(!!a.randomizeQuestions);
+      setRandomizeChoices(!!a.randomizeChoices);
+      setShowExplanations(a.showExplanations !== false);
+      setAllowRetake(!!a.allowRetake);
+      setMaxAttempts(a.maxAttempts != null ? String(a.maxAttempts) : "");
 
       if (questionsData && Array.isArray(questionsData)) {
         setQuestions(questionsData as Question[]);
@@ -146,7 +166,23 @@ export default function AssessmentBuilderPage() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await assessmentsApi.update(assessmentId, { name }, "");
+      const num = (s: string) => {
+        const n = parseInt(s, 10);
+        return Number.isFinite(n) ? n : undefined;
+      };
+      await assessmentsApi.update(assessmentId, {
+        name,
+        type,
+        description: description || undefined,
+        timeLimitMinutes: num(timeLimit),
+        passingScore: num(passingScore),
+        masteryThreshold: num(masteryThreshold),
+        randomizeQuestions,
+        randomizeChoices,
+        showExplanations,
+        allowRetake,
+        maxAttempts: num(maxAttempts),
+      });
     } catch (err) {
       console.error("Failed to save:", err);
     } finally {
@@ -302,20 +338,31 @@ export default function AssessmentBuilderPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-arc-navy-900 mb-1">Type</label>
-                    <select className="w-full h-10 px-3 border border-arc-slate-200 rounded-lg">
+                    <select value={type} onChange={(e) => setType(e.target.value)} className="w-full h-10 px-3 border border-arc-slate-200 rounded-lg">
                       <option value="QUIZ">Quiz</option>
                       <option value="PRACTICE">Practice</option>
                       <option value="DIAGNOSTIC">Diagnostic</option>
                       <option value="MOCK_EXAM">Mock Exam</option>
+                      <option value="ASSIGNMENT">Assignment</option>
+                      <option value="CET_SIMULATION">CET Simulation</option>
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-arc-navy-900 mb-1">Time Limit (minutes)</label>
-                    <input type="number" defaultValue={assessment.timeLimitMinutes} className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-arc-navy-500" />
+                    <input type="number" min="1" value={timeLimit} onChange={(e) => setTimeLimit(e.target.value)} placeholder="No limit" className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-arc-navy-500" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-arc-navy-900 mb-1">Passing Score (%)</label>
-                    <input type="number" defaultValue={assessment.passingScore} className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-arc-navy-500" />
+                    <input type="number" min="0" max="100" value={passingScore} onChange={(e) => setPassingScore(e.target.value)} className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-arc-navy-500" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-arc-navy-900 mb-1">Mastery Threshold (%)</label>
+                    <input type="number" min="0" max="100" value={masteryThreshold} onChange={(e) => setMasteryThreshold(e.target.value)} placeholder="e.g., 95" className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-arc-navy-500" />
+                    <p className="text-xs text-arc-slate-500 mt-1">Score required to master &amp; unlock the next level.</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-arc-navy-900 mb-1">Max Attempts</label>
+                    <input type="number" min="1" value={maxAttempts} onChange={(e) => setMaxAttempts(e.target.value)} placeholder="Unlimited" className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-arc-navy-500" />
                   </div>
                 </div>
               </CardContent>
@@ -398,17 +445,31 @@ export default function AssessmentBuilderPage() {
                 <h3 className="font-semibold text-arc-navy-900 mb-4">Settings</h3>
                 <div className="space-y-4">
                   <label className="flex items-center gap-3 cursor-pointer">
-                    <input type="checkbox" defaultChecked={assessment.randomizeQuestions} className="h-4 w-4 rounded border-arc-slate-300 text-arc-orange-500 focus:ring-arc-orange-500" />
+                    <input type="checkbox" checked={randomizeQuestions} onChange={(e) => setRandomizeQuestions(e.target.checked)} className="h-4 w-4 rounded border-arc-slate-300 text-arc-orange-500 focus:ring-arc-orange-500" />
                     <div>
                       <span className="text-sm font-medium text-arc-navy-900">Randomize Questions</span>
                       <p className="text-xs text-arc-slate-500">Shuffle question order</p>
                     </div>
                   </label>
                   <label className="flex items-center gap-3 cursor-pointer">
-                    <input type="checkbox" defaultChecked={assessment.showExplanations} className="h-4 w-4 rounded border-arc-slate-300 text-arc-orange-500 focus:ring-arc-orange-500" />
+                    <input type="checkbox" checked={randomizeChoices} onChange={(e) => setRandomizeChoices(e.target.checked)} className="h-4 w-4 rounded border-arc-slate-300 text-arc-orange-500 focus:ring-arc-orange-500" />
+                    <div>
+                      <span className="text-sm font-medium text-arc-navy-900">Randomize Choices</span>
+                      <p className="text-xs text-arc-slate-500">Shuffle answer options</p>
+                    </div>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" checked={showExplanations} onChange={(e) => setShowExplanations(e.target.checked)} className="h-4 w-4 rounded border-arc-slate-300 text-arc-orange-500 focus:ring-arc-orange-500" />
                     <div>
                       <span className="text-sm font-medium text-arc-navy-900">Show Explanations</span>
                       <p className="text-xs text-arc-slate-500">After submission</p>
+                    </div>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" checked={allowRetake} onChange={(e) => setAllowRetake(e.target.checked)} className="h-4 w-4 rounded border-arc-slate-300 text-arc-orange-500 focus:ring-arc-orange-500" />
+                    <div>
+                      <span className="text-sm font-medium text-arc-navy-900">Allow Retake</span>
+                      <p className="text-xs text-arc-slate-500">Let learners try again</p>
                     </div>
                   </label>
                 </div>
@@ -425,11 +486,11 @@ export default function AssessmentBuilderPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 text-arc-slate-600"><Clock className="h-4 w-4" /><span className="text-sm">Time Limit</span></div>
-                    <span className="font-semibold text-arc-navy-900">{assessment.timeLimitMinutes} min</span>
+                    <span className="font-semibold text-arc-navy-900">{timeLimit ? `${timeLimit} min` : "No limit"}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-arc-slate-600"><Check className="h-4 w-4" /><span className="text-sm">Passing Score</span></div>
-                    <span className="font-semibold text-arc-navy-900">{assessment.passingScore}%</span>
+                    <div className="flex items-center gap-2 text-arc-slate-600"><Check className="h-4 w-4" /><span className="text-sm">Mastery</span></div>
+                    <span className="font-semibold text-arc-navy-900">{masteryThreshold || passingScore || 95}%</span>
                   </div>
                   <div className="pt-3 border-t border-arc-slate-200">
                     <div className="flex items-center justify-between">

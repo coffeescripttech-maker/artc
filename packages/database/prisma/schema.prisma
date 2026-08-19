@@ -199,6 +199,8 @@ model LearnerProfile {
   currentCurriculum   Curriculum?      @relation(fields: [currentCurriculumId], references: [id])
   learningGoals       String?          @map("learning_goals")
   preferredLanguage   String           @default("fil") @map("preferred_language")
+  organizationId      String?          @map("organization_id")
+  organization        Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   createdAt           DateTime         @default(now()) @map("created_at")
   updatedAt           DateTime         @updatedAt @map("updated_at")
 
@@ -209,6 +211,7 @@ model LearnerProfile {
   testAttempts      TestAttempt[]
   progressRecords   Progress[]
 
+  @@index([organizationId])
   @@map("learner_profiles")
 }
 
@@ -223,6 +226,28 @@ enum ProgramStatus {
   ARCHIVED
 }
 
+// ============================================================
+// ORGANIZATION (multi-school tenancy seam)
+// ============================================================
+model Organization {
+  id        String        @id @default(cuid())
+  name      String
+  slug      String        @unique
+  type      String?       // e.g., "REVIEW_CENTER", "SCHOOL"
+  status    ContentStatus @default(PUBLISHED)
+  metadata  Json?
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  programs        Program[]
+  curriculums     Curriculum[]
+  learnerProfiles LearnerProfile[]
+  assessments     Assessment[]
+
+  @@map("organizations")
+}
+
 model Program {
   id          String         @id @default(cuid())
   name        String
@@ -232,6 +257,8 @@ model Program {
   status      ProgramStatus  @default(DRAFT)
   imageUrl    String?        @map("image_url")
   metadata    Json?         // flexible field for program-specific config
+  organizationId String?     @map("organization_id")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
 
@@ -244,6 +271,7 @@ model Program {
   assessments     Assessment[]
 
   @@index([status])
+  @@index([organizationId])
   @@map("programs")
 }
 
@@ -259,6 +287,8 @@ model Curriculum {
   status      ContentStatus    @default(DRAFT)
   programId   String?          @map("program_id")
   program     Program?         @relation(fields: [programId], references: [id], onDelete: SetNull)
+  organizationId String?       @map("organization_id")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   createdAt   DateTime         @default(now()) @map("created_at")
   updatedAt   DateTime         @updatedAt @map("updated_at")
 
@@ -268,6 +298,7 @@ model Curriculum {
 
   @@index([stage, gradeLevel])
   @@index([programId])
+  @@index([organizationId])
   @@map("curriculums")
 }
 
@@ -560,14 +591,18 @@ model Assessment {
   timeLimitMinutes     Int?              @map("time_limit_minutes")
   passingScore         Int?              @map("passing_score")     // percentage
   randomizeQuestions   Boolean           @default(false) @map("randomize_questions")
+  randomizeChoices     Boolean           @default(false) @map("randomize_choices")
   showExplanations     Boolean           @default(true) @map("show_explanations")
   allowRetake          Boolean           @default(false) @map("allow_retake")
   maxAttempts          Int?              @default(1) @map("max_attempts")
+  masteryThreshold     Int?              @map("mastery_threshold") // % required to be "mastered" (e.g., 95)
 
   scoringConfig        Json?             @map("scoring_config")
   status               ContentStatus     @default(DRAFT)
   programId            String?           @map("program_id")
   program              Program?          @relation(fields: [programId], references: [id], onDelete: SetNull)
+  organizationId       String?           @map("organization_id")
+  organization         Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   createdAt            DateTime          @default(now()) @map("created_at")
   updatedAt            DateTime          @updatedAt @map("updated_at")
 
@@ -577,6 +612,7 @@ model Assessment {
   questionLinks        QuestionBankLink[]
 
   @@index([programId])
+  @@index([organizationId])
   @@index([type])
   @@index([status])
   @@map("assessments")
