@@ -122,7 +122,7 @@ export function LessonCanvas({
 
               {/* Rendered content (non-interactive in the editor) */}
               <div className="pointer-events-none select-none">
-                <LessonBlockRenderer content={[block]} />
+                <LessonBlockRenderer content={[block]} isAdmin={true} />
               </div>
             </div>
           );

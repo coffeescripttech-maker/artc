@@ -1,11 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Upload, Loader2, Plus, X } from "lucide-react";
+import { Upload, Loader2, Plus, X, HelpCircle, ExternalLink, Loader } from "lucide-react";
 import { type LessonBlock, resolveVideo, generateBlockId } from "@aratc/shared";
-import { mediaApi } from "@/lib/api/client";
+import { mediaApi, questionsApi } from "@/lib/api/client";
 import { prepareImageForUpload, fileToUploadPayload } from "@/lib/image";
 import { RichTextEditor } from "./rich-text-editor";
+import { Button, Badge } from "@/components/ui";
 
 export const inputClass =
   "w-full px-3 py-2 border border-arc-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-arc-orange-500";
@@ -195,15 +196,154 @@ export function BlockFields({
 
     case "question":
       return (
-        <div className="text-sm text-arc-slate-500">
-          Linked question {block.questionId ? `#${block.questionId}` : "(not set)"} — editing
-          arrives with the Question Bank.
-        </div>
+        <QuestionBlockFields block={block} onUpdate={onUpdate} />
       );
 
     default:
       return null;
   }
+}
+
+function QuestionBlockFields({
+  block,
+  onUpdate,
+}: {
+  block: LessonBlock & { type: "question"; questionId?: string; points?: number; required?: boolean; showFeedback?: boolean };
+  onUpdate: (patch: Record<string, unknown>) => void;
+}) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [linkedQuestion, setLinkedQuestion] = useState<any>(null);
+
+  // Fetch linked question info
+  useState(() => {
+    if (block.questionId) {
+      setIsLoading(true);
+      questionsApi.getById(block.questionId)
+        .then((q: any) => setLinkedQuestion(q))
+        .catch(() => setLinkedQuestion(null))
+        .finally(() => setIsLoading(false));
+    }
+  });
+
+  if (!block.questionId) {
+    return (
+      <div className="space-y-2">
+        <div className="p-4 rounded-lg border border-dashed border-arc-slate-300 bg-arc-slate-50 text-center">
+          <HelpCircle className="h-8 w-8 text-arc-slate-400 mx-auto mb-2" />
+          <p className="text-sm text-arc-slate-500 mb-2">No question linked</p>
+          <p className="text-xs text-arc-slate-400">Use the block picker to select a question</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Linked Question Info */}
+      <div className="p-3 rounded-lg border border-arc-slate-200 bg-arc-slate-50">
+        <div className="flex items-center justify-between mb-2">
+          <Badge variant="secondary" className="text-xs">Linked Question</Badge>
+          {isLoading ? (
+            <Loader className="h-4 w-4 animate-spin text-arc-slate-400" />
+          ) : (
+            <a
+              href={`/admin/questions/${block.questionId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-arc-orange-600 hover:underline flex items-center gap-1"
+            >
+              View in Bank <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+        </div>
+        {linkedQuestion ? (
+          <>
+            <p className="text-sm text-arc-navy-900 line-clamp-2">{linkedQuestion.text}</p>
+            <div className="flex items-center gap-2 mt-2">
+              <Badge variant="outline" className="text-xs">{linkedQuestion.type?.replace(/_/g, " ")}</Badge>
+              {linkedQuestion.difficulty && (
+                <Badge
+                  className={`text-xs ${
+                    linkedQuestion.difficulty === "EASY"
+                      ? "bg-green-100 text-green-700"
+                      : linkedQuestion.difficulty === "MEDIUM"
+                      ? "bg-yellow-100 text-yellow-700"
+                      : "bg-red-100 text-red-700"
+                  }`}
+                >
+                  {linkedQuestion.difficulty}
+                </Badge>
+              )}
+            </div>
+          </>
+        ) : (
+          <p className="text-xs text-arc-slate-500">Question #{block.questionId}</p>
+        )}
+      </div>
+
+      {/* Points */}
+      <div>
+        <label className="block text-xs font-medium text-arc-slate-600 mb-1">Points</label>
+        <input
+          type="number"
+          value={block.points || 1}
+          onChange={(e) => onUpdate({ points: parseInt(e.target.value) || 1 })}
+          min={1}
+          max={100}
+          className={inputClass}
+        />
+      </div>
+
+      {/* Required Toggle */}
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-arc-slate-600">Required</label>
+        <button
+          type="button"
+          onClick={() => onUpdate({ required: !block.required })}
+          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+            block.required ? "bg-arc-orange-500" : "bg-arc-slate-200"
+          }`}
+        >
+          <span
+            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+              block.required ? "translate-x-4.5" : "translate-x-1"
+            }`}
+          />
+        </button>
+      </div>
+
+      {/* Show Feedback Toggle */}
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-arc-slate-600">Show Feedback</label>
+        <button
+          type="button"
+          onClick={() => onUpdate({ showFeedback: !block.showFeedback })}
+          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+            block.showFeedback !== false ? "bg-arc-orange-500" : "bg-arc-slate-200"
+          }`}
+        >
+          <span
+            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+              block.showFeedback !== false ? "translate-x-4.5" : "translate-x-1"
+            }`}
+          />
+        </button>
+      </div>
+
+      {/* Change Question Button */}
+      <Button
+        variant="outline"
+        size="sm"
+        className="w-full"
+        onClick={() => {
+          // Emit event to open question picker
+          window.dispatchEvent(new CustomEvent("openQuestionPicker", { detail: { blockId: block.id } }));
+        }}
+      >
+        Change Question
+      </Button>
+    </div>
+  );
 }
 
 function UploadButton({

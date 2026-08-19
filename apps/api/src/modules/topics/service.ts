@@ -15,6 +15,15 @@ export async function listTopics(moduleId?: string) {
   });
 }
 
+export async function listAllTopics() {
+  return prisma.topic.findMany({
+    orderBy: [{ moduleId: "asc" }, { orderIndex: "asc" }],
+    include: {
+      module: { select: { id: true, name: true, subject: { select: { id: true, name: true } } } },
+    },
+  });
+}
+
 export async function getTopicById(id: string) {
   const topic = await prisma.topic.findUnique({
     where: { id },

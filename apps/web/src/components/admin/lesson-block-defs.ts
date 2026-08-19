@@ -62,7 +62,7 @@ export const BLOCK_GROUPS: BlockGroup[] = [
   {
     title: "Interactive",
     items: [
-      { key: "question", label: "Question", icon: HelpCircle, soon: true },
+      { key: "question", label: "Question", icon: HelpCircle, type: "question" },
       { key: "practice", label: "Practice", icon: ClipboardList, soon: true },
     ],
   },

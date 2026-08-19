@@ -61,7 +61,15 @@ pnpm db:migrate
 
 ---
 
-## Next: Phase 4
+## Next: Phase 4 (Lesson Question Integration)
+- See `TODO_PHASE4.md` for details
+- [ ] Question picker modal for lesson editor
+- [ ] Interactive question renderer for students
+- [ ] Response tracking API
+- [ ] Block properties for question blocks
+
+---
+## Future: Phase 5 (Reports)
 - [ ] Academic Mastery score computation
 - [ ] College Readiness Index
 - [ ] CET Readiness score

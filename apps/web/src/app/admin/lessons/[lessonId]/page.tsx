@@ -10,6 +10,7 @@ import { BlockLibrary } from "@/components/admin/lesson-block-library";
 import { BlockPicker } from "@/components/admin/block-picker";
 import { LessonTemplates } from "@/components/admin/lesson-templates";
 import { LessonBlockRenderer } from "@/components/lesson/block-renderer";
+import { QuestionPickerModal } from "@/components/admin/question-picker-modal";
 import { lessonsApi } from "@/lib/api/client";
 import { Button, Badge, Input } from "@/components/ui";
 import {
@@ -155,6 +156,10 @@ export default function LessonEditorPage() {
     open: false,
     afterId: null,
   });
+  const [questionPicker, setQuestionPicker] = useState<{ open: boolean; afterId: string | null }>({
+    open: false,
+    afterId: null,
+  });
   const [undoStack, setUndoStack] = useState<LessonBlock[][]>([]);
   const [redoStack, setRedoStack] = useState<LessonBlock[][]>([]);
   const [previewDevice, setPreviewDevice] = useState<"desktop" | "tablet" | "mobile">("desktop");
@@ -179,6 +184,19 @@ export default function LessonEditorPage() {
   useEffect(() => {
     const t = setInterval(() => setNowTick((n) => n + 1), 30000);
     return () => clearInterval(t);
+  }, []);
+
+  // Listen for openQuestionPicker event from block-properties
+  useEffect(() => {
+    const handleOpenQuestionPicker = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.blockId) {
+        setSelectedBlockId(detail.blockId);
+      }
+      openQuestionPicker(detail?.blockId || null);
+    };
+    window.addEventListener("openQuestionPicker", handleOpenQuestionPicker);
+    return () => window.removeEventListener("openQuestionPicker", handleOpenQuestionPicker);
   }, []);
 
   // Fetch the real lesson
@@ -363,6 +381,30 @@ export default function LessonEditorPage() {
     setBlockPicker({ open: false, afterId: null });
     setActiveTab("content");
   };
+
+  // Handle question selection from picker
+  const handleQuestionSelect = (questionId: string, questionText: string) => {
+    const nb = createBlock("question") as any;
+    nb.questionId = questionId;
+    nb.points = 1;
+    nb.required = false;
+    nb.showFeedback = true;
+    console.log("Creating question block with ID:", questionId);
+
+    const afterId = questionPicker.afterId;
+    const idx = afterId ? blocks.findIndex((b) => b.id === afterId) : -1;
+    const next = [...blocks];
+    if (idx < 0) next.push(nb);
+    else next.splice(idx + 1, 0, nb);
+
+    commit(next);
+    setSelectedBlockId(nb.id);
+    setQuestionPicker({ open: false, afterId: null });
+    setActiveTab("content");
+  };
+
+  // Open question picker modal
+  const openQuestionPicker = (afterId: string | null) => setQuestionPicker({ open: true, afterId });
 
   const applyTemplate = (templateBlocks: LessonBlock[]) => {
     commit(templateBlocks);
@@ -865,7 +907,7 @@ export default function LessonEditorPage() {
               </div>
             )}
             <div className="mt-6 border-t border-arc-slate-100 pt-6">
-              <LessonBlockRenderer content={{ version: LESSON_CONTENT_VERSION, blocks }} />
+              <LessonBlockRenderer content={{ version: LESSON_CONTENT_VERSION, blocks }} isAdmin={true} />
             </div>
           </div>
         </div>
@@ -935,7 +977,22 @@ export default function LessonEditorPage() {
       <BlockPicker
         open={blockPicker.open}
         onClose={() => setBlockPicker({ open: false, afterId: null })}
-        onPick={(t) => insertBlockAt(t, blockPicker.afterId)}
+        onPick={(t) => {
+          if (t === "question") {
+            // Open question picker instead of inserting directly
+            setBlockPicker({ open: false, afterId: null });
+            openQuestionPicker(blockPicker.afterId);
+          } else {
+            insertBlockAt(t, blockPicker.afterId);
+          }
+        }}
+      />
+
+      <QuestionPickerModal
+        isOpen={questionPicker.open}
+        onClose={() => setQuestionPicker({ open: false, afterId: null })}
+        onSelect={handleQuestionSelect}
+        excludeQuestionIds={blocks.filter((b) => b.type === "question" && b.questionId).map((b) => b.questionId)}
       />
     </>
   );

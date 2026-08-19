@@ -120,6 +120,7 @@ export const modulesApi = {
 export const topicsApi = {
   list: (moduleId?: string) =>
     apiFetch(moduleId ? `/topics?moduleId=${moduleId}` : "/topics"),
+  listAll: () => apiFetch("/topics/all"),
   getById: (id: string) => apiFetch(`/topics/${id}`),
   create: (data: any, token?: string) =>
     apiFetch("/topics", { method: "POST", body: JSON.stringify(data), token }),

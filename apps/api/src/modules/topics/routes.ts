@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import {
   list,
+  listAll,
   getById,
   create,
   update,
@@ -15,6 +16,7 @@ const router: IRouter = Router();
 
 // Public routes
 router.get("/", list);
+router.get("/all", listAll);
 router.get("/:id", getById);
 
 // Protected admin routes

@@ -34,6 +34,12 @@ export async function listQuestions(filters?: {
     include: {
       author: { select: { id: true, firstName: true, lastName: true } },
       reviewer: { select: { id: true, firstName: true, lastName: true } },
+      bankLinks: {
+        include: {
+          topic: { select: { id: true, name: true } },
+          subject: { select: { id: true, name: true } },
+        },
+      },
       _count: { select: { bankLinks: true, assessmentQuestions: true } },
     },
   });

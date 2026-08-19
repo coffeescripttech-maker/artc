@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { validateRequest } from "../../lib/validate";
 import {
   listTopics,
+  listAllTopics,
   getTopicById,
   createTopic,
   updateTopic,
@@ -19,6 +20,19 @@ export async function list(
   try {
     const moduleId = req.query.moduleId as string | undefined;
     const topics = await listTopics(moduleId);
+    res.json(topics);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function listAll(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const topics = await listAllTopics();
     res.json(topics);
   } catch (error) {
     next(error);

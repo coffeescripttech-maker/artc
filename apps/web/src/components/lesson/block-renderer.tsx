@@ -11,12 +11,17 @@ import {
   CheckSquare,
   Square,
   Star,
+  Loader2,
+  HelpCircle,
+  CheckCircle,
 } from "lucide-react";
 import {
   type LessonBlock,
   type LessonContent,
   resolveVideo,
 } from "@aratc/shared";
+import { QuestionRenderer } from "./question-renderer";
+import { questionsApi } from "@/lib/api/client";
 
 /**
  * Read-only renderer for block-based lesson content.
@@ -27,9 +32,11 @@ import {
 export function LessonBlockRenderer({
   content,
   className = "",
+  isAdmin = false,
 }: {
   content: LessonContent | LessonBlock[] | null | undefined;
   className?: string;
+  isAdmin?: boolean; // Show preview (admin) vs interactive (student)
 }) {
   const blocks = Array.isArray(content) ? content : content?.blocks;
 
@@ -42,13 +49,17 @@ export function LessonBlockRenderer({
   return (
     <div className={`space-y-4 ${className}`}>
       {blocks.map((block) => (
-        <BlockView key={block.id} block={block} />
+        <BlockView key={block.id} block={block} isAdmin={isAdmin} />
       ))}
     </div>
   );
 }
 
-function BlockView({ block }: { block: LessonBlock }) {
+function BlockView({ block, isAdmin = false }: { block: LessonBlock; isAdmin?: boolean }) {
+  // Debug log
+  if (block.type === "question") {
+    console.log("Question block:", block.questionId, "isAdmin:", isAdmin);
+  }
   switch (block.type) {
     case "heading":
       return block.level === 3 ? (
@@ -191,11 +202,21 @@ function BlockView({ block }: { block: LessonBlock }) {
       );
 
     case "question":
+      if (!block.questionId) {
+        return (
+          <div className="rounded-lg border border-dashed border-arc-slate-300 bg-arc-slate-50 px-4 py-3 text-sm text-arc-slate-500">
+            Question block (not linked) — Select a question in the editor.
+          </div>
+        );
+      }
+      if (isAdmin) {
+        return <QuestionBlockPreview questionId={block.questionId} />;
+      }
       return (
-        <div className="rounded-lg border border-dashed border-arc-slate-300 bg-arc-slate-50 px-4 py-3 text-sm text-arc-slate-500">
-          Question block {block.questionId ? `(#${block.questionId})` : "(not linked)"} —
-          interactive rendering arrives with the Question Bank.
-        </div>
+        <QuestionRenderer
+          questionId={block.questionId}
+          points={block.points || 1}
+        />
       );
 
     default:
@@ -381,6 +402,102 @@ function RichText({
     );
   }
   return <p className={`whitespace-pre-wrap ${className}`}>{text}</p>;
+}
+
+// Question block preview for admin editor (interactive preview)
+function QuestionBlockPreview({ questionId }: { questionId: string }) {
+  const [question, setQuestion] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+
+  useEffect(() => {
+    questionsApi.getById(questionId)
+      .then((data: any) => {
+        setQuestion(data);
+        setIsLoading(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load question:", err);
+        setError("Failed to load");
+        setIsLoading(false);
+      });
+  }, [questionId]);
+
+  if (isLoading) {
+    return (
+      <div className="rounded-lg border border-arc-slate-200 bg-white p-4 flex items-center gap-3">
+        <Loader2 className="h-5 w-5 animate-spin text-arc-orange-500" />
+        <span className="text-sm text-arc-slate-500">Loading question...</span>
+      </div>
+    );
+  }
+
+  if (!question || error) {
+    return (
+      <div className="rounded-lg border border-dashed border-red-300 bg-red-50 px-4 py-3 text-sm text-red-600">
+        {error || "Failed to load question"}
+      </div>
+    );
+  }
+
+  const isSelectable = question.type === "MULTIPLE_CHOICE" || question.type === "TRUE_OR_FALSE";
+
+  return (
+    <div className="rounded-lg border border-arc-orange-200 bg-arc-orange-50/50 overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-2 bg-arc-orange-100 border-b border-arc-orange-200 flex items-center gap-2">
+        <HelpCircle className="h-4 w-4 text-arc-orange-600" />
+        <span className="text-xs font-semibold text-arc-orange-700">Question Preview</span>
+        <span className="ml-auto text-xs text-arc-orange-600">{question.type?.replace(/_/g, " ")}</span>
+      </div>
+
+      {/* Preview banner */}
+      <div className="px-4 py-1.5 bg-amber-50 border-b border-amber-200 text-xs text-amber-700">
+        Preview mode — View as student to answer
+      </div>
+
+      {/* Question content */}
+      <div className="p-4">
+        <p className="text-sm font-medium text-arc-navy-900">{question.stem}</p>
+
+        {/* Options */}
+        {Array.isArray(question.options) && question.options.length > 0 && (
+          <div className="mt-3 space-y-1.5">
+            {question.options.map((opt: any, idx: number) => (
+              <button
+                key={opt.id || idx}
+                onClick={() => isSelectable && setSelectedOption(opt.id)}
+                disabled={!isSelectable}
+                className={`w-full flex items-center gap-2 p-2 rounded border text-sm text-left transition-all ${
+                  selectedOption === opt.id
+                    ? "border-arc-orange-500 bg-arc-orange-50"
+                    : "border-arc-slate-200 bg-white hover:border-arc-slate-300"
+                } ${!isSelectable ? "cursor-default" : "cursor-pointer"}`}
+              >
+                <span className="text-xs font-medium text-arc-slate-400 w-5">
+                  {String.fromCharCode(65 + idx)}.
+                </span>
+                <span className="text-arc-slate-700">{opt.text}</span>
+                {selectedOption === opt.id && (
+                  <CheckCircle className="h-4 w-4 text-arc-orange-500 ml-auto" />
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Metadata */}
+        <div className="mt-3 flex items-center gap-2 text-xs text-arc-slate-500">
+          <span className={question.difficulty === "EASY" ? "text-green-600" : question.difficulty === "HARD" ? "text-red-600" : "text-yellow-600"}>
+            {question.difficulty}
+          </span>
+          <span>•</span>
+          <span>{question.points || 1} point{(question.points || 1) !== 1 ? "s" : ""}</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default LessonBlockRenderer;
