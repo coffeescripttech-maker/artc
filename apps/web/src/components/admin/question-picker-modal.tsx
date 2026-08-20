@@ -38,7 +38,7 @@ interface QuestionPickerModalProps {
 
 const QUESTION_TYPE_LABELS: Record<string, string> = {
   MULTIPLE_CHOICE: "Multiple Choice",
-  TRUE_OR_FALSE: "True or False",
+  TRUE_FALSE: "True or False",
   FILL_IN_THE_BLANK: "Fill in the Blank",
   IDENTIFICATION: "Identification",
   SHORT_ANSWER: "Short Answer",
@@ -52,6 +52,19 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   MEDIUM: "bg-yellow-100 text-yellow-700",
   HARD: "bg-red-100 text-red-700",
 };
+
+function parseOptions(options: unknown): { id: string; text: string }[] {
+  if (Array.isArray(options)) return options;
+  if (typeof options === "string") {
+    try {
+      const parsed = JSON.parse(options);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
 
 export function QuestionPickerModal({
   isOpen,
@@ -265,10 +278,13 @@ export function QuestionPickerModal({
                     <p className="text-sm font-medium text-arc-navy-900">{selectedQuestion.stem}</p>
 
                     {/* Show options for multiple choice */}
-                    {Array.isArray(selectedQuestion.options) && selectedQuestion.options.length > 0 && (
+                    {parseOptions(selectedQuestion.options).length > 0 && (
                       <div className="mt-3 space-y-2">
-                        {selectedQuestion.options.map((opt: any, idx: number) => (
-                          <div key={opt.id || idx} className="flex items-center gap-2 p-2 rounded border border-arc-slate-100 bg-arc-slate-50">
+                        {parseOptions(selectedQuestion.options).map((opt: any, idx: number) => (
+                          <div
+                            key={opt.id || idx}
+                            className="flex items-center gap-2 p-2 rounded border border-arc-slate-100 bg-arc-slate-50"
+                          >
                             <span className="text-xs font-medium text-arc-slate-400">
                               {String.fromCharCode(65 + idx)}.
                             </span>

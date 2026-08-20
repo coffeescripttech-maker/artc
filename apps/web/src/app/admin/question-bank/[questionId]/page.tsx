@@ -25,17 +25,20 @@ import {
 interface Option {
   id: string;
   text: string;
+  matchText?: string;
   isCorrect: boolean;
 }
 
 interface Question {
   id: string;
   stem: string;
-  type: "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER" | "ESSAY" | "FILL_IN_THE_BLANK";
+  type: "MULTIPLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER" | "ESSAY" | "FILL_IN_THE_BLANK" | "MULTIPLE_SELECT" | "MATCHING" | "NUMERIC" | "ORDERING";
   difficulty: "EASY" | "MEDIUM" | "HARD";
   status: "DRAFT" | "PUBLISHED" | "UNDER_REVIEW" | "ARCHIVED";
   options?: Option[];
   explanation?: string;
+  correctAnswer?: string;
+  tolerance?: number;
   links?: {
     id: string;
     type: "SUBJECT" | "TOPIC" | "MODULE";
@@ -102,10 +105,14 @@ const mockTopics: Topic[] = [
 
 const questionTypes = [
   { value: "MULTIPLE_CHOICE", label: "Multiple Choice", description: "Select one correct answer" },
+  { value: "MULTIPLE_SELECT", label: "Multiple Select", description: "Select all correct answers" },
   { value: "TRUE_FALSE", label: "True/False", description: "Mark as true or false" },
+  { value: "FILL_IN_THE_BLANK", label: "Fill in the Blank", description: "Complete the sentence" },
+  { value: "MATCHING", label: "Matching", description: "Match items from two columns" },
+  { value: "ORDERING", label: "Ordering", description: "Arrange items in correct order" },
+  { value: "NUMERIC", label: "Numeric", description: "Enter a numeric answer" },
   { value: "SHORT_ANSWER", label: "Short Answer", description: "Brief text response" },
   { value: "ESSAY", label: "Essay", description: "Extended written response" },
-  { value: "FILL_IN_THE_BLANK", label: "Fill in the Blank", description: "Complete the sentence" },
 ];
 
 const difficulties = [
@@ -136,6 +143,8 @@ export default function QuestionEditorPage() {
   const [explanation, setExplanation] = useState("");
   const [options, setOptions] = useState<Option[]>([]);
   const [links, setLinks] = useState<Question["links"]>([]);
+  const [correctAnswer, setCorrectAnswer] = useState("");
+  const [tolerance, setTolerance] = useState("");
 
   // UI state
   const [isLoading, setIsLoading] = useState(true);
@@ -162,11 +171,13 @@ export default function QuestionEditorPage() {
         type !== question.type ||
         difficulty !== question.difficulty ||
         explanation !== (question.explanation || "") ||
-        JSON.stringify(options) !== JSON.stringify(question.options || []);
+         JSON.stringify(options) !== JSON.stringify(question.options || []) ||
+         correctAnswer !== (question.correctAnswer || "") ||
+         tolerance !== (question.tolerance !== undefined ? String(question.tolerance) : "");
 
-      setSaveStatus(hasChanges ? "unsaved" : "saved");
-    }
-  }, [stem, type, difficulty, explanation, options, question]);
+       setSaveStatus(hasChanges ? "unsaved" : "saved");
+     }
+   }, [stem, type, difficulty, explanation, options, correctAnswer, tolerance, question]);
 
   // Filter topics when subject changes
   useEffect(() => {
@@ -189,6 +200,8 @@ export default function QuestionEditorPage() {
         setExplanation(q.explanation || "");
         setOptions(q.options || []);
         setLinks(q.links || []);
+        setCorrectAnswer(q.correctAnswer || "");
+        setTolerance(q.tolerance !== undefined ? String(q.tolerance) : "");
       } else {
         // Use mock data for demo
         setQuestion(mockQuestion);
@@ -198,6 +211,8 @@ export default function QuestionEditorPage() {
         setExplanation(mockQuestion.explanation || "");
         setOptions(mockQuestion.options || []);
         setLinks(mockQuestion.links || []);
+        setCorrectAnswer("");
+        setTolerance("");
       }
     } catch (err) {
       console.error("Failed to fetch question:", err);
@@ -209,6 +224,8 @@ export default function QuestionEditorPage() {
       setExplanation(mockQuestion.explanation || "");
       setOptions(mockQuestion.options || []);
       setLinks(mockQuestion.links || []);
+      setCorrectAnswer("");
+      setTolerance("");
     } finally {
       setIsLoading(false);
     }
@@ -219,7 +236,7 @@ export default function QuestionEditorPage() {
     try {
       await questionsApi.update(
         questionId,
-        { stem, type, difficulty, explanation, options },
+        { stem, type, difficulty, explanation, options, correctAnswer: type === "NUMERIC" || type === "SHORT_ANSWER" || type === "FILL_IN_THE_BLANK" ? correctAnswer : undefined, tolerance: type === "NUMERIC" ? (tolerance ? Number(tolerance) : undefined) : undefined },
         "" // Token would come from auth
       );
       setSaveStatus("saved");
@@ -261,6 +278,14 @@ export default function QuestionEditorPage() {
 
   const handleSetCorrect = (id: string) => {
     setOptions(options.map((o) => ({ ...o, isCorrect: o.id === id })));
+  };
+
+  const handleToggleCorrect = (id: string) => {
+    setOptions(options.map((o) => (o.id === id ? { ...o, isCorrect: !o.isCorrect } : o)));
+  };
+
+  const handleMatchOptionChange = (id: string, matchText: string) => {
+    setOptions(options.map((o) => (o.id === id ? { ...o, matchText } : o)));
   };
 
   // Link handlers
@@ -503,6 +528,224 @@ export default function QuestionEditorPage() {
                     False
                   </button>
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Fill in the Blank correct answer */}
+          {type === "FILL_IN_THE_BLANK" && (
+            <Card>
+              <CardContent className="p-6 space-y-4">
+                <h3 className="font-semibold text-arc-navy-900">Correct Answer</h3>
+                <input
+                  type="text"
+                  value={correctAnswer}
+                  onChange={(e) => setCorrectAnswer(e.target.value)}
+                  placeholder="Enter the exact answer..."
+                  className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-arc-orange-500"
+                />
+                <p className="text-xs text-arc-slate-500">
+                  Students must enter this exact answer (case-insensitive)
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Short Answer correct answer */}
+          {type === "SHORT_ANSWER" && (
+            <Card>
+              <CardContent className="p-6 space-y-4">
+                <h3 className="font-semibold text-arc-navy-900">Expected Answer</h3>
+                <input
+                  type="text"
+                  value={correctAnswer}
+                  onChange={(e) => setCorrectAnswer(e.target.value)}
+                  placeholder="Enter the expected answer (used for auto-grading)..."
+                  className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-arc-orange-500"
+                />
+                <p className="text-xs text-arc-slate-500">
+                  This answer will be used for auto-grading
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Numeric correct answer */}
+          {type === "NUMERIC" && (
+            <Card>
+              <CardContent className="p-6 space-y-4">
+                <h3 className="font-semibold text-arc-navy-900">Correct Answer</h3>
+                <input
+                  type="number"
+                  value={correctAnswer}
+                  onChange={(e) => setCorrectAnswer(e.target.value)}
+                  placeholder="Enter the correct number..."
+                  className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-arc-orange-500"
+                />
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-arc-navy-900">
+                    Tolerance (optional)
+                  </label>
+                  <input
+                    type="number"
+                    value={tolerance}
+                    onChange={(e) => setTolerance(e.target.value)}
+                    placeholder="e.g. 0.01"
+                    className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-arc-orange-500"
+                  />
+                  <p className="text-xs text-arc-slate-500">
+                    Accept answers within ± this value
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Multiple Select options */}
+          {type === "MULTIPLE_SELECT" && (
+            <Card>
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-arc-navy-900">Answer Options</h3>
+                  <button
+                    onClick={handleAddOption}
+                    className="text-sm text-arc-orange-600 hover:text-arc-orange-700 flex items-center gap-1"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Option
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {options.map((option, index) => (
+                    <div key={option.id} className="flex items-center gap-3">
+                      <button
+                        onClick={() => handleToggleCorrect(option.id)}
+                        className={`h-8 w-8 rounded-md border-2 flex items-center justify-center transition-all flex-shrink-0 ${
+                          option.isCorrect
+                            ? "border-green-500 bg-green-500 text-white"
+                            : "border-arc-slate-300 hover:border-arc-slate-400"
+                        }`}
+                      >
+                        {option.isCorrect && <Check className="h-4 w-4" />}
+                      </button>
+                      <input
+                        type="text"
+                        value={option.text}
+                        onChange={(e) => handleOptionChange(option.id, e.target.value)}
+                        placeholder={`Option ${String.fromCharCode(65 + index)}`}
+                        className="flex-1 px-3 py-2 border border-arc-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-arc-orange-500"
+                      />
+                      {options.length > 2 && (
+                        <button
+                          onClick={() => handleRemoveOption(option.id)}
+                          className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-arc-slate-500">
+                  Click the checkbox to mark multiple correct answers
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Matching options */}
+          {type === "MATCHING" && (
+            <Card>
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-arc-navy-900">Match Pairs</h3>
+                  <button
+                    onClick={handleAddOption}
+                    className="text-sm text-arc-orange-600 hover:text-arc-orange-700 flex items-center gap-1"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Pair
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {options.map((option, index) => (
+                    <div key={option.id} className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-arc-slate-500 w-6">{index + 1}.</span>
+                      <input
+                        type="text"
+                        value={option.text}
+                        onChange={(e) => handleOptionChange(option.id, e.target.value)}
+                        placeholder="Left column..."
+                        className="flex-1 px-3 py-2 border border-arc-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-arc-orange-500"
+                      />
+                      <span className="text-arc-slate-400">→</span>
+                       <input
+                        type="text"
+                        value={option.matchText || ""}
+                        onChange={(e) => handleMatchOptionChange(option.id, e.target.value)}
+                        placeholder="Right column..."
+                        className="flex-1 px-3 py-2 border border-arc-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-arc-orange-500"
+                      />
+                      {options.length > 2 && (
+                        <button
+                          onClick={() => handleRemoveOption(option.id)}
+                          className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-arc-slate-500">
+                  Enter pairs: left prompt and its correct match
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Ordering options */}
+          {type === "ORDERING" && (
+            <Card>
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-arc-navy-900">Items to Order</h3>
+                  <button
+                    onClick={handleAddOption}
+                    className="text-sm text-arc-orange-600 hover:text-arc-orange-700 flex items-center gap-1"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Item
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {options.map((option, index) => (
+                    <div key={option.id} className="flex items-center gap-3">
+                      <GripVertical className="h-5 w-5 text-arc-slate-400 cursor-grab" />
+                      <input
+                        type="text"
+                        value={option.text}
+                        onChange={(e) => handleOptionChange(option.id, e.target.value)}
+                        placeholder={`Item ${index + 1}...`}
+                        className="flex-1 px-3 py-2 border border-arc-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-arc-orange-500"
+                      />
+                      {options.length > 2 && (
+                        <button
+                          onClick={() => handleRemoveOption(option.id)}
+                          className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-arc-slate-500">
+                  Arrange options in the correct order top to bottom
+                </p>
               </CardContent>
             </Card>
           )}

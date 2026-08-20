@@ -66,6 +66,8 @@ export function QuestionForm({ isOpen, onClose, onSubmit, passages = [], onCreat
   // For NUMERIC type
   const [numericAnswer, setNumericAnswer] = useState("");
   const [numericTolerance, setNumericTolerance] = useState("0");
+  // For FILL_IN_THE_BLANK type
+  const [fillInTheBlankAnswer, setFillInTheBlankAnswer] = useState("");
   // For ORDERING type - items to arrange
   const [orderingItems, setOrderingItems] = useState<string[]>(["", "", "", ""]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -186,7 +188,11 @@ export function QuestionForm({ isOpen, onClose, onSubmit, passages = [], onCreat
         break;
 
       case QUESTION_TYPES.FILL_IN_THE_BLANK:
-        correctAnswer = stem; // The answer is embedded in the stem
+        if (!fillInTheBlankAnswer.trim()) {
+          setError("Please provide the correct answer for the blank");
+          return;
+        }
+        correctAnswer = fillInTheBlankAnswer.trim();
         break;
 
       case QUESTION_TYPES.ESSAY:
@@ -239,6 +245,7 @@ export function QuestionForm({ isOpen, onClose, onSubmit, passages = [], onCreat
     ]);
     setNumericAnswer("");
     setNumericTolerance("0");
+    setFillInTheBlankAnswer("");
     setOrderingItems(["", "", "", ""]);
   };
 
@@ -398,10 +405,27 @@ export function QuestionForm({ isOpen, onClose, onSubmit, passages = [], onCreat
                 }
                 rows={3}
                 className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-arc-orange-500 resize-none"
-              />
+               />
             </div>
 
-            {/* Options for Multiple Choice / Multiple Select */}
+            {/* Fill in the Blank answer input */}
+            {type === QUESTION_TYPES.FILL_IN_THE_BLANK && (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-arc-navy-900">
+                  Correct Answer <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={fillInTheBlankAnswer}
+                  onChange={(e) => setFillInTheBlankAnswer(e.target.value)}
+                  placeholder="Type the correct answer..."
+                  className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-arc-orange-500"
+                />
+                <p className="text-xs text-arc-slate-500">
+                  Enter the exact answer students should provide.
+                </p>
+              </div>
+            )}
             {(type === QUESTION_TYPES.MULTIPLE_CHOICE || type === QUESTION_TYPES.MULTIPLE_SELECT || type === QUESTION_TYPES.MATCHING) && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">

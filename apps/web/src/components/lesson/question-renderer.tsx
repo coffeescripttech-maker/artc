@@ -12,17 +12,64 @@ import {
   Loader2,
   RotateCcw,
   GripVertical,
+  CheckSquare,
+  Square,
 } from "lucide-react";
+
+interface QuestionOption {
+  id: string;
+  text: string;
+  isCorrect?: boolean;
+}
 
 interface QuestionData {
   id: string;
   stem: string;  // The question text
   type: string;
   difficulty: string;
-  options?: { id: string; text: string }[];
+  options?: QuestionOption[];
   correctAnswer?: any;
   tolerance?: number; // For NUMERIC type
   points?: number;
+}
+
+function parseOptions(options: QuestionData["options"]): QuestionOption[] {
+  if (!options) return [];
+  if (Array.isArray(options)) return options as QuestionOption[];
+  if (typeof options === "string") {
+    try {
+      const parsed = JSON.parse(options);
+      return Array.isArray(parsed) ? parsed as QuestionOption[] : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function parseCorrectAnswer(correctAnswer: QuestionData["correctAnswer"]): string[] {
+  if (Array.isArray(correctAnswer)) return correctAnswer.map(String);
+  if (typeof correctAnswer === "string") {
+    try {
+      const parsed = JSON.parse(correctAnswer);
+      return Array.isArray(parsed) ? parsed.map(String) : [correctAnswer];
+    } catch {
+      return [correctAnswer];
+    }
+  }
+  if (correctAnswer !== undefined && correctAnswer !== null) return [String(correctAnswer)];
+  return [];
+}
+
+function isOptionCorrect(question: QuestionData | null, option: QuestionOption): boolean {
+  if (!question) return false;
+  if (option.isCorrect !== undefined) return option.isCorrect;
+  const opts = parseOptions(question.options);
+  const optsText = opts
+    .filter((o) => o.id === option.id)
+    .map((o) => o.text);
+  if (optsText.length && optsText[0] === question.correctAnswer) return true;
+  return false;
 }
 
 interface QuestionRendererProps {
@@ -42,6 +89,7 @@ export function QuestionRenderer({
 
   // User's answer
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [selectedOptions, setSelectedOptions] = useState<Set<string>>(new Set());
   const [textAnswer, setTextAnswer] = useState("");
   const [orderingAnswer, setOrderingAnswer] = useState<string[]>([]);
 
@@ -57,14 +105,15 @@ export function QuestionRenderer({
   const fetchQuestion = async () => {
     setIsLoading(true);
     setError(null);
-    console.log("QuestionRenderer fetching:", questionId);
-    try {
+   try {
       const data = await questionsApi.getById(questionId) as QuestionData;
-      console.log("QuestionRenderer loaded:", data);
-      setQuestion(data);
-      // Initialize ordering answer with shuffled options
-      if (data.type === "ORDERING" && data.options) {
-        const shuffled = [...data.options].sort(() => Math.random() - 0.5);
+      const normalized: QuestionData = {
+        ...data,
+        options: parseOptions(data.options),
+      };
+      setQuestion(normalized);
+      if ((normalized.type === "ORDERING" || normalized.type === "MATCHING") && normalized.options) {
+        const shuffled = [...normalized.options].sort(() => Math.random() - 0.5);
         setOrderingAnswer(shuffled.map((o) => o.id));
       }
     } catch (err) {
@@ -80,8 +129,21 @@ export function QuestionRenderer({
 
     switch (question.type) {
       case "MULTIPLE_CHOICE":
-      case "TRUE_OR_FALSE":
-        return selectedOption === question.correctAnswer;
+      case "TRUE_FALSE":
+        return selectedOption === question.correctAnswer || (question.options?.find((o) => o.id === selectedOption)?.isCorrect ?? false);
+
+      case "MULTIPLE_SELECT": {
+        const correctIds = new Set(parseCorrectAnswer(question.correctAnswer));
+        if (correctIds.size === 0) {
+          // Fall back to isCorrect flags on options
+          const correctOptIds = question.options?.filter((o) => o.isCorrect).map((o) => o.id) ?? [];
+          const correctSet = new Set(correctOptIds);
+          if (selectedOptions.size !== correctSet.size) return false;
+          return Array.from(selectedOptions).every((id) => correctSet.has(id));
+        }
+        if (selectedOptions.size !== correctIds.size) return false;
+        return Array.from(selectedOptions).every((id) => correctIds.has(id));
+      }
 
       case "FILL_IN_THE_BLANK":
       case "IDENTIFICATION":
@@ -95,6 +157,7 @@ export function QuestionRenderer({
         return Math.abs(num - correct) <= tolerance;
 
       case "ORDERING":
+      case "MATCHING":
         return (
           JSON.stringify(orderingAnswer) ===
           JSON.stringify([...question.options!].sort((a, b) => a.id.localeCompare(b.id)).map((o) => o.id))
@@ -134,11 +197,12 @@ export function QuestionRenderer({
 
   const handleRetry = () => {
     setSelectedOption(null);
+    setSelectedOptions(new Set());
     setTextAnswer("");
     setIsSubmitted(false);
     setIsCorrect(null);
     // Re-shuffle ordering options
-    if (question?.type === "ORDERING" && question.options) {
+    if ((question?.type === "ORDERING" || question?.type === "MATCHING") && question.options) {
       const shuffled = [...question.options].sort(() => Math.random() - 0.5);
       setOrderingAnswer(shuffled.map((o) => o.id));
     }
@@ -154,19 +218,22 @@ export function QuestionRenderer({
 
   const getAnswer = () => {
     switch (question?.type) {
-      case "MULTIPLE_CHOICE":
-      case "TRUE_OR_FALSE":
-        return selectedOption;
-      case "ORDERING":
-        return orderingAnswer;
-      default:
+       case "MULTIPLE_CHOICE":
+       case "TRUE_FALSE":
+         return selectedOption;
+       case "MULTIPLE_SELECT":
+         return Array.from(selectedOptions);
+       case "ORDERING":
+       case "MATCHING":
+         return orderingAnswer;
+       default:
         return textAnswer;
     }
   };
 
-  const renderOption = (option: { id: string; text: string }, index: number) => {
+  const renderOption = (option: QuestionOption, index: number) => {
     const isSelected = selectedOption === option.id;
-    const isCorrectOption = question?.correctAnswer === option.id;
+    const isCorrectOption = isOptionCorrect(question, option);
     const showResult = isSubmitted;
 
     let optionClass = "border-arc-slate-200 bg-white hover:bg-arc-slate-50";
@@ -194,6 +261,59 @@ export function QuestionRenderer({
             {String.fromCharCode(65 + index)}.
           </span>
           <span className="flex-1 text-sm text-arc-navy-900">{option.text}</span>
+          {showResult && isCorrectOption && (
+            <CheckCircle className="h-5 w-5 text-green-500" />
+          )}
+          {showResult && isSelected && !isCorrectOption && (
+            <XCircle className="h-5 w-5 text-red-500" />
+          )}
+        </div>
+      </button>
+    );
+  };
+
+  const renderMultipleSelectOption = (option: QuestionOption, index: number) => {
+    const isSelected = selectedOptions.has(option.id);
+    const isCorrectOption = isOptionCorrect(question, option);
+    const showResult = isSubmitted;
+
+    let optionClass = "border-arc-slate-200 bg-white hover:bg-arc-slate-50";
+    if (showResult) {
+      if (isCorrectOption) {
+        optionClass = "border-green-500 bg-green-50";
+      } else if (isSelected && !isCorrectOption) {
+        optionClass = "border-red-500 bg-red-50";
+      }
+    } else if (isSelected) {
+      optionClass = "border-arc-orange-500 bg-arc-orange-50";
+    }
+
+    return (
+      <button
+        key={option.id}
+        onClick={() => {
+          if (!isSubmitted) {
+            const next = new Set(selectedOptions);
+            if (next.has(option.id)) next.delete(option.id);
+            else next.add(option.id);
+            setSelectedOptions(next);
+          }
+        }}
+        disabled={isSubmitted}
+        className={`w-full text-left p-3 rounded-lg border-2 transition-all ${optionClass} ${
+          !isSubmitted ? "cursor-pointer" : "cursor-default"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-medium text-arc-slate-400 w-5">
+            {String.fromCharCode(65 + index)}.
+          </span>
+          <span className="flex-1 text-sm text-arc-navy-900">{option.text}</span>
+          {isSelected ? (
+            <CheckSquare className="h-5 w-5 text-arc-orange-500" />
+          ) : (
+            <Square className="h-4 w-4 text-arc-slate-300" />
+          )}
           {showResult && isCorrectOption && (
             <CheckCircle className="h-5 w-5 text-green-500" />
           )}
@@ -273,9 +393,12 @@ export function QuestionRenderer({
   const canSubmit = () => {
     switch (question.type) {
       case "MULTIPLE_CHOICE":
-      case "TRUE_OR_FALSE":
+      case "TRUE_FALSE":
         return selectedOption !== null;
+      case "MULTIPLE_SELECT":
+        return selectedOptions.size > 0;
       case "ORDERING":
+      case "MATCHING":
         return orderingAnswer.length === question.options?.length;
       default:
         return textAnswer.trim().length > 0;
@@ -313,12 +436,22 @@ export function QuestionRenderer({
 
         {/* Answer Options */}
         <div className="space-y-2">
-          {(question.type === "MULTIPLE_CHOICE" || question.type === "TRUE_OR_FALSE") &&
-            question.options?.map((option, index) => renderOption(option, index))}
+          {(question.type === "MULTIPLE_CHOICE" || question.type === "TRUE_FALSE") &&
+             question.options?.map((option, index) => renderOption(option, index))}
+
+          {question.type === "MULTIPLE_SELECT" &&
+             question.options?.map((option, index) => renderMultipleSelectOption(option, index))}
 
           {question.type === "ORDERING" && (
             <div className="space-y-2">
               <p className="text-xs text-arc-slate-500 mb-2">Arrange in correct order:</p>
+              {orderingAnswer.map((optionId, index) => renderOrderingItem(optionId, index))}
+            </div>
+          )}
+
+          {question.type === "MATCHING" && (
+            <div className="space-y-2">
+              <p className="text-xs text-arc-slate-500 mb-2">Arrange in the correct matching order:</p>
               {orderingAnswer.map((optionId, index) => renderOrderingItem(optionId, index))}
             </div>
           )}
@@ -342,7 +475,7 @@ export function QuestionRenderer({
                 }`}
               />
               {isSubmitted && !isCorrect && (
-                <p className="mt-2 text-sm text-green-600">
+                <p className="mt-2 text-sm text-arc-navy-600">
                   Correct answer: <strong>{question.correctAnswer}</strong>
                 </p>
               )}
@@ -371,7 +504,7 @@ export function QuestionRenderer({
                 </p>
               )}
               {isSubmitted && !isCorrect && (
-                <p className="mt-2 text-sm text-green-600">
+                <p className="mt-2 text-sm text-arc-navy-600">
                   Correct answer: <strong>{question.correctAnswer}</strong>
                 </p>
               )}

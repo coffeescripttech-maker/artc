@@ -56,10 +56,6 @@ export function LessonBlockRenderer({
 }
 
 function BlockView({ block, isAdmin = false }: { block: LessonBlock; isAdmin?: boolean }) {
-  // Debug log
-  if (block.type === "question") {
-    console.log("Question block:", block.questionId, "isAdmin:", isAdmin);
-  }
   switch (block.type) {
     case "heading":
       return block.level === 3 ? (
@@ -441,7 +437,7 @@ function QuestionBlockPreview({ questionId }: { questionId: string }) {
     );
   }
 
-  const isSelectable = question.type === "MULTIPLE_CHOICE" || question.type === "TRUE_OR_FALSE";
+  const isSelectable = question.type === "MULTIPLE_CHOICE" || question.type === "TRUE_FALSE" || question.type === "MULTIPLE_SELECT";
 
   return (
     <div className="rounded-lg border border-arc-orange-200 bg-arc-orange-50/50 overflow-hidden">

@@ -120,6 +120,7 @@ export interface QuestionBlock {
   id: string;
   type: "question";
   questionId: string;
+  points?: number;
 }
 
 export type LessonBlock =
@@ -175,7 +176,7 @@ export const lessonBlockSchema = z.discriminatedUnion("type", [
   z.object({ id: zId, type: z.literal("checklist"), items: z.array(z.object({ id: zId, text: z.string().default("") })).default([]) }),
   z.object({ id: zId, type: z.literal("keypoint"), text: z.string().default(""), html: z.string().optional() }),
   z.object({ id: zId, type: z.literal("link"), url: z.string().default(""), label: z.string().default(""), description: z.string().optional() }),
-  z.object({ id: zId, type: z.literal("question"), questionId: z.string().default("") }),
+  z.object({ id: zId, type: z.literal("question"), questionId: z.string().default(""), points: z.number().optional() }),
 ]);
 
 export const lessonContentSchema = z.object({
@@ -223,7 +224,7 @@ export function createBlock(type: BlockType): LessonBlock {
     case "link":
       return { id, type: "link", url: "", label: "", description: "" };
     case "question":
-      return { id, type: "question", questionId: "" };
+      return { id, type: "question", questionId: "", points: 1 };
     default:
       return { id, type: "paragraph", text: "" };
   }
@@ -306,7 +307,7 @@ function normalizeBlock(raw: unknown): LessonBlock | null {
     case "link":
       return { id, type: "link", url: str(b.url), label: str(b.label ?? b.name), description: str(b.description) };
     case "question":
-      return { id, type: "question", questionId: str(b.questionId) };
+       return { id, type: "question", questionId: str(b.questionId), ...(typeof b.points === "number" ? { points: b.points } : typeof b.points === "string" && !isNaN(Number(b.points)) ? { points: Number(b.points) } : {}) };
     default:
       return null;
   }
