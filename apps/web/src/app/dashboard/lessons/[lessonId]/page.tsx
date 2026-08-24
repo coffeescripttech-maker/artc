@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { DashboardHeader } from "@/components/dashboard";
@@ -15,6 +15,10 @@ import {
   ChevronRight,
   CheckCircle2,
   BookOpen,
+  Trophy,
+  BarChart3,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 
 interface LessonApi {
@@ -41,6 +45,22 @@ interface SiblingLesson {
   status: string;
 }
 
+interface QuestionStats {
+  totalBlocks: number;
+  answeredBlocks: number;
+  correctAnswers: number;
+  totalPoints: number;
+  earnedPoints: number;
+}
+
+interface ProgressWithQuestions {
+  lessonId: string;
+  completed: boolean;
+  completionPercentage: number;
+  mastery: string;
+  questionStats: QuestionStats;
+}
+
 const typeLabels: Record<string, string> = {
   VIDEO: "Video",
   ARTICLE: "Article",
@@ -48,6 +68,33 @@ const typeLabels: Record<string, string> = {
   ACTIVITY: "Activity",
   PRACTICE: "Practice",
 };
+
+function MasteryBadge({ mastery }: { mastery: string }) {
+  const cfg: Record<string, { label: string; className: string; icon: JSX.Element }> = {
+    MASTERED: {
+      label: "Mastered",
+      className: "bg-green-100 text-green-700",
+      icon: <CheckCircle className="h-3 w-3 mr-1" />,
+    },
+    IN_PROGRESS: {
+      label: "In Progress",
+      className: "bg-yellow-100 text-yellow-700",
+      icon: <Clock className="h-3 w-3 mr-1" />,
+    },
+    NOT_STARTED: {
+      label: "Not Started",
+      className: "bg-arc-slate-100 text-arc-slate-600",
+      icon: <BookOpen className="h-3 w-3 mr-1" />,
+    },
+  };
+  const c = cfg[mastery] || cfg.NOT_STARTED;
+  return (
+    <Badge className={`inline-flex items-center text-xs font-medium ${c.className}`}>
+      {c.icon}
+      {c.label}
+    </Badge>
+  );
+}
 
 export default function StudentLessonViewerPage() {
   const params = useParams();
@@ -57,15 +104,38 @@ export default function StudentLessonViewerPage() {
   const [siblings, setSiblings] = useState<SiblingLesson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [completed, setCompleted] = useState(false);
+
+  const [progressData, setProgressData] = useState<ProgressWithQuestions | null>(null);
   const [savingProgress, setSavingProgress] = useState(false);
+
+  const fetchProgress = useCallback(async () => {
+    try {
+      const data = (await progressApi.getLessonWithQuestions(lessonId)) as ProgressWithQuestions;
+      setProgressData(data);
+    } catch (err) {
+      // Silently fail — progress is optional
+      console.error("Failed to load question progress:", err);
+    }
+  }, [lessonId]);
+
+  const handleToggleComplete = async () => {
+    const next = !progressData?.completed;
+    setSavingProgress(true);
+    try {
+      await progressApi.setLesson(lessonId, next);
+      await fetchProgress();
+    } catch (err) {
+      console.error("Failed to save progress:", err);
+    } finally {
+      setSavingProgress(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
     (async () => {
       setIsLoading(true);
       setError(null);
-      setCompleted(false);
       try {
         const data = (await lessonsApi.getById(lessonId)) as LessonApi;
         if (!active) return;
@@ -78,10 +148,7 @@ export default function StudentLessonViewerPage() {
           }
         }
 
-        const prog = (await progressApi
-          .getLesson(lessonId)
-          .catch(() => null)) as { completed?: boolean } | null;
-        if (active && prog) setCompleted(Boolean(prog.completed));
+        await fetchProgress();
       } catch (err) {
         console.error("Failed to load lesson:", err);
         if (active) setError("This lesson could not be loaded.");
@@ -92,20 +159,11 @@ export default function StudentLessonViewerPage() {
     return () => {
       active = false;
     };
-  }, [lessonId]);
+  }, [lessonId, fetchProgress]);
 
-  const handleToggleComplete = async () => {
-    const next = !completed;
-    setCompleted(next); // optimistic
-    setSavingProgress(true);
-    try {
-      await progressApi.setLesson(lessonId, next);
-    } catch (err) {
-      console.error("Failed to save progress:", err);
-      setCompleted(!next); // revert on failure
-    } finally {
-      setSavingProgress(false);
-    }
+  const handleQuestionComplete = (correct: boolean, _earnedPoints: number) => {
+    // Refresh progress so the score card updates live
+    fetchProgress();
   };
 
   if (isLoading) {
@@ -142,6 +200,9 @@ export default function StudentLessonViewerPage() {
   const nextLesson =
     currentIndex >= 0 && currentIndex < siblings.length - 1 ? siblings[currentIndex + 1] : null;
 
+  const qs = progressData?.questionStats;
+  const hasQuestions = qs && qs.totalBlocks > 0;
+
   return (
     <>
       <DashboardHeader
@@ -167,23 +228,63 @@ export default function StudentLessonViewerPage() {
           )}
 
           {/* Lesson header */}
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Badge className="bg-arc-orange-100 text-arc-orange-700">
-                {typeLabels[lesson.type] || lesson.type}
-              </Badge>
-              {lesson.durationMinutes ? (
-                <span className="flex items-center gap-1 text-sm text-arc-slate-500">
-                  <Clock className="h-4 w-4" />
-                  {lesson.durationMinutes} min
-                </span>
-              ) : null}
+          <div className="mb-6 flex items-start justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Badge className="bg-arc-orange-100 text-arc-orange-700">
+                  {typeLabels[lesson.type] || lesson.type}
+                </Badge>
+                {lesson.durationMinutes ? (
+                  <span className="flex items-center gap-1 text-sm text-arc-slate-500">
+                    <Clock className="h-4 w-4" />
+                    {lesson.durationMinutes} min
+                  </span>
+                ) : null}
+              </div>
+              <h1 className="text-3xl font-bold text-arc-navy-900">{lesson.title}</h1>
+              {lesson.description && (
+                <p className="text-arc-slate-600 mt-2">{lesson.description}</p>
+              )}
             </div>
-            <h1 className="text-3xl font-bold text-arc-navy-900">{lesson.title}</h1>
-            {lesson.description && (
-              <p className="text-arc-slate-600 mt-2">{lesson.description}</p>
+
+            {progressData && (
+              <MasteryBadge mastery={progressData.mastery} />
             )}
           </div>
+
+          {/* Question score card */}
+          {hasQuestions && qs && (
+            <div className="mb-6 rounded-xl border border-arc-orange-200 bg-arc-orange-50/50 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Trophy className="h-5 w-5 text-arc-orange-500" />
+                <span className="font-semibold text-arc-navy-900">Practice Score</span>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-arc-navy-900 font-medium">
+                    {qs.earnedPoints} / {qs.totalPoints} points
+                  </span>
+                  <span className="text-arc-navy-900 font-medium">
+                    {qs.correctAnswers} / {qs.totalBlocks} correct
+                  </span>
+                </div>
+
+                <div className="w-full h-2 bg-arc-slate-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-arc-orange-500 transition-all"
+                    style={{ width: `${(qs.earnedPoints / qs.totalPoints) * 100}%` }}
+                  />
+                </div>
+
+                <div className="text-xs text-arc-slate-500">
+                  {qs.answeredBlocks === qs.totalBlocks
+                    ? "All questions answered!"
+                    : `${qs.totalBlocks - qs.answeredBlocks} questions remaining`}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Lesson content */}
           <article className="bg-white rounded-2xl border border-arc-slate-200 p-6 sm:p-8">
@@ -193,19 +294,23 @@ export default function StudentLessonViewerPage() {
                 <p>This lesson has no content yet.</p>
               </div>
             ) : (
-              <LessonBlockRenderer content={content} />
+              <LessonBlockRenderer
+                content={content}
+                lessonId={lesson.id}
+                onQuestionComplete={handleQuestionComplete}
+              />
             )}
           </article>
 
           {/* Complete + navigation */}
           <div className="mt-6 flex items-center justify-center">
             <Button
-              variant={completed ? "outline" : "accent"}
+              variant={progressData?.completed ? "outline" : "accent"}
               onClick={handleToggleComplete}
               disabled={savingProgress}
             >
               <CheckCircle2 className="h-4 w-4 mr-2" />
-              {savingProgress ? "Saving..." : completed ? "Completed" : "Mark as complete"}
+              {savingProgress ? "Saving..." : progressData?.completed ? "Completed" : "Mark as complete"}
             </Button>
           </div>
 

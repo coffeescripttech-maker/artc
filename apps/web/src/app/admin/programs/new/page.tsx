@@ -16,7 +16,7 @@ import {
   Input,
   Label,
 } from "@/components/ui";
-import { ArrowLeft, Layers } from "lucide-react";
+import { ArrowLeft, Layers, Plus } from "lucide-react";
 
 export default function NewProgramPage() {
   const router = useRouter();
@@ -67,15 +67,6 @@ export default function NewProgramPage() {
 
       <div className="p-6">
         <div className="max-w-2xl mx-auto">
-          {/* Back Button */}
-          <Link
-            href="/admin/programs"
-            className="inline-flex items-center gap-2 text-sm text-arc-slate-500 hover:text-arc-navy-900 mb-6 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to programs
-          </Link>
-
           {error && (
             <div className="rounded-lg bg-red-50 border border-red-200 p-4 mb-6">
               <p className="text-sm text-red-600">{error}</p>
@@ -83,7 +74,7 @@ export default function NewProgramPage() {
           )}
 
           <form onSubmit={handleSubmit}>
-            <Card className="shadow-arc-md">
+            <Card className="shadow-md">
               <CardHeader className="border-b border-arc-slate-100">
                 <CardTitle className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-xl bg-arc-orange-100 flex items-center justify-center">

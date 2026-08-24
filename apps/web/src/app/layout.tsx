@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Poppins, Nunito } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 import { QueryProvider } from "@/providers/query-provider";
 
@@ -40,7 +41,19 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${poppins.variable} ${nunito.variable}`}>
       <body>
-        <QueryProvider>{children}</QueryProvider>
+        <QueryProvider>
+          {children}
+          <Toaster
+            position="bottom-right"
+            richColors
+            closeButton
+            toastOptions={{
+              style: {
+                fontFamily: "var(--font-nunito), sans-serif",
+              },
+            }}
+          />
+        </QueryProvider>
       </body>
     </html>
   );

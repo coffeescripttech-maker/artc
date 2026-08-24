@@ -14,6 +14,11 @@ import {
   Copy,
   Trash2,
   Eye,
+  Award,
+  Zap,
+  Building,
+  Target,
+  Trophy,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -46,70 +51,96 @@ interface ProgramCardProps {
   onDelete?: () => void;
 }
 
+// Color mapping for program types (matching curriculum stage colors)
+export const programTypeColors: Record<string, { bg: string; text: string; iconColor: string; icon: React.ElementType }> = {
+  BASIC_EDUCATION: { bg: "bg-blue-100", text: "text-blue-700", iconColor: "text-blue-600", icon: GraduationCap },
+  ENTRANCE_EXAM: { bg: "bg-purple-100", text: "text-purple-700", iconColor: "text-purple-600", icon: Trophy },
+  COLLEGE: { bg: "bg-green-100", text: "text-green-700", iconColor: "text-green-600", icon: Building },
+  PROFESSIONAL: { bg: "bg-orange-100", text: "text-orange-700", iconColor: "text-orange-600", icon: Award },
+  BOARD_EXAM: { bg: "bg-red-100", text: "text-red-700", iconColor: "text-red-600", icon: Target },
+  CERTIFICATION: { bg: "bg-teal-100", text: "text-teal-700", iconColor: "text-teal-600", icon: Zap },
+  CONTINUING_EDUCATION: { bg: "bg-gray-100", text: "text-gray-700", iconColor: "text-gray-600", icon: BookOpen },
+};
+
 const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
   PUBLISHED: { bg: "bg-green-100", text: "text-green-700", label: "Published" },
   DRAFT: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Draft" },
   ARCHIVED: { bg: "bg-gray-100", text: "text-gray-600", label: "Archived" },
 };
 
-export function ProgramCard({
-  program,
-  onView,
-  onEdit,
-  onDuplicate,
-  onDelete,
-}: ProgramCardProps) {
+export function ProgramCard({ program, onView, onEdit, onDuplicate, onDelete }: ProgramCardProps) {
   const status = statusConfig[program.status] || statusConfig.DRAFT;
   const counts = program._count || {};
+  const typeConfig = programTypeColors[program.programType || "BASIC_EDUCATION"] || programTypeColors.BASIC_EDUCATION;
+  const TypeIcon = typeConfig.icon;
 
   return (
-    <Card className="hover:shadow-arc-xl transition-all duration-300 group overflow-hidden">
-      {/* Top accent bar */}
-      <div className="h-1 bg-gradient-to-r from-arc-orange-500 to-arc-orange-400" />
+    <Card className="hover:shadow-lg transition-all duration-200 group overflow-hidden border border-arc-slate-100">
+      {/* Top accent bar matching program type color */}
+      <div className={`h-1 ${typeConfig.bg}`} />
 
-      <CardContent className="p-6">
+      <CardContent className="p-5">
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-start gap-3">
-            {/* Icon */}
-            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-arc-navy-600 to-arc-navy-700 flex items-center justify-center flex-shrink-0">
-              <GraduationCap className="h-6 w-6 text-white" />
+            {/* Colored Icon Background - matches Curriculum card design */}
+            <div className={`h-12 w-12 rounded-xl flex items-center justify-center flex-shrink-0 ${typeConfig.bg}`}>
+              <TypeIcon className={`h-6 w-6 ${typeConfig.iconColor}`} />
             </div>
-            <div>
-              <h3 className="font-bold text-arc-navy-900 text-lg group-hover:text-arc-orange-600 transition-colors">
+            <div className="min-w-0">
+              <h3 className="font-semibold text-arc-navy-900 text-lg group-hover:text-arc-navy-700 transition-colors truncate">
                 {program.name}
               </h3>
               {program.programType && (
-                <Badge variant="secondary" className="mt-1 bg-arc-slate-100 text-arc-slate-600">
-                  {program.programType}
+                <Badge variant="secondary" className={`mt-1 ${typeConfig.bg} ${typeConfig.text}`}>
+                  {program.programType.replace(/_/g, " ")}
                 </Badge>
               )}
             </div>
           </div>
 
-          {/* Actions dropdown */}
+          {/* Actions dropdown - cleaner styling */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="p-1.5 rounded-lg hover:bg-arc-slate-100 text-arc-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Program actions"
+              >
                 <MoreVertical className="h-4 w-4" />
-              </button>
+              </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onView} className="cursor-pointer">
+            <DropdownMenuContent
+              align="end"
+              className="w-44 bg-white border border-arc-slate-200 shadow-lg rounded-xl p-1 z-50"
+            >
+              <DropdownMenuItem
+                onClick={onView}
+                className="cursor-pointer px-3 py-2 text-sm text-arc-navy-700 hover:bg-arc-navy-50 hover:text-arc-navy-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-arc-orange-500"
+              >
                 <Eye className="h-4 w-4 mr-2 text-arc-slate-500" />
                 View Details
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onEdit} className="cursor-pointer">
+              <DropdownMenuItem
+                onClick={onEdit}
+                className="cursor-pointer px-3 py-2 text-sm text-arc-navy-700 hover:bg-arc-navy-50 hover:text-arc-navy-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-arc-orange-500"
+              >
                 <Edit className="h-4 w-4 mr-2 text-arc-slate-500" />
                 Edit Program
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onDuplicate} className="cursor-pointer">
+              <DropdownMenuItem
+                onClick={onDuplicate}
+                className="cursor-pointer px-3 py-2 text-sm text-arc-navy-700 hover:bg-arc-navy-50 hover:text-arc-navy-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-arc-orange-500"
+              >
                 <Copy className="h-4 w-4 mr-2 text-arc-slate-500" />
                 Duplicate
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onDelete} className="cursor-pointer text-red-600 hover:bg-red-50">
-                <Trash2 className="h-4 w-4 mr-2" />
+              <DropdownMenuSeparator className="bg-arc-slate-200 my-1" />
+              <DropdownMenuItem
+                onClick={onDelete}
+                className="cursor-pointer px-3 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+              >
+                <Trash2 className="h-4 w-4 mr-2 text-red-500" />
                 Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -118,50 +149,48 @@ export function ProgramCard({
 
         {/* Description */}
         {program.description && (
-          <p className="text-sm text-arc-slate-600 mb-4 line-clamp-2">
-            {program.description}
-          </p>
+          <p className="text-sm text-arc-slate-600 mb-4 line-clamp-2">{program.description}</p>
         )}
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-2 mb-4">
+        {/* Stats Grid - matching Curriculum card style */}
+        <div className="grid grid-cols-2 gap-2 mb-4">
           {counts.curriculums !== undefined && (
-            <div className="flex items-center gap-1.5 p-2 bg-arc-slate-50 rounded-lg">
-              <Layers className="h-4 w-4 text-arc-slate-400" />
+            <div className="flex items-center gap-2 p-2 bg-arc-slate-50 rounded-lg hover:bg-arc-slate-100 transition-colors">
+              <BookOpen className="h-4 w-4 text-arc-slate-400" />
               <span className="text-xs text-arc-slate-600">
-                <span className="font-semibold">{counts.curriculums}</span> Curriculums
+                <span className="font-semibold">{counts.curriculums}</span> Curriculum{counts.curriculums !== 1 ? "s" : ""}
               </span>
             </div>
           )}
           {counts.subjects !== undefined && (
-            <div className="flex items-center gap-1.5 p-2 bg-arc-slate-50 rounded-lg">
-              <BookOpen className="h-4 w-4 text-arc-slate-400" />
+            <div className="flex items-center gap-2 p-2 bg-arc-slate-50 rounded-lg hover:bg-arc-slate-100 transition-colors">
+              <Layers className="h-4 w-4 text-arc-slate-400" />
               <span className="text-xs text-arc-slate-600">
-                <span className="font-semibold">{counts.subjects}</span> Subjects
+                <span className="font-semibold">{counts.subjects}</span> Subject{counts.subjects !== 1 ? "s" : ""}
               </span>
             </div>
           )}
           {counts.modules !== undefined && (
-            <div className="flex items-center gap-1.5 p-2 bg-arc-slate-50 rounded-lg">
-              <Layers className="h-4 w-4 text-arc-slate-400" />
+            <div className="flex items-center gap-2 p-2 bg-arc-slate-50 rounded-lg hover:bg-arc-slate-100 transition-colors">
+              <FileText className="h-4 w-4 text-arc-slate-400" />
               <span className="text-xs text-arc-slate-600">
-                <span className="font-semibold">{counts.modules}</span> Modules
+                <span className="font-semibold">{counts.modules}</span> Module{counts.modules !== 1 ? "s" : ""}
               </span>
             </div>
           )}
           {counts.lessons !== undefined && (
-            <div className="flex items-center gap-1.5 p-2 bg-arc-slate-50 rounded-lg">
-              <FileText className="h-4 w-4 text-arc-slate-400" />
+            <div className="flex items-center gap-2 p-2 bg-arc-slate-50 rounded-lg hover:bg-arc-slate-100 transition-colors">
+              <Award className="h-4 w-4 text-arc-slate-400" />
               <span className="text-xs text-arc-slate-600">
-                <span className="font-semibold">{counts.lessons}</span> Lessons
+                <span className="font-semibold">{counts.lessons}</span> Lesson{counts.lessons !== 1 ? "s" : ""}
               </span>
             </div>
           )}
           {counts.enrollments !== undefined && (
-            <div className="flex items-center gap-1.5 p-2 bg-arc-slate-50 rounded-lg">
+            <div className="flex items-center gap-2 p-2 bg-arc-slate-50 rounded-lg hover:bg-arc-slate-100 transition-colors col-span-2">
               <Users className="h-4 w-4 text-arc-slate-400" />
               <span className="text-xs text-arc-slate-600">
-                <span className="font-semibold">{counts.enrollments}</span> Students
+                <span className="font-semibold">{counts.enrollments}</span> Enrollment{counts.enrollments !== 1 ? "s" : ""}
               </span>
             </div>
           )}
@@ -169,15 +198,13 @@ export function ProgramCard({
 
         {/* Footer */}
         <div className="flex items-center justify-between pt-4 border-t border-arc-slate-100">
-          <Badge className={`${status.bg} ${status.text}`}>
-            {status.label}
-          </Badge>
+          <Badge className={`${status.bg} ${status.text} text-xs`}>{status.label}</Badge>
 
           <Link href={`/admin/programs/${program.id}`}>
             <Button
               variant="ghost"
               size="sm"
-              className="text-arc-orange-600 hover:text-arc-orange-700 hover:bg-arc-orange-50"
+              className="text-arc-navy-700 hover:text-arc-navy-900 hover:bg-arc-navy-50 font-semibold"
             >
               Manage Curriculum
               <ArrowRight className="h-4 w-4 ml-1" />

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { WorkspaceHeader, DraggableList, type DraggableItem, QuestionForm, TopicPicker } from "@/components/admin";
+import { WorkspaceHeader, DraggableList, type DraggableItem, QuestionForm, TopicPicker, TopicPickerCompact } from "@/components/admin";
 import { assessmentsApi, questionsApi } from "@/lib/api/client";
 import { Card, CardContent, Button, Badge, Input } from "@/components/ui";
 import { toast } from "@/lib/toast";
@@ -540,6 +540,22 @@ export default function AssessmentBuilderPage() {
                     </div>
                   </label>
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <h3 className="font-semibold text-arc-navy-900 mb-4">Question Pool</h3>
+                <label className="block text-sm font-medium text-arc-navy-900 mb-2">
+                  Topics for Question Bank
+                </label>
+                <p className="text-xs text-arc-slate-500 mb-3">
+                  Select topics to auto-generate questions from the library. When topics are set, the assessment pulls a random sample — no need to add questions manually.
+                </p>
+                <TopicPickerCompact
+                  selectedTopicIds={selectedTopicIds}
+                  onChange={setSelectedTopicIds}
+                />
               </CardContent>
             </Card>
 

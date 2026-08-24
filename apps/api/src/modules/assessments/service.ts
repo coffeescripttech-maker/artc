@@ -379,6 +379,65 @@ async function getOrCreateLearnerProfile(userId: string) {
   return prisma.learnerProfile.create({ data: { userId } });
 }
 
+/**
+ * Derive the SAFE question set for an assessment.
+ * - If the assessment has a question pool (questionCount + topics/tags/difficulty),
+ *   draw a fresh random sample from the question bank.
+ * - Otherwise use the fixed AssessmentQuestion set.
+ * Returns the served raw questions and the SAFE payload for the player.
+ */
+export async function getServedQuestions(assessment: {
+  questions: { question: any }[];
+  questionCount?: number | null;
+  topicIds?: string[] | null;
+  questionTags?: string[] | null;
+  difficultyLevels?: string[] | null;
+  randomizeQuestions?: boolean;
+  randomizeChoices?: boolean;
+}): Promise<{ questions: any[]; passages: any[]; served: any[] }> {
+  let served = assessment.questions.map((aq) => aq.question);
+  const hasPool =
+    !!assessment.questionCount &&
+    ((assessment.topicIds?.length ?? 0) > 0 ||
+      (assessment.questionTags?.length ?? 0) > 0 ||
+      (assessment.difficultyLevels?.length ?? 0) > 0);
+  if (hasPool) {
+    const where: any = { status: "PUBLISHED" };
+    if (assessment.topicIds?.length) where.bankLinks = { some: { topicId: { in: assessment.topicIds } } };
+    if (assessment.difficultyLevels?.length) where.difficulty = { in: assessment.difficultyLevels };
+    if (assessment.questionTags?.length) where.tags = { hasSome: assessment.questionTags };
+    const pool = await prisma.question.findMany({ where });
+    if (pool.length > 0) {
+      served = shuffle(pool).slice(0, assessment.questionCount!);
+    }
+  }
+  if (assessment.randomizeQuestions) served = shuffle(served);
+
+  const questions = served.map((q) => {
+    let opts = getOptions(q).map((o) => ({ id: o.id, text: o.text }));
+    if (assessment.randomizeChoices) opts = shuffle(opts);
+    return {
+      id: q.id,
+      type: q.type,
+      difficulty: q.difficulty,
+      stem: q.stem,
+      hint: q.hint,
+      options: opts,
+      passageId: q.passageId,
+    };
+  });
+
+  const passageIds = [...new Set(served.map((q) => q.passageId).filter(Boolean) as string[])];
+  const passages = passageIds.length > 0
+    ? await prisma.passage.findMany({
+        where: { id: { in: passageIds } },
+        select: { id: true, title: true, content: true },
+      })
+    : [];
+
+  return { questions, passages, served };
+}
+
 export async function startAttempt(assessmentId: string, userId: string) {
   const assessment = await prisma.assessment.findUnique({
     where: { id: assessmentId },
@@ -405,6 +464,31 @@ export async function startAttempt(assessmentId: string, userId: string) {
     programId: assessment.programId,
   });
 
+  // Resume in-progress attempt if one exists
+  const inProgress = await prisma.assessmentAttempt.findFirst({
+    where: { assessmentId, learnerId: learner.id, status: "IN_PROGRESS" },
+    orderBy: { createdAt: "desc" },
+  });
+  if (inProgress) {
+    const { questions, passages } = await getServedQuestions(assessment);
+    return {
+      attempt: inProgress,
+      assessment: {
+        id: assessment.id,
+        name: assessment.name,
+        type: assessment.type,
+        timeLimitMinutes: assessment.timeLimitMinutes,
+        showExplanations: assessment.showExplanations,
+        passingScore: assessment.passingScore,
+        masteryThreshold: assessment.masteryThreshold,
+        allowRetake: assessment.allowRetake,
+        scoringConfig: assessment.scoringConfig,
+      },
+      questions,
+      passages,
+    };
+  }
+
   const existingAttempts = await prisma.assessmentAttempt.count({
     where: { assessmentId, learnerId: learner.id },
   });
@@ -412,59 +496,27 @@ export async function startAttempt(assessmentId: string, userId: string) {
     throw new BadRequestError("Maximum attempts reached");
   }
 
-  // Variant/served question set. If the assessment defines a question pool
-  // (count + topics/tags/difficulty), draw a fresh random sample each attempt
-  // (anti-memorization); otherwise use the fixed AssessmentQuestion set.
-  let served = assessment.questions.map((aq) => aq.question);
-  const hasPool =
-    !!assessment.questionCount &&
-    ((assessment.topicIds?.length ?? 0) > 0 ||
-      (assessment.questionTags?.length ?? 0) > 0 ||
-      (assessment.difficultyLevels?.length ?? 0) > 0);
-  if (hasPool) {
-    const where: any = { status: "PUBLISHED" };
-    if (assessment.topicIds?.length) where.bankLinks = { some: { topicId: { in: assessment.topicIds } } };
-    if (assessment.difficultyLevels?.length) where.difficulty = { in: assessment.difficultyLevels };
-    if (assessment.questionTags?.length) where.tags = { hasSome: assessment.questionTags };
-    const pool = await prisma.question.findMany({ where });
-    if (pool.length > 0) {
-      served = shuffle(pool).slice(0, assessment.questionCount!);
+  const { questions, passages, served } = await getServedQuestions(assessment);
+
+  // Compute maxScore from per-question weights
+  const servedIds = new Set(served.map((q) => q.id));
+  let maxScore = 0;
+  for (const aq of assessment.questions) {
+    if (servedIds.has(aq.question.id)) {
+      maxScore += aq.score ?? 1;
     }
   }
-  if (assessment.randomizeQuestions) served = shuffle(served);
+  // Fallback if no AssessmentQuestion entries (question pool)
+  if (maxScore === 0) maxScore = served.length;
 
   const attempt = await prisma.assessmentAttempt.create({
     data: {
       assessmentId,
       learnerId: learner.id,
-      maxScore: served.length,
+      maxScore,
       status: "IN_PROGRESS",
     },
   });
-
-  // SAFE payload for the player: strip isCorrect / correctAnswer / explanation.
-  const questions = served.map((q) => {
-    let opts = getOptions(q).map((o) => ({ id: o.id, text: o.text }));
-    if (assessment.randomizeChoices) opts = shuffle(opts);
-    return {
-      id: q.id,
-      type: q.type,
-      difficulty: q.difficulty,
-      stem: q.stem,
-      hint: q.hint,
-      options: opts,
-      passageId: q.passageId,
-    };
-  });
-
-  // Get passages for questions that have them
-  const passageIds = [...new Set(served.map((q) => q.passageId).filter(Boolean) as string[])];
-  const passages = passageIds.length > 0
-    ? await prisma.passage.findMany({
-        where: { id: { in: passageIds } },
-        select: { id: true, title: true, content: true },
-      })
-    : [];
 
   return {
     attempt,
@@ -477,6 +529,7 @@ export async function startAttempt(assessmentId: string, userId: string) {
       passingScore: assessment.passingScore,
       masteryThreshold: assessment.masteryThreshold,
       allowRetake: assessment.allowRetake,
+      scoringConfig: assessment.scoringConfig,
     },
     questions,
     passages,
@@ -499,7 +552,24 @@ export async function submitAttempt(
     throw new BadRequestError("Attempt already completed");
   }
 
-  let correctCount = 0;
+  // Load per-question weights from AssessmentQuestion and scoringConfig
+  const assessmentQuestions = await prisma.assessmentQuestion.findMany({
+    where: { assessmentId: attempt.assessmentId },
+    select: { questionId: true, score: true },
+  });
+  const questionWeights = new Map(assessmentQuestions.map((aq) => [aq.questionId, aq.score]));
+
+  // Parse scoringConfig for potential weight overrides
+  let scoringConfig: Record<string, unknown> = {};
+  if (attempt.assessment.scoringConfig) {
+    scoringConfig = typeof attempt.assessment.scoringConfig === "string"
+      ? JSON.parse(attempt.assessment.scoringConfig)
+      : (attempt.assessment.scoringConfig as Record<string, unknown>);
+  }
+  const configWeights = (scoringConfig.questionWeights as Record<string, number> | undefined) ?? {};
+
+  let score = 0;
+  let maxPossible = 0;
   const ops: any[] = [];
 
   for (const { questionId, answer, timeSpentSeconds } of answers) {
@@ -507,7 +577,11 @@ export async function submitAttempt(
     if (!question) continue;
 
     const result = gradeAnswer(question, answer); // true | false | null (manual)
-    if (result === true) correctCount++;
+    // Weighted score: config override → AssessmentQuestion score → default 1
+    const weight = configWeights[questionId] ?? questionWeights.get(questionId) ?? 1;
+    const points = result === true ? weight : 0;
+    score += points;
+    maxPossible += weight;
 
     ops.push(
       prisma.attemptAnswer.create({
@@ -516,7 +590,7 @@ export async function submitAttempt(
           questionId,
           answer: (answer ?? null) as any, // store the raw answer object (no double-encoding)
           isCorrect: result,
-          score: result === true ? 1 : 0,
+          score: points,
           timeSpentSeconds: timeSpentSeconds ?? null,
         },
       })
@@ -531,7 +605,7 @@ export async function submitAttempt(
     console.error("Failed to track question exposure:", err);
   });
 
-  const percentage = attempt.maxScore > 0 ? (correctCount / attempt.maxScore) * 100 : 0;
+  const percentage = maxPossible > 0 ? (score / maxPossible) * 100 : 0;
 
   // Calculate total time spent on this attempt
   const totalTimeSpent = answers.reduce((sum, a) => sum + (a.timeSpentSeconds ?? 0), 0);
@@ -544,7 +618,7 @@ export async function submitAttempt(
     data: {
       status: "COMPLETED",
       completedAt,
-      score: correctCount,
+      score: score,
       percentage,
       timeSpentSeconds: totalElapsedSeconds,
     },
@@ -763,6 +837,52 @@ export async function getAssessmentStats(id: string) {
   };
 }
 
+/**
+ * Get a single assessment attempt with all answers and question details (for review).
+ * Only the attempt owner can view.
+ */
+export async function getAttemptWithAnswers(attemptId: string, userId: string) {
+  const learner = await prisma.learnerProfile.findUnique({ where: { userId } });
+  if (!learner) return null;
+
+  return prisma.assessmentAttempt.findFirst({
+    where: { id: attemptId, learnerId: learner.id },
+    include: {
+      assessment: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          timeLimitMinutes: true,
+          passingScore: true,
+          masteryThreshold: true,
+          showExplanations: true,
+          allowRetake: true,
+          maxAttempts: true,
+        },
+      },
+      answers: {
+        orderBy: { questionId: "asc" }, // preserve some order; frontend can reorder
+        include: {
+          question: {
+            select: {
+              id: true,
+              type: true,
+              stem: true,
+              difficulty: true,
+              options: true,
+              correctAnswer: true,
+              explanation: true,
+              hint: true,
+              tolerance: true,
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
 // A learner's own attempts (for "my assessments" list + progress).
 export async function getMyAttempts(userId: string) {
   const learner = await prisma.learnerProfile.findUnique({ where: { userId } });
@@ -778,6 +898,16 @@ export async function getMyAttempts(userId: string) {
       score: true,
       maxScore: true,
       completedAt: true,
+      startedAt: true,
+      assessment: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          passingScore: true,
+          masteryThreshold: true,
+        },
+      },
     },
   });
 }

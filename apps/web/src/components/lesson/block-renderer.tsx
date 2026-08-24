@@ -33,10 +33,14 @@ export function LessonBlockRenderer({
   content,
   className = "",
   isAdmin = false,
+  lessonId,
+  onQuestionComplete,
 }: {
   content: LessonContent | LessonBlock[] | null | undefined;
   className?: string;
   isAdmin?: boolean; // Show preview (admin) vs interactive (student)
+  lessonId?: string; // Required for student answer tracking
+  onQuestionComplete?: (correct: boolean, earnedPoints: number) => void;
 }) {
   const blocks = Array.isArray(content) ? content : content?.blocks;
 
@@ -49,13 +53,29 @@ export function LessonBlockRenderer({
   return (
     <div className={`space-y-4 ${className}`}>
       {blocks.map((block) => (
-        <BlockView key={block.id} block={block} isAdmin={isAdmin} />
+        <BlockView
+          key={block.id}
+          block={block}
+          isAdmin={isAdmin}
+          lessonId={lessonId}
+          onQuestionComplete={onQuestionComplete}
+        />
       ))}
     </div>
   );
 }
 
-function BlockView({ block, isAdmin = false }: { block: LessonBlock; isAdmin?: boolean }) {
+function BlockView({
+  block,
+  isAdmin = false,
+  lessonId,
+  onQuestionComplete,
+}: {
+  block: LessonBlock;
+  isAdmin?: boolean;
+  lessonId?: string;
+  onQuestionComplete?: (correct: boolean, earnedPoints: number) => void;
+}) {
   switch (block.type) {
     case "heading":
       return block.level === 3 ? (
@@ -211,7 +231,10 @@ function BlockView({ block, isAdmin = false }: { block: LessonBlock; isAdmin?: b
       return (
         <QuestionRenderer
           questionId={block.questionId}
+          lessonId={lessonId}
+          blockId={block.id}
           points={block.points || 1}
+          onComplete={onQuestionComplete}
         />
       );
 

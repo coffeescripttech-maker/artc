@@ -13,6 +13,9 @@ import {
   getLessonStats,
   getLessonProgress,
   setLessonProgress,
+  saveLessonQuestionResponse,
+  getLessonQuestionResponse,
+  getLessonProgressWithQuestions,
 } from "./service";
 
 export async function list(
@@ -177,6 +180,20 @@ export async function getProgress(
   }
 }
 
+export async function getProgressWithQuestions(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = getAuthUserId(req);
+    const progress = await getLessonProgressWithQuestions(userId, req.params.id);
+    res.json(progress);
+  } catch (error) {
+    next(error);
+  }
+}
+
 export async function setProgress(
   req: Request,
   res: Response,
@@ -187,6 +204,60 @@ export async function setProgress(
     const completed = Boolean(req.body?.completed);
     const progress = await setLessonProgress(userId, req.params.id, completed);
     res.json(progress);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ============================================================
+// Lesson question responses (Phase 4 — in-lesson answering)
+// ============================================================
+
+export async function saveQuestionResponse(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = getAuthUserId(req);
+    const lessonId = req.params.id;
+    const questionId = req.params.questionId;
+    const { answer, isCorrect, pointsEarned, blockId } = req.body ?? {};
+
+    if (isCorrect === undefined || isCorrect === null) {
+      res.status(400).json({ error: "isCorrect is required" });
+      return;
+    }
+
+    const response = await saveLessonQuestionResponse(userId, lessonId, {
+      questionId,
+      answer,
+      isCorrect: Boolean(isCorrect),
+      pointsEarned: pointsEarned != null ? Number(pointsEarned) : 0,
+      blockId,
+    });
+    res.json(response);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getQuestionResponse(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = getAuthUserId(req);
+    const lessonId = req.params.id;
+    const questionId = req.params.questionId;
+
+    const response = await getLessonQuestionResponse(userId, lessonId, questionId);
+    if (!response) {
+      res.status(404).json({ error: "No response recorded" });
+      return;
+    }
+    res.json(response);
   } catch (error) {
     next(error);
   }

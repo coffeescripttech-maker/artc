@@ -157,6 +157,32 @@ export const lessonsApi = {
     apiFetch(`/lessons/${id}`, { method: "DELETE", token }),
   reorder: (topicId: string, lessonIds: string[], token?: string) =>
     apiFetch(`/lessons/topic/${topicId}/reorder`, { method: "PUT", body: JSON.stringify(lessonIds), token }),
+  // Lesson question responses (Phase 4)
+  respondToQuestion: (
+    lessonId: string,
+    questionId: string,
+    data: { answer?: unknown; isCorrect: boolean; pointsEarned?: number; blockId?: string },
+    token?: string
+  ) =>
+    apiFetch(`/lessons/${lessonId}/questions/${questionId}/respond`, {
+      method: "POST",
+      body: JSON.stringify(data),
+      token,
+    }),
+  getQuestionResponse: async (lessonId: string, questionId: string, token?: string) => {
+    try {
+      return await apiFetch<{ answer?: unknown; isCorrect: boolean; pointsEarned: number; attemptedAt: string }>(
+        `/lessons/${lessonId}/questions/${questionId}/response`,
+        { token }
+      );
+    } catch (e: any) {
+      // 404 = no prior response recorded; treat as "no previous answer"
+      if (e?.message?.includes("404") || e?.message?.includes("No response recorded")) {
+        return null;
+      }
+      throw e;
+    }
+  },
 };
 
 // ============================================================
@@ -164,6 +190,8 @@ export const lessonsApi = {
 // ============================================================
 export const progressApi = {
   getLesson: (lessonId: string) => apiFetch(`/lessons/${lessonId}/progress`),
+  getLessonWithQuestions: (lessonId: string) =>
+    apiFetch(`/lessons/${lessonId}/progress/questions`),
   setLesson: (lessonId: string, completed: boolean, token?: string) =>
     apiFetch(`/lessons/${lessonId}/progress`, {
       method: "PUT",
@@ -172,6 +200,22 @@ export const progressApi = {
     }),
   progression: (programId?: string) =>
     apiFetch(`/progression${programId ? `?programId=${programId}` : ""}`),
+};
+
+// ============================================================
+// Progression API (College Readiness ladder)
+// ============================================================
+export const progressionApi = {
+  get: (programId?: string) =>
+    apiFetch(
+      `/progression${programId ? `?programId=${programId}` : ""}`
+    ),
+  weakTopics: (programId?: string) =>
+    apiFetch(`/progression/weak-topics${programId ? `?programId=${programId}` : ""}`),
+  activity: (limit?: number) =>
+    apiFetch(`/progression/activity${limit ? `?limit=${limit}` : ""}`),
+  recommendations: (assessmentId: string) =>
+    apiFetch(`/progression/assessments/${assessmentId}/recommendations`),
 };
 
 // ============================================================
@@ -265,6 +309,8 @@ export const assessmentsApi = {
   submit: (attemptId: string, answers: any[], token?: string) =>
     apiFetch(`/assessments/attempts/${attemptId}/submit`, { method: "POST", body: JSON.stringify({ answers }), token }),
   myAttempts: () => apiFetch(`/assessments/me/attempts`),
+  getAttempt: (attemptId: string) => apiFetch(`/assessments/attempts/${attemptId}`),
+  recommendations: (assessmentId: string) => apiFetch(`/assessments/${assessmentId}/recommendations`),
 };
 
 // ============================================================
@@ -341,6 +387,10 @@ export const programsApi = {
     apiFetch(`/programs/${id}/publish`, { method: "PATCH", token }),
   delete: (id: string, token?: string) =>
     apiFetch(`/programs/${id}`, { method: "DELETE", token }),
+  createFromTemplate: (token?: string) =>
+    apiFetch("/programs/template", { method: "POST", token }),
+  generateCetExams: (programId: string, token?: string) =>
+    apiFetch(`/programs/${programId}/cet-exams`, { method: "POST", token }),
 };
 
 // ============================================================
@@ -376,4 +426,5 @@ export default {
   cet: cetApi,
   programs: programsApi,
   passages: passagesApi,
+  progression: progressionApi,
 };

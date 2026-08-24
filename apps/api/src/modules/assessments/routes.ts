@@ -16,6 +16,8 @@ import {
   submit,
   stats,
   myAttempts,
+  recommendations,
+  getAttempt,
 } from "./controller";
 import { authenticate, requireRole } from "../../middleware/auth";
 
@@ -25,8 +27,10 @@ const router: IRouter = Router();
 router.get("/", list);
 router.get("/me/attempts", authenticate, myAttempts);
 router.get("/slug/:slug", getBySlug);
-router.get("/:id", getById);
 router.get("/:id/stats", stats);
+router.get("/:id/recommendations", authenticate, recommendations);
+router.get("/attempts/:attemptId", authenticate, getAttempt);
+router.get("/:id", getById);
 
 // Learner routes (authenticated students)
 router.post("/:id/start", authenticate, start);

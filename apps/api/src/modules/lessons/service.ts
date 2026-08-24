@@ -1,4 +1,6 @@
 import { prisma } from "@aratc/database";
+type JsonInput = import("@prisma/client").InputJsonValue | null;
+import { normalizeLessonContent } from "@aratc/shared";
 import { NotFoundError, BadRequestError } from "../../lib/errors";
 import type { CreateLessonInput, UpdateLessonInput } from "./schemas";
 
@@ -189,6 +191,93 @@ export async function getLessonsBySubject(subjectId: string) {
   });
 }
 
+// ============================================================
+// Lesson Question Responses (Phase 4 — in-lesson answering)
+// ============================================================
+
+export interface SaveLessonQuestionResponseInput {
+  questionId: string;
+  answer: unknown;
+  isCorrect: boolean;
+  pointsEarned?: number;
+  blockId?: string;
+}
+
+/**
+ * Persist (upsert) a learner's answer to a question embedded in a lesson.
+ * One response per (learner, lesson, question) — keeps the latest attempt
+ * so students can retry and see updated feedback.
+ */
+export async function saveLessonQuestionResponse(
+  userId: string,
+  lessonId: string,
+  input: SaveLessonQuestionResponseInput
+) {
+  const lesson = await prisma.lesson.findUnique({ where: { id: lessonId } });
+  if (!lesson) {
+    throw new NotFoundError("Lesson not found");
+  }
+
+  const learner = await prisma.learnerProfile.findUnique({ where: { userId } });
+  if (!learner) {
+    throw new NotFoundError("Learner profile not found");
+  }
+
+  // Confirm the linked question block is actually part of this lesson content.
+  const question = await prisma.question.findUnique({
+    where: { id: input.questionId },
+    select: { id: true },
+  });
+  if (!question) {
+    throw new NotFoundError("Question not found");
+  }
+
+  return prisma.lessonQuestionResponse.upsert({
+    where: {
+      learnerId_lessonId_questionId: {
+        learnerId: learner.id,
+        lessonId,
+        questionId: input.questionId,
+      },
+    },
+    update: {
+      answer: input.answer as JsonInput | undefined,
+      isCorrect: input.isCorrect,
+      pointsEarned: input.pointsEarned ?? 0,
+      blockId: input.blockId ?? null,
+      attemptedAt: new Date(),
+    },
+    create: {
+      learnerId: learner.id,
+      lessonId,
+      questionId: input.questionId,
+      blockId: input.blockId ?? null,
+      answer: input.answer as JsonInput | undefined,
+      isCorrect: input.isCorrect,
+      pointsEarned: input.pointsEarned ?? 0,
+    },
+  });
+}
+
+/**
+ * Fetch the most recent response a learner gave to a given lesson question.
+ */
+export async function getLessonQuestionResponse(userId: string, lessonId: string, questionId: string) {
+  const learner = await prisma.learnerProfile.findUnique({ where: { userId } });
+  if (!learner) {
+    throw new NotFoundError("Learner profile not found");
+  }
+
+  return prisma.lessonQuestionResponse.findFirst({
+    where: {
+      learnerId: learner.id,
+      lessonId,
+      questionId,
+    },
+    orderBy: { attemptedAt: "desc" },
+  });
+}
+
 // Stats
 export async function getLessonStats(topicId: string) {
   const topic = await prisma.topic.findUnique({
@@ -280,4 +369,110 @@ export async function setLessonProgress(userId: string, lessonId: string, comple
   }
 
   return getLessonProgress(userId, lessonId);
+}
+
+// ============================================================
+// Lesson progress with question breakdown (Phase 6)
+// ============================================================
+
+interface QuestionStats {
+  totalBlocks: number;
+  answeredBlocks: number;
+  correctAnswers: number;
+  totalPoints: number;
+  earnedPoints: number;
+}
+
+/** Derive completion percentage from answered question blocks in lesson content. */
+const computeCompletionFromQuestions = (answered: number, total: number): number => {
+  if (total === 0) return 0;
+  return Math.round((answered / total) * 100);
+};
+
+/** Map completionPercentage to a MasteryLevel. */
+const masteryFromCompletion = (pct: number): "NOT_STARTED" | "LEARNING" | "PRACTICING" | "PROFICIENT" | "MASTERED" => {
+  if (pct >= 100) return "MASTERED";
+  if (pct >= 75) return "PROFICIENT";
+  if (pct >= 25) return "PRACTICING";
+  if (pct > 0) return "LEARNING";
+  return "NOT_STARTED";
+};
+
+/**
+ * Fetch progress for a lesson plus aggregate question-level stats:
+ * how many question blocks exist, how many the learner has answered,
+ * how many were correct, and total/earned points.
+ */
+export async function getLessonProgressWithQuestions(userId: string, lessonId: string): Promise<{
+  lessonId: string;
+  completed: boolean;
+  completionPercentage: number;
+  mastery: "NOT_STARTED" | "LEARNING" | "PRACTICING" | "PROFICIENT" | "MASTERED";
+  questionStats: QuestionStats;
+}> {
+  const learner = await prisma.learnerProfile.findUnique({ where: { userId } });
+  if (!learner) {
+    return {
+      lessonId,
+      completed: false,
+      completionPercentage: 0,
+      mastery: "NOT_STARTED",
+      questionStats: { totalBlocks: 0, answeredBlocks: 0, correctAnswers: 0, totalPoints: 0, earnedPoints: 0 },
+    };
+  }
+
+  const lesson = await prisma.lesson.findUnique({
+    where: { id: lessonId },
+    select: { content: true, topicId: true },
+  });
+  if (!lesson) {
+    throw new NotFoundError("Lesson not found");
+  }
+
+  const content = normalizeLessonContent(lesson.content);
+  const questionBlocks = content.blocks.filter((b) => b.type === "question");
+  const totalBlocks = questionBlocks.length;
+  const totalPoints = questionBlocks.reduce((sum, b) => sum + (b.points ?? 1), 0);
+
+  // If there are no question blocks, fall back to the plain progress record.
+  if (totalBlocks === 0) {
+    const progress = await prisma.progress.findFirst({ where: { learnerId: learner.id, lessonId } });
+    return {
+      lessonId,
+      completed: (progress?.completionPercentage ?? 0) >= 100,
+      completionPercentage: progress?.completionPercentage ?? 0,
+      mastery: progress?.mastery ?? "NOT_STARTED",
+      questionStats: { totalBlocks: 0, answeredBlocks: 0, correctAnswers: 0, totalPoints: 0, earnedPoints: 0 },
+    };
+  }
+
+  const answeredBlockIds = new Set<string>();
+  let correctAnswers = 0;
+  let earnedPoints = 0;
+
+  const responses = await prisma.lessonQuestionResponse.findMany({
+    where: { learnerId: learner.id, lessonId },
+  });
+
+  for (const resp of responses) {
+    // Count unique question blocks answered
+    if (resp.questionId) {
+      answeredBlockIds.add(resp.questionId);
+    }
+    if (resp.isCorrect) correctAnswers++;
+    earnedPoints += resp.pointsEarned ?? 0;
+  }
+
+  const answeredBlocks = answeredBlockIds.size;
+  const completionPercentage = computeCompletionFromQuestions(answeredBlocks, totalBlocks);
+  // Lesson is completed when all question blocks have been answered AND >=80% correct
+  const completed = answeredBlocks === totalBlocks && correctAnswers >= Math.ceil(totalBlocks * 0.8);
+
+  return {
+    lessonId,
+    completed,
+    completionPercentage,
+    mastery: masteryFromCompletion(completionPercentage),
+    questionStats: { totalBlocks, answeredBlocks, correctAnswers, totalPoints, earnedPoints },
+  };
 }

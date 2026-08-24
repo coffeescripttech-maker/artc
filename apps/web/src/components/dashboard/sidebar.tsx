@@ -18,20 +18,19 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
-  Menu,
-  Bell,
-  Search,
   Layers,
   Tags,
   Upload,
   Zap,
   Award,
   Building,
+  Target,
 } from "lucide-react";
 import { cn } from "@aratc/ui";
 import { Avatar, AvatarFallback, Button, Badge } from "@/components/ui";
 import { createContext, useContext } from "react";
 import { useAuth } from "@/contexts/auth-context";
+import { Breadcrumbs } from "@/components/admin/breadcrumbs";
 import LogoImage from "../../../assets/images/logo/logo.png";
 
 // Sidebar width constants
@@ -45,18 +44,18 @@ interface NavItem {
   badge?: string;
 }
 
-interface NavGroup {
+export interface NavGroup {
   label?: string;
   items: NavItem[];
 }
 
-const studentNav: NavGroup[] = [
+export const studentNav: NavGroup[] = [
   {
     items: [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { label: "My Programs", href: "/dashboard/programs", icon: BookOpen },
       { label: "Assessments", href: "/dashboard/assessments", icon: Zap },
-      { label: "Practice", href: "/dashboard/practice", icon: FileText },
+      { label: "Practice", href: "/dashboard/practice/weak-topics", icon: Target },
       { label: "Mock Exams", href: "/dashboard/exams", icon: Trophy },
     ],
   },
@@ -77,7 +76,7 @@ const studentNav: NavGroup[] = [
   },
 ];
 
-const adminNav: NavGroup[] = [
+export const adminNav: NavGroup[] = [
   {
     label: "OVERVIEW",
     items: [
@@ -134,7 +133,7 @@ const adminNav: NavGroup[] = [
   {
     label: "ANALYTICS",
     items: [
-      { label: "Reports", href: "/admin/reports", icon: BarChart3 },
+      { label: "Analytics", href: "/admin/analytics", icon: BarChart3 },
     ],
   },
   {
@@ -145,7 +144,7 @@ const adminNav: NavGroup[] = [
   },
 ];
 
-const teacherNav: NavGroup[] = [
+export const teacherNav: NavGroup[] = [
   {
     items: [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -177,11 +176,15 @@ interface SidebarProps {
 interface SidebarContextType {
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
+  mobileOpen: boolean;
+  setMobileOpen: (open: boolean) => void;
 }
 
 const SidebarContext = createContext<SidebarContextType>({
   collapsed: false,
   setCollapsed: () => {},
+  mobileOpen: false,
+  setMobileOpen: () => {},
 });
 
 export function useSidebar() {
@@ -195,11 +198,20 @@ export function Sidebar({ role = "student", children }: SidebarProps) {
 
   // Load collapsed state from localStorage
   const [collapsed, setCollapsedState] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const saved = localStorage.getItem("sidebar-collapsed");
     if (saved !== null) {
       setCollapsedState(saved === "true");
+    }
+    const savedGroups = localStorage.getItem("sidebar-collapsed-groups");
+    if (savedGroups) {
+      try {
+        setCollapsedGroups(new Set(JSON.parse(savedGroups)));
+      } catch {
+        // ignore parse errors
+      }
     }
   }, []);
 
@@ -210,6 +222,19 @@ export function Sidebar({ role = "student", children }: SidebarProps) {
 
   const toggleCollapsed = () => {
     setCollapsed(!collapsed);
+  };
+
+  const toggleGroup = (label: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) {
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
+      localStorage.setItem("sidebar-collapsed-groups", JSON.stringify([...next]));
+      return next;
+    });
   };
 
   const nav = role === "admin" ? adminNav : role === "teacher" ? teacherNav : studentNav;
@@ -277,53 +302,76 @@ export function Sidebar({ role = "student", children }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3">
-        {nav.map((group, groupIndex) => (
-          <div key={groupIndex} className="mb-6">
-            {group.label && !collapsed && (
-              <div className="px-3 mb-2 text-xs font-semibold text-arc-navy-400 uppercase tracking-wider">
-                {group.label}
-              </div>
-            )}
-            <div className="space-y-1">
-              {group.items.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-                const Icon = item.icon;
+      <nav className="flex-1 overflow-y-auto py-4 px-3 arc-sidebar-scroll">
+        {nav.map((group, groupIndex) => {
+          const groupKey = group.label || `group-${groupIndex}`;
+          const isGroupCollapsed = collapsedGroups.has(groupKey);
+          const hasActiveItem = group.items.some(
+            (item) => pathname === item.href || pathname.startsWith(item.href + "/")
+          );
 
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setMobileOpen(false)}
+          return (
+            <div key={groupIndex} className="mb-4">
+              {group.label && !collapsed && (
+                <button
+                  onClick={() => toggleGroup(groupKey)}
+                  className="w-full flex items-center justify-between px-3 mb-1 text-xs font-semibold text-arc-navy-400 uppercase tracking-wider hover:text-arc-navy-200 transition-colors group-label"
+                >
+                  <span>{group.label}</span>
+                  <ChevronDown
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group",
-                      isActive
-                        ? "bg-arc-navy-800 text-white"
-                        : "text-arc-navy-200 hover:bg-arc-navy-800 hover:text-white",
-                      collapsed && "justify-center"
+                      "h-3.5 w-3.5 transition-transform duration-200",
+                      isGroupCollapsed && "-rotate-90"
                     )}
-                    title={collapsed ? item.label : undefined}
-                  >
-                    <Icon
-                      className={cn(
-                        "h-5 w-5 shrink-0",
-                        isActive ? "text-arc-orange-400" : "text-arc-navy-300 group-hover:text-white"
-                      )}
-                    />
-                    {!collapsed && (
-                      <>
-                        <span className="flex-1 font-medium text-sm">{item.label}</span>
-                        {item.badge && (
-                          <Badge variant="premium" size="sm">{item.badge}</Badge>
+                  />
+                </button>
+              )}
+              {(!isGroupCollapsed || !group.label || collapsed) && (
+                <div className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                    const Icon = item.icon;
+
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setMobileOpen(false)}
+                        className={cn(
+                          "relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group",
+                          isActive
+                            ? "bg-arc-navy-800 text-white"
+                            : "text-arc-navy-200 hover:bg-arc-navy-800/60 hover:text-white",
+                          collapsed && "justify-center"
                         )}
-                      </>
-                    )}
-                  </Link>
-                );
-              })}
+                        title={collapsed ? item.label : undefined}
+                      >
+                        {/* Active accent bar */}
+                        {isActive && (
+                          <span className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-r-full bg-arc-orange-500" />
+                        )}
+                        <Icon
+                          className={cn(
+                            "h-5 w-5 shrink-0 transition-colors",
+                            isActive ? "text-arc-orange-400" : "text-arc-navy-300 group-hover:text-white"
+                          )}
+                        />
+                        {!collapsed && (
+                          <>
+                            <span className="flex-1 font-medium text-sm">{item.label}</span>
+                            {item.badge && (
+                              <Badge variant="premium" size="sm">{item.badge}</Badge>
+                            )}
+                          </>
+                        )}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
 
       {/* User Section */}
@@ -365,15 +413,7 @@ export function Sidebar({ role = "student", children }: SidebarProps) {
   );
 
   return (
-    <SidebarContext.Provider value={{ collapsed, setCollapsed }}>
-      {/* Mobile Menu Button */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="lg:hidden fixed bottom-4 left-4 z-50 p-3 bg-arc-orange-500 text-white rounded-full shadow-arc-lg"
-      >
-        <Menu className="h-6 w-6" />
-      </button>
-
+    <SidebarContext.Provider value={{ collapsed, setCollapsed, mobileOpen, setMobileOpen }}>
       {/* Mobile Overlay */}
       {mobileOpen && (
         <div
@@ -408,65 +448,28 @@ interface DashboardHeaderProps {
   title: string;
   subtitle?: string;
   breadcrumbs?: { label: string; href?: string }[];
+  actions?: React.ReactNode;
 }
 
-export function DashboardHeader({ title, subtitle, breadcrumbs }: DashboardHeaderProps) {
-  const { user } = useAuth();
-
+export function DashboardHeader({ title, subtitle, breadcrumbs, actions }: DashboardHeaderProps) {
   return (
-    <header className="h-16 bg-white border-b border-arc-slate-200 flex items-center justify-between px-6">
-      {/* Mobile menu button */}
-      <button className="lg:hidden p-2 rounded-lg hover:bg-arc-slate-100 transition-colors">
-        <Menu className="h-5 w-5 text-arc-slate-600" />
-      </button>
-
-      <div className="flex-1">
-        {/* Breadcrumbs */}
-        {breadcrumbs && breadcrumbs.length > 0 && (
-          <nav className="flex items-center gap-1 text-sm mb-1">
-            {breadcrumbs.map((crumb, index) => (
-              <div key={index} className="flex items-center gap-1">
-                {index > 0 && (
-                  <span className="text-arc-slate-400">/</span>
-                )}
-                {crumb.href ? (
-                  <a href={crumb.href} className="text-arc-slate-500 hover:text-arc-orange-600 transition-colors">
-                    {crumb.label}
-                  </a>
-                ) : (
-                  <span className="text-arc-navy-900 font-medium">{crumb.label}</span>
-                )}
-              </div>
-            ))}
-          </nav>
-        )}
-        <h1 className="text-xl font-bold text-arc-navy-900">{title}</h1>
-        {subtitle && <p className="text-sm text-arc-slate-500">{subtitle}</p>}
-      </div>
-      <div className="flex items-center gap-4">
-        {/* Search */}
-        <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-arc-slate-50 rounded-lg border border-arc-slate-200">
-          <Search className="h-4 w-4 text-arc-slate-400" />
-          <input
-            type="text"
-            placeholder="Search..."
-            className="bg-transparent border-none outline-none text-sm w-48 text-arc-navy-900 placeholder:text-arc-slate-400"
-          />
+    <div className="bg-white border-b border-arc-slate-200 px-6 py-4">
+      {breadcrumbs && breadcrumbs.length > 0 && (
+        <div className="mb-3">
+          <Breadcrumbs items={breadcrumbs} />
         </div>
-        {/* Notifications */}
-        <button className="relative p-2 rounded-lg hover:bg-arc-slate-100 transition-colors">
-          <Bell className="h-5 w-5 text-arc-slate-600" />
-          <span className="absolute top-1 right-1 h-2 w-2 bg-arc-red-500 rounded-full" />
-        </button>
-        {/* User Avatar */}
-        {user && (
-          <Avatar className="h-9 w-9">
-            <AvatarFallback className="bg-gradient-to-br from-arc-orange-500 to-arc-orange-600 text-white text-sm font-semibold">
-              {user.firstName?.[0]}{user.lastName?.[0]}
-            </AvatarFallback>
-          </Avatar>
+      )}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl font-bold text-arc-navy-900">{title}</h1>
+          {subtitle && <p className="text-sm text-arc-slate-500 mt-0.5">{subtitle}</p>}
+        </div>
+        {actions && (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {actions}
+          </div>
         )}
       </div>
-    </header>
+    </div>
   );
 }

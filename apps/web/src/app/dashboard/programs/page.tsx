@@ -1,281 +1,446 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { DashboardHeader } from "@/components/dashboard";
+import { DashboardHeader, MasteryLadder } from "@/components/dashboard";
+import { Button, Badge, Card, CardHeader, CardTitle, CardContent, Progress } from "@/components/ui";
+import { useAuth } from "@/contexts/auth-context";
+import { progressionApi, lessonsApi, progressApi } from "@/lib/api/client";
+import { masteryBand } from "@/lib/mastery";
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  Badge,
-  Button,
-  Progress,
-  Input,
-} from "@/components/ui";
-import {
-  Search,
+  RefreshCw,
   BookOpen,
-  Users,
-  Clock,
   TrendingUp,
-  TrendingDown,
+  Target,
+  ChevronDown,
   ChevronRight,
   Play,
-  Star,
-  Filter,
-  Calculator,
-  FlaskConical,
-  BarChart3,
-  FileText,
-  BookMarked,
-  PenLine,
+  Clock,
 } from "lucide-react";
 
-const enrolledPrograms = [
-  {
-    id: 1,
-    name: "Grade 10 Mathematics",
-    description: "Algebra, Geometry, Statistics and Probability",
-    progress: 72,
-    lessonsCompleted: 43,
-    totalLessons: 60,
-    hoursSpent: 28.5,
-    streak: 12,
-    rating: 4.8,
-    nextLesson: "Quadratic Equations: Applications",
-    icon: Calculator,
-    color: "from-blue-500 to-blue-600",
-  },
-  {
-    id: 2,
-    name: "Grade 10 Science",
-    description: "Physics, Chemistry, Biology fundamentals",
-    progress: 58,
-    lessonsCompleted: 35,
-    totalLessons: 60,
-    hoursSpent: 22.0,
-    streak: 8,
-    rating: 4.7,
-    nextLesson: "Chemical Bonding",
-    icon: FlaskConical,
-    color: "from-green-500 to-green-600",
-  },
-  {
-    id: 3,
-    name: "College Entrance Prep: Math",
-    description: "UPCAT, Ateneo, DLSU Math review",
-    progress: 35,
-    lessonsCompleted: 18,
-    totalLessons: 50,
-    hoursSpent: 15.0,
-    streak: 5,
-    rating: 4.9,
-    nextLesson: "Advanced Trigonometry",
-    icon: BarChart3,
-    color: "from-purple-500 to-purple-600",
-  },
-];
+interface TopicInfo {
+  id: string;
+  name: string;
+  percent: number;
+  mastery: string;
+  tracked: boolean;
+}
 
-const quickStats = [
-  { label: "Enrolled Programs", value: "3", change: "+1", positive: true, icon: BookOpen },
-  { label: "Lessons Completed", value: "96", change: "+12", positive: true, icon: TrendingUp },
-  { label: "Total Study Time", value: "65.5h", change: "+5.2h", positive: true, icon: Clock },
-  { label: "Best Streak", value: "12 days", change: "+3", positive: true, icon: Star },
-];
+interface SubjectInfo {
+  id: string;
+  name: string;
+  percent: number;
+  mastered: boolean;
+  topicCount: number;
+  topics: TopicInfo[];
+}
 
-const recommendedPrograms = [
-  {
-    id: 4,
-    name: "Araling Panlipunan: Grade 10",
-    description: "Philippine History and Government",
-    students: 2500,
-    rating: 4.6,
-    icon: FileText,
-  },
-  {
-    id: 5,
-    name: "English Proficiency",
-    description: "Grammar, Vocabulary, Comprehension",
-    students: 3200,
-    rating: 4.8,
-    icon: BookMarked,
-  },
-  {
-    id: 6,
-    name: "College Entrance: English",
-    description: "Entrance exam English preparation",
-    students: 1800,
-    rating: 4.7,
-    icon: PenLine,
-  },
-];
+interface GradeInfo {
+  curriculumId: string;
+  name: string;
+  gradeLevel: number;
+  stage: string;
+  percent: number;
+  mastered: boolean;
+  unlocked: boolean;
+  subjects: SubjectInfo[];
+}
+
+interface ProgramInfo {
+  id: string;
+  name: string;
+  slug: string;
+}
+
+interface WeakTopic {
+  id: string;
+  name: string;
+  completionPercentage: number;
+  mastery: string;
+  topic: { id: string; name: string; module: { subject: { id: string; name: string } } };
+}
+
+interface LessonInfo {
+  id: string;
+  title: string;
+  subject: string;
+  progress: number;
+  questionStats?: {
+    answeredBlocks: number;
+    totalBlocks: number;
+    earnedPoints: number;
+    totalPoints: number;
+    correctAnswers: number;
+  } | null;
+}
+
+interface ProgressionResult {
+  program: ProgramInfo | null;
+  gate: number;
+  grades: GradeInfo[];
+}
 
 export default function MyProgramsPage() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [progression, setProgression] = useState<ProgressionResult | null>(null);
+  const [weakTopics, setWeakTopics] = useState<WeakTopic[]>([]);
+  const [studyLessons, setStudyLessons] = useState<LessonInfo[]>([]);
+  const [expandedSubjects, setExpandedSubjects] = useState<Record<string, boolean>>({});
+
+  const loadProgression = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [progData, weakData] = await Promise.all([
+        progressionApi.get().catch(() => null),
+        progressionApi.weakTopics().catch(() => null),
+      ]);
+
+      const prog = progData as ProgressionResult | null;
+      setProgression(prog);
+      setWeakTopics((weakData as { topics: WeakTopic[] })?.topics ?? []);
+
+      // Fetch continue-learning lessons from first unlocked grade's first subject
+      if (prog?.grades?.length) {
+        const unlockedGrade = prog.grades.find((g) => g.unlocked);
+        const unlockedSubjects = unlockedGrade?.subjects || [];
+        if (unlockedSubjects.length > 0) {
+          const firstSubjectId = unlockedSubjects[0].id;
+          const subjectLessons = await lessonsApi.getBySubject(firstSubjectId).catch(() => []);
+          if (Array.isArray(subjectLessons)) {
+            const lessonsWithProgress = await Promise.all(
+              subjectLessons.slice(0, 3).map(async (l: any) => {
+                try {
+                  const prog = (await progressApi
+                    .getLessonWithQuestions(l.id)
+                    .catch(() => null)) as {
+                    completionPercentage: number;
+                    questionStats: LessonInfo["questionStats"];
+                  } | null;
+                  return {
+                    id: l.id,
+                    title: l.title,
+                    subject: l.topic?.module?.subject?.name || "Subject",
+                    progress: prog?.completionPercentage ?? 0,
+                    questionStats: prog?.questionStats ?? null,
+                  };
+                } catch {
+                  return {
+                    id: l.id,
+                    title: l.title,
+                    subject: l.topic?.module?.subject?.name || "Subject",
+                    progress: 0,
+                    questionStats: null,
+                  };
+                }
+              })
+            );
+            setStudyLessons(lessonsWithProgress);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load progression:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProgression();
+  }, [loadProgression]);
+
+  const toggleSubject = (subjectId: string) => {
+    setExpandedSubjects((prev) => ({ ...prev, [subjectId]: !prev[subjectId] }));
+  };
+
+  if (loading) {
+    return (
+      <>
+        <DashboardHeader title="My Programs" subtitle="Manage your enrolled programs" />
+        <div className="p-6 flex items-center justify-center py-12">
+          <RefreshCw className="h-8 w-8 animate-spin text-arc-orange-500" />
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
-      <DashboardHeader title="My Programs" subtitle="Manage your enrolled programs" />
+      <DashboardHeader
+        title="My Programs"
+        subtitle={progression?.program?.name || "Manage your enrolled programs"}
+        breadcrumbs={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: "My Programs" },
+        ]}
+      />
 
       <div className="p-6">
-        {/* Quick Stats */}
-        <div className="grid gap-5 mb-8 md:grid-cols-2 lg:grid-cols-4">
-          {quickStats.map((stat, index) => (
-            <Card key={stat.label} className="relative overflow-hidden group hover:shadow-xl transition-all duration-300">
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transform origin-left transition-transform duration-300" />
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="h-12 w-12 rounded-xl flex items-center justify-center bg-blue-100">
-                    <stat.icon className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
-                    stat.positive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
-                  }`}>
-                    {stat.positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                    {stat.change}
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-3xl font-bold tracking-tight text-gray-900">{stat.value}</div>
-                  <div className="text-sm font-medium text-gray-500">{stat.label}</div>
-                </div>
+        {progression && progression.program && (
+          <>
+            {/* Program Header */}
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="text-xl">{progression.program.name}</CardTitle>
+                <p className="text-sm text-arc-slate-500 mt-1">
+                  Mastery gate: <strong>{progression.gate}%</strong> to unlock the next grade level
+                </p>
+              </CardHeader>
+              <CardContent>
+                <MasteryLadder grades={progression.grades} gate={progression.gate} />
               </CardContent>
             </Card>
-          ))}
-        </div>
 
-        {/* Search & Filter */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search your programs..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <div className="flex gap-2">
-            {["all", "in-progress", "completed"].map((f) => (
-              <Button
-                key={f}
-                variant={filter === f ? "default" : "outline"}
-                size="sm"
-                onClick={() => setFilter(f)}
-              >
-                {f === "all" ? "All" : f === "in-progress" ? "In Progress" : "Completed"}
-              </Button>
-            ))}
-          </div>
-        </div>
-
-        {/* Enrolled Programs */}
-        <div className="mb-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Your Enrolled Programs</h2>
-          <div className="grid gap-6 lg:grid-cols-3">
-            {enrolledPrograms.map((program) => (
-              <Card key={program.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                {/* Header with gradient */}
-                <div className={`bg-gradient-to-r ${program.color} p-4`}>
-                  <div className="flex items-center justify-between">
-                    <div className="h-14 w-14 rounded-xl bg-gradient-to-br {program.color} flex items-center justify-center">
-                      <program.icon className="h-7 w-7 text-white" />
+            {/* Quick Stats */}
+            <div className="grid gap-5 mb-8 md:grid-cols-4">
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-arc-orange-100 flex items-center justify-center">
+                      <BookOpen className="h-5 w-5 text-arc-orange-500" />
                     </div>
-                    <Badge className="bg-white/20 text-white border-0">
-                      <Clock className="h-3 w-3 mr-1" />
-                      {program.streak} day streak
-                    </Badge>
-                  </div>
-                </div>
-
-                <CardContent className="p-5">
-                  <h3 className="font-semibold text-gray-900 mb-1">{program.name}</h3>
-                  <p className="text-sm text-gray-500 mb-4">{program.description}</p>
-
-                  {/* Progress */}
-                  <div className="mb-4">
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">Progress</span>
-                      <span className="font-medium text-gray-900">{program.progress}%</span>
-                    </div>
-                    <Progress value={program.progress} className="h-2" />
-                    <p className="text-xs text-gray-500 mt-1">
-                      {program.lessonsCompleted} of {program.totalLessons} lessons
-                    </p>
-                  </div>
-
-                  {/* Stats */}
-                  <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <Clock className="h-4 w-4" />
-                      <span>{program.hoursSpent}h studied</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <Star className="h-4 w-4 text-yellow-400" />
-                      <span>{program.rating} rating</span>
+                    <div>
+                      <div className="text-2xl font-bold text-arc-navy-900">{progression.grades.length}</div>
+                      <div className="text-sm text-arc-slate-500">Grade Levels</div>
                     </div>
                   </div>
-
-                  {/* Next Lesson */}
-                  <div className="p-3 bg-gray-50 rounded-lg mb-4">
-                    <p className="text-xs text-gray-500 mb-1">Up Next</p>
-                    <p className="text-sm font-medium text-gray-900">{program.nextLesson}</p>
-                  </div>
-
-                  {/* Action */}
-                  <Button className="w-full" size="sm">
-                    <Play className="h-4 w-4 mr-2" />
-                    Continue Learning
-                  </Button>
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        </div>
-
-        {/* Recommended Programs */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Recommended for You</h2>
-            <Link href="/programs" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-              Browse all programs →
-            </Link>
-          </div>
-          <div className="grid gap-4 md:grid-cols-3">
-            {recommendedPrograms.map((program) => (
-              <Card key={program.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-5">
-                  <div className="flex items-start gap-4">
-                    <div className="h-12 w-12 rounded-xl bg-gray-100 flex items-center justify-center">
-                      <program.icon className="h-6 w-6 text-gray-600" />
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-blue-100 flex items-center justify-center">
+                      <TrendingUp className="h-5 w-5 text-blue-500" />
                     </div>
-                    <div className="flex-1">
-                      <h3 className="font-medium text-gray-900 mb-1">{program.name}</h3>
-                      <p className="text-sm text-gray-500 mb-3">{program.description}</p>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 text-xs text-gray-500">
-                          <span className="flex items-center gap-1">
-                            <Users className="h-3 w-3" />
-                            {program.students.toLocaleString()}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Star className="h-3 w-3 text-yellow-400" />
-                            {program.rating}
-                          </span>
-                        </div>
+                    <div>
+                      <div className="text-2xl font-bold text-arc-navy-900">
+                        {Math.round(
+                          progression.grades.reduce(
+                            (sum, g) => sum + g.percent * g.subjects.length,
+                            0
+                          ) /
+                            (progression.grades.reduce((sum, g) => sum + g.subjects.length, 0) || 1)
+                        )}%
                       </div>
+                      <div className="text-sm text-arc-slate-500">Overall Mastery</div>
                     </div>
                   </div>
-                  <Button variant="outline" className="w-full mt-4" size="sm">
-                    View Program
-                  </Button>
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        </div>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-red-100 flex items-center justify-center">
+                      <Target className="h-5 w-5 text-red-500" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-arc-navy-900">
+                        {weakTopics.length}
+                      </div>
+                      <div className="text-sm text-arc-slate-500">Focus Areas</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-green-100 flex items-center justify-center">
+                      <BookOpen className="h-5 w-5 text-green-500" />
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-arc-navy-900">{studyLessons.length}</div>
+                      <div className="text-sm text-arc-slate-500">Lessons to Continue</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Subject Breakdown by Grade */}
+            <div className="space-y-6">
+              <h2 className="text-lg font-semibold text-arc-navy-900">Subjects by Grade Level</h2>
+              {progression.grades.map((grade) => (
+                <Card key={grade.curriculumId}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        Grade {grade.gradeLevel} — {grade.name}
+                        {grade.mastered && (
+                          <Badge className="text-xs bg-green-100 text-green-700">Mastered</Badge>
+                        )}
+                      </CardTitle>
+                      {!grade.unlocked && (
+                        <Badge variant="secondary" className="text-xs">
+                          Locked
+                        </Badge>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center gap-2 mb-4">
+                      <Progress value={grade.percent} className="h-2 flex-1" />
+                      <span className="text-sm font-medium text-arc-navy-900">{grade.percent}%</span>
+                    </div>
+                    <div className="space-y-2">
+                      {grade.subjects.map((subject) => {
+                        const isExpanded = expandedSubjects[subject.id] ?? false;
+                        return (
+                          <div key={subject.id} className={`border rounded-lg transition-colors ${grade.unlocked ? "border-arc-slate-200 bg-white" : "border-arc-slate-200 bg-arc-slate-50"}`}>
+                            <div
+                              className="flex items-center justify-between p-3 cursor-pointer"
+                              onClick={() => grade.unlocked && toggleSubject(subject.id)}
+                            >
+                              <div className="flex items-center gap-3">
+                                <BookOpen className="h-4 w-4 text-arc-orange-500" />
+                                <span className={`font-medium ${grade.unlocked ? "text-arc-navy-900" : "text-arc-slate-400"}`}>
+                                  {subject.name}
+                                </span>
+                                <span className={`text-xs text-arc-slate-500`}>
+                                  ({subject.topicCount} topics)
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  variant={subject.mastered ? "default" : "secondary"}
+                                  className={`text-xs ${subject.mastered ? "bg-green-100 text-green-700" : ""}`}
+                                >
+                                  {subject.mastered ? "✓" : `${subject.percent}%`}
+                                </Badge>
+                                {grade.unlocked && (
+                                  isExpanded ? (
+                                    <ChevronDown className="h-4 w-4 text-arc-slate-400" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4 text-arc-slate-400" />
+                                  )
+                                )}
+                              </div>
+                            </div>
+
+                            {isExpanded && grade.unlocked && (
+                              <div className="px-3 pb-3 space-y-2 border-t border-arc-slate-200">
+                                {subject.topics.map((topic) => (
+                                  <div key={topic.id} className="flex items-center justify-between text-sm">
+                                    <span className="text-arc-slate-700">{topic.name}</span>
+                                    <div className="flex items-center gap-2">
+                                      <div className="text-xs text-arc-slate-500">{topic.percent}%</div>
+                                      <div className="w-16 h-1.5 bg-arc-slate-200 rounded-full overflow-hidden">
+                                        <div
+                                          className={`h-full rounded-full ${
+                                            topic.mastery === "MASTERED"
+                                              ? "bg-green-500"
+                                              : topic.mastery === "PRACTICING"
+                                              ? "bg-orange-400"
+                                              : "bg-blue-400"
+                                          }`}
+                                          style={{ width: `${topic.percent}%` }}
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* Focus Areas (Weak Topics) */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Target className="h-5 w-5 text-red-500" />
+                  Focus Areas
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {weakTopics.length === 0 ? (
+                  <p className="text-sm text-arc-slate-500">No weak areas identified. Keep up the good work!</p>
+                ) : (
+                  <div className="space-y-3">
+                    {weakTopics.slice(0, 5).map((t) => (
+                      <div
+                        key={t.id}
+                        className="flex items-center justify-between p-3 rounded-lg border border-arc-slate-200 bg-white"
+                      >
+                        <div>
+                          <div className="font-medium text-arc-navy-900">{t.topic?.name || "Topic"}</div>
+                          <div className="text-xs text-arc-slate-500">
+                            {t.topic?.module?.subject?.name || "Unknown subject"}
+                          </div>
+                        </div>
+                        <Badge variant="secondary" className="text-xs">
+                          {Math.round(t.completionPercentage ?? 0)}%
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Continue Learning */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <BookOpen className="h-5 w-5 text-arc-orange-500" />
+                  Continue Learning
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {studyLessons.length === 0 ? (
+                  <p className="text-sm text-arc-slate-500">No lessons started yet. Browse subjects to begin!</p>
+                ) : (
+                  <div className="space-y-4">
+                    {studyLessons.map((lesson) => (
+                      <div
+                        key={lesson.id}
+                        className="flex items-center gap-4 p-3 rounded-lg bg-arc-slate-50 hover:bg-arc-slate-100 transition-colors"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-arc-navy-900 truncate">{lesson.title}</div>
+                          <div className="text-sm text-arc-slate-500">{lesson.subject}</div>
+                          {lesson.questionStats && (
+                            <div className="mt-1 text-xs text-arc-slate-500">
+                              {lesson.questionStats.answeredBlocks}/{lesson.questionStats.totalBlocks} questions answered
+                            </div>
+                          )}
+                          <div className="mt-1 flex items-center gap-2">
+                            <Progress value={lesson.progress} className="h-1.5 flex-1" />
+                            <span className="text-xs text-arc-slate-500">{lesson.progress}%</span>
+                          </div>
+                        </div>
+                        <Link href={`/dashboard/lessons/${lesson.id}`}>
+                          <Button size="sm" variant="outline">
+                            <Play className="h-4 w-4 mr-1" />
+                            Continue
+                          </Button>
+                        </Link>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        {!progression?.program && (
+          <Card>
+            <CardContent className="p-12 text-center">
+              <BookOpen className="h-12 w-12 text-arc-slate-300 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">No Program Enrolled</h3>
+              <p className="text-arc-slate-500">
+                You don't have an active program. Contact your administrator to get enrolled.
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </>
   );

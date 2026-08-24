@@ -18,6 +18,7 @@ import {
   Send,
   AlertCircle,
   RotateCcw,
+  SkipForward,
 } from "lucide-react";
 
 interface PlayerOption {
@@ -64,6 +65,19 @@ interface SubmitResult {
     question: { id: string; stem: string; explanation?: string | null };
   }[];
 }
+interface RecommendationsResult {
+  assessmentId: string;
+  isMastered: boolean;
+  bestScore: number;
+  gate: number;
+  canRetry: boolean;
+  attemptsUsed: number;
+  maxAttempts: number | null;
+  weakTopics: { id: string; name: string; subjectName?: string }[];
+  suggestions: string[];
+  hasLowExposure: boolean;
+  message: string;
+}
 
 function fmtTime(s: number): string {
   const m = Math.floor(s / 60);
@@ -82,9 +96,12 @@ export default function AssessmentPlayerPage() {
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
+  const [reviewed, setReviewed] = useState<Set<string>>(new Set());
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<SubmitResult | null>(null);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [recommendations, setRecommendations] = useState<RecommendationsResult | null>(null);
   const [questionStartTime, setQuestionStartTime] = useState<Record<string, number>>({});
 
   const answersRef = useRef(answers);
@@ -99,8 +116,10 @@ export default function AssessmentPlayerPage() {
     setResult(null);
     setAnswers({});
     setFlagged(new Set());
+    setReviewed(new Set());
     setCurrent(0);
     setTimeLeft(null);
+    setShowConfirm(false);
     try {
       const res = (await assessmentsApi.start(assessmentId)) as StartResponse;
       setData(res);
@@ -136,6 +155,13 @@ export default function AssessmentPlayerPage() {
       });
       const res = (await assessmentsApi.submit(data.attempt.id, payload)) as SubmitResult;
       setResult(res);
+      // Fetch retry recommendations after submit
+      try {
+        const recs = (await assessmentsApi.recommendations(assessmentId)) as RecommendationsResult;
+        setRecommendations(recs);
+      } catch (e) {
+        console.error("Failed to load recommendations:", e);
+      }
     } catch (err) {
       console.error("Failed to submit:", err);
       submittedRef.current = false;
@@ -198,6 +224,48 @@ export default function AssessmentPlayerPage() {
             </p>
           </div>
 
+          {/* Retry recommendations */}
+          {recommendations && (
+            <div className="mt-6 rounded-xl border border-arc-slate-200 bg-white p-5">
+              <h3 className="text-sm font-semibold text-arc-slate-500 uppercase tracking-wide mb-3">
+                Suggestions
+              </h3>
+              {recommendations.message ? (
+                <p className="text-sm text-arc-navy-900 mb-3">{recommendations.message}</p>
+              ) : null}
+
+              {recommendations.weakTopics && recommendations.weakTopics.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-medium text-arc-slate-500 mb-2">Weak topics</p>
+                  <div className="flex flex-wrap gap-2">
+                    {recommendations.weakTopics.map((t) => (
+                      <span
+                        key={t.id}
+                        className="text-xs px-2.5 py-1 rounded-lg bg-arc-slate-100 text-arc-slate-700"
+                      >
+                        {t.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {recommendations.suggestions && recommendations.suggestions.length > 0 && (
+                <ul className="text-sm text-arc-slate-600 space-y-1 list-disc list-inside">
+                  {recommendations.suggestions.map((s, i) => (
+                    <li key={i}>{s}</li>
+                  ))}
+                </ul>
+              )}
+
+              {recommendations.attemptsUsed > 0 && recommendations.maxAttempts && (
+                <p className="text-xs text-arc-slate-500 mt-2">
+                  Attempts used: {recommendations.attemptsUsed} / {recommendations.maxAttempts}
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="mt-6 space-y-2">
             <h3 className="text-sm font-semibold text-arc-slate-500 uppercase tracking-wide">Review</h3>
             {result.answers.map((a, i) => (
@@ -224,14 +292,24 @@ export default function AssessmentPlayerPage() {
           </div>
 
           <div className="mt-6 flex justify-center gap-3">
-            {pct < gate && data.assessment.allowRetake && (
+            {recommendations?.canRetry && pct < gate ? (
               <Button variant="accent" onClick={beginAttempt}>
                 <RotateCcw className="h-4 w-4 mr-2" />
                 Try a new variant
               </Button>
-            )}
+            ) : pct < gate && data.assessment.allowRetake ? (
+              <Button variant="accent" onClick={beginAttempt}>
+                <RotateCcw className="h-4 w-4 mr-2" />
+                Try a new variant
+              </Button>
+            ) : null}
+            <Link href={`/dashboard/assessments/${data.assessment.id}/review?attemptId=${data.attempt.id}`}>
+              <Button variant={pct < gate && data.assessment.allowRetake ? "outline" : "accent"}>
+                Review Answers
+              </Button>
+            </Link>
             <Link href="/dashboard/assessments">
-              <Button variant={pct < gate && data.assessment.allowRetake ? "outline" : "accent"}>Done</Button>
+              <Button variant="outline">Back to List</Button>
             </Link>
           </div>
         </div>
@@ -261,85 +339,202 @@ export default function AssessmentPlayerPage() {
     return Array.isArray(v) ? v.length > 0 : v !== undefined && v !== "";
   };
 
+  const nextUnanswered = () => {
+    const idx = data.questions.findIndex((qq) => !isAnswered(qq.id));
+    return idx >= 0 ? idx : null;
+  };
+
+  const handleNavNext = () => {
+    if (current < total - 1) {
+      setCurrent(current + 1);
+    }
+  };
+  const handleNavPrev = () => {
+    if (current > 0) setCurrent(current - 1);
+  };
+  const goToAction = (idx: number) => setCurrent(idx);
+
+  const handleSaveAndNext = () => {
+    const idx = nextUnanswered();
+    if (idx !== null && idx !== current) {
+      setCurrent(idx);
+    } else {
+      handleNavNext();
+    }
+  };
+
+  const handleSubmit = () => {
+    if (answeredCount < total) {
+      setShowConfirm(true);
+    } else {
+      void doSubmit();
+    }
+  };
+
+  const unansweredCount = total - answeredCount;
+
   return (
-    <div className="flex flex-col h-[calc(100vh-0px)]">
+    <div className="flex flex-col h-screen">
       {/* Top bar */}
-      <div className="shrink-0 border-b border-arc-slate-200 bg-white px-6 py-3 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <Link href="/dashboard" className="text-arc-slate-400 hover:text-arc-navy-900">
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <div className="min-w-0">
-            <div className="font-semibold text-arc-navy-900 truncate">{data.assessment.name}</div>
-            <div className="text-xs text-arc-slate-500">
-              {answeredCount}/{total} answered
+      <div className="shrink-0 border-b border-arc-slate-200 bg-white px-6 py-3">
+        <div className="flex items-center justify-between gap-4 mb-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <Link href="/dashboard" className="text-arc-slate-400 hover:text-arc-navy-900">
+              <ArrowLeft className="h-5 w-5" />
+            </Link>
+            <div className="min-w-0">
+              <div className="font-semibold text-arc-navy-900 truncate">{data.assessment.name}</div>
+              <div className="text-xs text-arc-slate-500">
+                {answeredCount}/{total} answered
+                {unansweredCount > 0 && <span className="text-red-500"> · {unansweredCount} unanswered</span>}
+              </div>
             </div>
           </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {timeLeft !== null && (
+              <span
+                className={`flex items-center gap-1.5 font-mono text-sm px-2.5 py-1 rounded-lg ${
+                  timeLeft <= 60 ? "bg-red-50 text-red-600" : "bg-arc-slate-100 text-arc-navy-900"
+                }`}
+              >
+                <Clock className="h-4 w-4" />
+                {fmtTime(timeLeft)}
+              </span>
+            )}
+            {flagged.size > 0 && (
+              <span className="flex items-center gap-1 text-xs text-arc-orange-600 bg-arc-orange-50 px-2 py-0.5 rounded-lg">
+                <Flag className="h-3 w-3" />
+                {flagged.size} flagged
+              </span>
+            )}
+            <Button variant="accent" size="sm" onClick={handleSubmit} disabled={submitting}>
+              <Send className="h-4 w-4 mr-2" />
+              {submitting ? "Submitting…" : "Submit"}
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {timeLeft !== null && (
-            <span
-              className={`flex items-center gap-1.5 font-mono text-sm px-2.5 py-1 rounded-lg ${
-                timeLeft <= 60 ? "bg-red-50 text-red-600" : "bg-arc-slate-100 text-arc-navy-900"
-              }`}
-            >
-              <Clock className="h-4 w-4" />
-              {fmtTime(timeLeft)}
-            </span>
-          )}
-          <Button variant="accent" size="sm" onClick={doSubmit} disabled={submitting}>
-            <Send className="h-4 w-4 mr-2" />
-            {submitting ? "Submitting…" : "Submit"}
-          </Button>
+
+        {/* Progress bar */}
+        <div className="w-full h-2 bg-arc-slate-100 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-arc-orange-500 rounded-full transition-all duration-300"
+            style={{ width: `${(answeredCount / total) * 100}%` }}
+          />
         </div>
       </div>
 
       <div className="flex-1 min-h-0 flex">
-        {/* Navigator */}
-        <aside className="w-52 shrink-0 border-r border-arc-slate-200 bg-white p-4 overflow-y-auto">
-          <div className="grid grid-cols-5 gap-2">
+        {/* Navigator sidebar */}
+        <aside className="w-56 shrink-0 border-r border-arc-slate-200 bg-white p-4 overflow-y-auto">
+          <p className="text-xs font-semibold text-arc-slate-500 uppercase tracking-wide mb-3">
+            Question Navigator
+          </p>
+          <div className="space-y-2">
             {data.questions.map((qq, i) => {
               const active = i === current;
               const done = isAnswered(qq.id);
               const flag = flagged.has(qq.id);
+              const rev = reviewed.has(qq.id);
+
+              let bg = "bg-white text-arc-slate-400 border-arc-slate-200";
+              let dot = "bg-arc-slate-300";
+              if (done) {
+                bg = "bg-arc-navy-900 text-white border-arc-navy-900";
+                dot = "bg-arc-navy-900";
+              }
+              if (flag) {
+                bg = "border-arc-orange-400 bg-arc-orange-50 text-arc-orange-600";
+                dot = "bg-arc-orange-500";
+              }
+              if (active) {
+                bg = "border-arc-orange-400 bg-arc-orange-50 text-arc-orange-600";
+                dot = done ? "bg-arc-navy-900" : "bg-arc-orange-500";
+              }
+
               return (
-                <button
-                  key={qq.id}
-                  onClick={() => setCurrent(i)}
-                  className={`relative h-9 rounded-lg text-sm font-medium border transition-colors ${
-                    active
-                      ? "border-arc-orange-400 bg-arc-orange-50 text-arc-orange-600"
+                <div key={qq.id} className="flex items-center gap-2">
+                  <button
+                    onClick={() => goToAction(i)}
+                    className={`relative w-9 h-9 rounded-lg text-sm font-medium border transition-all flex items-center justify-center ${bg} ${
+                      active ? "ring-2 ring-arc-orange-400" : ""
+                    }`}
+                  >
+                    {flag && <Flag className="h-2.5 w-2.5 absolute top-0.5 right-0.5 fill-arc-orange-500 text-arc-orange-500" />}
+                    {rev && <span className="h-1.5 w-1.5 absolute bottom-0.5 right-0.5 rounded-full bg-green-500" />}
+                    {i + 1}
+                  </button>
+                  <span className="text-xs text-arc-slate-500 truncate max-w-[120px]">
+                    {qq.type === "ESSAY" || qq.type === "FILL_IN_THE_BLANK" || qq.type === "NUMERIC"
+                      ? `${qq.id.slice(0, 4)}`
                       : done
-                        ? "border-arc-slate-200 bg-arc-navy-900 text-white"
-                        : "border-arc-slate-200 bg-white text-arc-slate-500 hover:border-arc-slate-300"
-                  }`}
-                >
-                  {i + 1}
-                  {flag && <Flag className="h-2.5 w-2.5 text-arc-orange-500 absolute top-0.5 right-0.5 fill-arc-orange-500" />}
-                </button>
+                        ? "Answered"
+                        : flag
+                          ? "Flagged"
+                          : rev
+                            ? "Reviewed"
+                            : "unanswered"}
+                  </span>
+                </div>
               );
             })}
           </div>
+
+          <div className="mt-6 space-y-1 text-xs text-arc-slate-500">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-arc-slate-300" />
+              <span>Unanswered</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-arc-navy-900" />
+              <span>Answered</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-arc-orange-500" />
+              <span>Flagged</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
+              <span>Reviewed</span>
+            </div>
+          </div>
         </aside>
 
-        {/* Question */}
+        {/* Question panel */}
         <main className="flex-1 min-w-0 overflow-y-auto p-6 bg-arc-slate-50">
           <div className="max-w-2xl mx-auto">
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm text-arc-slate-500">
                 Question {current + 1} of {total}
               </span>
-              <button
-                onClick={toggleFlag}
-                className={`flex items-center gap-1.5 text-sm px-2.5 py-1 rounded-lg border ${
-                  flagged.has(q.id)
-                    ? "border-arc-orange-300 bg-arc-orange-50 text-arc-orange-600"
-                    : "border-arc-slate-200 text-arc-slate-500 hover:text-arc-navy-900"
-                }`}
-              >
-                <Flag className="h-4 w-4" />
-                {flagged.has(q.id) ? "Flagged" : "Flag"}
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={toggleFlag}
+                  className={`flex items-center gap-1.5 text-sm px-2.5 py-1 rounded-lg border ${
+                    flagged.has(q.id)
+                      ? "border-arc-orange-300 bg-arc-orange-50 text-arc-orange-600"
+                      : "border-arc-slate-200 text-arc-slate-500 hover:text-arc-navy-900"
+                  }`}
+                >
+                  <Flag className="h-4 w-4" />
+                  {flagged.has(q.id) ? "Flagged" : "Flag"}
+                </button>
+                <button
+                  onClick={() => {
+                    const next = new Set(reviewed);
+                    if (next.has(q.id)) next.delete(q.id);
+                    else next.add(q.id);
+                    setReviewed(next);
+                  }}
+                  className={`flex items-center gap-1.5 text-sm px-2.5 py-1 rounded-lg border ${
+                    reviewed.has(q.id)
+                      ? "border-green-300 bg-green-50 text-green-600"
+                      : "border-arc-slate-200 text-arc-slate-500 hover:text-arc-navy-900"
+                  }`}
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  {reviewed.has(q.id) ? "Reviewed" : "Mark reviewed"}
+                </button>
+              </div>
             </div>
 
             <div className="bg-white rounded-2xl border border-arc-slate-200 p-6">
@@ -368,31 +563,61 @@ export default function AssessmentPlayerPage() {
               </div>
             </div>
 
-            {/* Prev / Next */}
+            {/* Navigation controls */}
             <div className="mt-6 flex items-center justify-between">
               <Button
                 variant="outline"
-                onClick={() => setCurrent((c) => Math.max(0, c - 1))}
+                size="sm"
+                onClick={handleNavPrev}
                 disabled={current === 0}
               >
                 <ChevronLeft className="h-4 w-4 mr-1" />
                 Previous
               </Button>
-              {current < total - 1 ? (
-                <Button variant="outline" onClick={() => setCurrent((c) => Math.min(total - 1, c + 1))}>
-                  Next
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              ) : (
-                <Button variant="accent" onClick={doSubmit} disabled={submitting}>
-                  <Send className="h-4 w-4 mr-2" />
-                  {submitting ? "Submitting…" : "Submit"}
-                </Button>
-              )}
+              <div className="flex gap-2">
+                {unansweredCount > 0 && (
+                  <Button variant="outline" size="sm" onClick={handleSaveAndNext}>
+                    <SkipForward className="h-4 w-4 mr-1" />
+                    Save & Next Unanswered
+                  </Button>
+                )}
+                {current < total - 1 ? (
+                  <Button variant="outline" size="sm" onClick={handleNavNext}>
+                    Next
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                ) : (
+                  <Button variant="accent" size="sm" onClick={handleSubmit} disabled={submitting}>
+                    <Send className="h-4 w-4 mr-2" />
+                    {submitting ? "Submitting…" : "Submit All"}
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         </main>
       </div>
+
+      {/* Confirm submit with unanswered questions */}
+      {showConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <h3 className="font-semibold text-arc-navy-900 mb-2">Unanswered Questions</h3>
+            <p className="text-sm text-arc-slate-600 mb-4">
+              You have {unansweredCount} unanswered {unansweredCount === 1 ? "question" : "questions"}.
+              They will be marked as incorrect. Are you sure you want to submit?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setShowConfirm(false)}>
+                Go Back
+              </Button>
+              <Button variant="accent" size="sm" onClick={() => { setShowConfirm(false); void doSubmit(); }}>
+                Submit Anyway
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -28,7 +28,6 @@ import {
   Eye,
   Send,
   Check,
-  ArrowLeft,
   Clock,
   RefreshCw,
   Archive,
@@ -383,13 +382,12 @@ export default function LessonEditorPage() {
   };
 
   // Handle question selection from picker
-  const handleQuestionSelect = (questionId: string, questionText: string) => {
+  const handleQuestionSelect = (questionId: string, _questionText: string) => {
     const nb = createBlock("question") as any;
     nb.questionId = questionId;
     nb.points = 1;
     nb.required = false;
     nb.showFeedback = true;
-    console.log("Creating question block with ID:", questionId);
 
     const afterId = questionPicker.afterId;
     const idx = afterId ? blocks.findIndex((b) => b.id === afterId) : -1;
@@ -992,7 +990,9 @@ export default function LessonEditorPage() {
         isOpen={questionPicker.open}
         onClose={() => setQuestionPicker({ open: false, afterId: null })}
         onSelect={handleQuestionSelect}
-        excludeQuestionIds={blocks.filter((b) => b.type === "question" && b.questionId).map((b) => b.questionId)}
+        excludeQuestionIds={blocks
+          .filter((b): b is Extract<LessonBlock, { type: "question" }> => b.type === "question" && Boolean(b.questionId))
+          .map((b) => b.questionId)}
       />
     </>
   );

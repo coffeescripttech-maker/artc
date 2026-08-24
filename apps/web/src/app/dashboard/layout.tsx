@@ -1,6 +1,6 @@
 "use client";
 
-import { Sidebar } from "@/components/dashboard";
+import { Sidebar, TopNav } from "@/components/dashboard";
 import { ProtectedRoute } from "@/components/auth/protected-route";
 import { useAuth } from "@/contexts/auth-context";
 
@@ -25,6 +25,7 @@ export default function DashboardLayout({
   return (
     <ProtectedRoute>
       <Sidebar role={getUserRole()}>
+        <TopNav />
         {children}
       </Sidebar>
     </ProtectedRoute>

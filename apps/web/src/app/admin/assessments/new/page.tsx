@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { WorkspaceHeader } from "@/components/admin";
+import { WorkspaceHeader, TopicPickerCompact } from "@/components/admin";
 import { assessmentsApi, programsApi, curriculumApi, subjectsApi } from "@/lib/api/client";
 import { Button, Input, Card, CardContent } from "@/components/ui";
 import {
@@ -88,6 +88,7 @@ export default function NewAssessmentPage() {
     randomizeQuestions: false,
     showExplanations: true,
     allowRetake: false,
+    topicIds: [] as string[],
   });
 
   useEffect(() => {
@@ -179,6 +180,9 @@ export default function NewAssessmentPage() {
       payload.randomizeQuestions = formData.randomizeQuestions;
       payload.showExplanations = formData.showExplanations;
       payload.allowRetake = formData.allowRetake;
+      if (formData.topicIds.length > 0) {
+        payload.topicIds = formData.topicIds;
+      }
 
       await assessmentsApi.create(payload);
       router.push("/admin/assessments");
@@ -411,6 +415,19 @@ export default function NewAssessmentPage() {
                       min="1"
                       required
                       className="w-full"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-arc-navy-900 mb-2">
+                      Question Source
+                    </label>
+                    <p className="text-xs text-arc-slate-500 mb-2">
+                      Select topics to pull questions from the question bank, or skip to add questions manually in the builder.
+                    </p>
+                    <TopicPickerCompact
+                      selectedTopicIds={formData.topicIds}
+                      onChange={(ids) => setFormData((prev) => ({ ...prev, topicIds: ids }))}
                     />
                   </div>
 

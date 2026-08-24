@@ -155,6 +155,110 @@ export async function getCurriculumUnlockMap(
 }
 
 /**
+ * Get a chronological activity feed for a learner.
+ * Combines assessment attempts and topic progress updates.
+ */
+export async function getLearnerActivity(userId: string, limit = 20) {
+  const learner = await prisma.learnerProfile.findUnique({ where: { userId } });
+  if (!learner) return { activities: [] };
+
+  const activities: {
+    id: string;
+    type: string;
+    title: string;
+    description: string;
+    timestamp: Date;
+    percent?: number;
+    link?: string;
+  }[] = [];
+
+  // Assessment attempts (completed)
+  const attempts = await prisma.assessmentAttempt.findMany({
+    where: { learnerId: learner.id, status: "COMPLETED" },
+    orderBy: { completedAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      completedAt: true,
+      createdAt: true,
+      score: true,
+      maxScore: true,
+      percentage: true,
+      assessment: { select: { name: true, id: true } },
+    },
+  });
+
+  for (const a of attempts) {
+    activities.push({
+      id: `attempt-${a.id}`,
+      type: "ASSESSMENT",
+      title: `Completed ${a.assessment.name}`,
+      description: `${a.score ?? 0} of ${a.maxScore} correct`,
+      timestamp: a.completedAt ?? a.createdAt,
+      percent: a.percentage ?? undefined,
+      link: `/dashboard/assessments/${a.assessment.id}/review?attemptId=${a.id}`,
+    });
+  }
+
+  // Topic progress updates (only ones with activity) — query separately
+  // because Progress is sharded across topic/lesson/subject rows without a single relation.
+  const topicProgress = await prisma.progress.findMany({
+    where: {
+      learnerId: learner.id,
+      completionPercentage: { gt: 0 },
+      topicId: { not: null },
+    },
+    orderBy: { lastActivityAt: "desc" },
+    take: limit,
+    include: { topic: true },
+  });
+
+  const lessonProgress = await prisma.progress.findMany({
+    where: {
+      learnerId: learner.id,
+      completionPercentage: { gt: 0 },
+      lessonId: { not: null },
+    },
+    orderBy: { lastActivityAt: "desc" },
+    take: limit,
+    include: { lesson: true },
+  });
+
+  for (const p of lessonProgress) {
+    const pp = p as any;
+    const pct = pp.completionPercentage ?? 0;
+    activities.push({
+      id: `progress-${pp.id}`,
+      type: "PROGRESS",
+      title: `Studied ${pp.lesson?.title || "Lesson"}`,
+      description: `${Math.round(pct)}% complete`,
+      timestamp: pp.lastActivityAt,
+      percent: pct,
+      link: pp.lesson?.id ? `/dashboard/lessons/${pp.lesson.id}` : undefined,
+    });
+  }
+
+  for (const p of topicProgress) {
+    const pt = p as any;
+    const pct = pt.completionPercentage ?? 0;
+    activities.push({
+      id: `progress-${pt.id}`,
+      type: "PROGRESS",
+      title: `Progressed in ${pt.topic?.name || "Topic"}`,
+      description: `${Math.round(pct)}% complete`,
+      timestamp: pt.lastActivityAt,
+      percent: pct,
+      link: undefined,
+    });
+  }
+
+  // Merge, sort by timestamp descending, and slice
+  activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+  return { activities: activities.slice(0, limit) };
+}
+
+/**
  * Enforces the progression gate: if an assessment's topics belong to a level
  * (curriculum) in the learner's ladder and none of those levels are unlocked,
  * block it. Ungated assessments (no topic→curriculum mapping) are always allowed.

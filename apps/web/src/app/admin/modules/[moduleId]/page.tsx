@@ -220,7 +220,7 @@ export default function ModuleDetailPage() {
         await topicsApi.archive(topicId);
       }
       setTopics(topics.map((t) =>
-        t.id === topicId ? { ...t, status: newStatus as const } : t
+        t.id === topicId ? { ...t, status: newStatus as Topic["status"] } : t
       ));
       toast.success(`Topic ${newStatus === "PUBLISHED" ? "published" : "unpublished"}`);
     } catch (err) {

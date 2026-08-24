@@ -1,89 +1,66 @@
 ---
 name: project-status
-description: ARATC LMS development progress and design system
-metadata: 
-  node_type: memory
+description: ARATC LMS current development status
+metadata:
   type: project
-  originSessionId: 0c98ce03-c50f-4f9b-9ff8-c810914293e2
-  modified: 2026-08-17T03:00:00.000Z
 ---
 
-# ARATC LMS - Project Status
+# ARATC LMS Development Status
 
-## Current Focus
-**Hallmark UI Redesign** - Homepage redesigned following Hallmark design principles
+**Current date:** 2026-08-22
 
-## ✅ Hallmark Redesign Completed (2026-08-17)
+## 🚀 Phases Complete (14 of N)
+1. ✅ Phase 1: Question Engine Foundation
+2. ✅ Phase 2: Assessment Engine
+3. ✅ Phase 3: Attempt Engine
+4. ✅ Phase 4: Lesson Question Responses
+5. ✅ Phase 5: Lesson Question Stats API
+6. ✅ Phase 6: Question Stats Endpoint
+7. ✅ Phase 7: Student Dashboard — Live Mastery Overview
+8. ✅ Phase 8: Assessment Review Mode
+9. ✅ Phase 9: My Programs Page Connection
+10. ✅ Phase 10: Real-time Activity Feed
+11. ✅ Phase 11: Targeted Weak-Topic Practice
+12. ✅ Phase 12: Assessment Results Export (PDF)
+13. ✅ Phase 13: Personalized Retry Recommendations
+14. ✅ Phase 14: Admin Analytics Dashboard
 
-### Design Approach
-- **Genre**: modern-minimal (SaaS education platform)
-- **Macrostructure**: Bento Grid - asymmetric modular blocks
-- **Nav**: N1b SaaS three-section (existing navbar)
-- **Footer**: Ft2 Inline single line
-- **Theme**: Custom ARC palette (modern-minimal adaptation)
+## Key Systems Built
 
-### Components Redesigned
-- **HeroSection** - 7/5 asymmetric bento layout, left-aligned headline, card-based stats
-- **StatsSection** - Clean 4-column grid, counter animations, accreditation strip
-- **FeaturesSection** - Bento-style asymmetric grid with varying card sizes
-- **ProgramsSection** - Horizontal card layout with icon blocks
-- **TestimonialsSection** - Clean 2-column grid with star ratings
-- **CTASection** - Centered statement CTA with dual buttons
+### Backend
+- **`GET /progression`** — mastery ladder: program → grades → subjects → topics
+- **`GET /progression/weak-topics`** — prioritized weak topics for focused study
+- **`GET /progression/activity`** — chronological activity feed
+- **`GET /assessments/attempts/:id`** — detailed attempt with answers (review + PDF export)
+- **`GET /assessments/:id/recommendations`** — retry recommendations with weak topics, suggestions, gate threshold
+- **`GET /questions/topic/:topicId`** — questions tagged to a topic
+- **`GET /topics/:id`** — topic with module.subject info
+- **`POST /assessments/:id/start`** → **`POST /assessments/attempts/:id/submit`** — full assessment lifecycle with auto-scoring and mastery rollup
+- **`GET /questions/stats`** — aggregate question statistics (total, byStatus, byDifficulty, byType)
+- **`GET /subjects`** — subjects list with `_count` (modules, curriculumItems, examCoverages)
 
-### Design Improvements
-- Removed purple-gradient hero (Hallmark anti-pattern)
-- Removed aurora-blob background decorations
-- Removed floating-orb animations
-- Removed glassmorphism effects
-- Left-aligned headlines for visual hierarchy
-- Clean spacing scale with consistent rhythm
-- Tabular numerics for stats
-- Single accent color (orange) for CTAs
+### Frontend (Next.js App Router)
+- **`MasteryLadder`** — vertical grade-level stepper with lock/unlock state
+- **`QuestionRenderer`** — editable question widget for all 10 question types
+- **`AssessmentReviewPage`** — read-only review with color-coded answers, navigator, explanations, "Download PDF" + "Get Study Plan" buttons
+- **`AssessmentReportPage`** — print-optimized PDF report with per-question breakdown
+- **`AssessmentRecommendationsPage`** — personalized study plan with weak topics, tips, retry button
+- **`ActivityPage`** — grouped timeline (Today, Yesterday, This Week, This Month) with filters
+- **`WeakTopicsPage`** — API-driven weak topics list with mastery %, progress bars
+- **`TopicPracticePage`** — renders `QuestionRenderer` for topic-specific questions, tracks accuracy, shows summary
+- **`AdminAnalyticsPage`** — platform-wide stats dashboard with question bank overview, subjects table, mastery overview, assessment stats
+- **API client** — typed client for all endpoints at `lib/api/client.ts`
 
-### Hallmark Files Created
-- `.hallmark/log.json` - Design system log
+## Type Check Status
+- **Web:** 35 pre-existing errors, 0 new per phase
+- **API:** 86 pre-existing errors, 0 new per phase
+- Errors are all in pre-existing code
 
-## ARC Design System (Previous Implementation)
+## Next Steps
+- Phase 15: TBD
 
-### Color Palette
-| Purpose | Color | Hex |
-|---------|-------|-----|
-| Primary Navy | Deep Academic Blue | #0B2553, #164C91, #216FD1 |
-| Accent Orange | Energy/CTA | #F26522, #E45100 |
-| Success Green | Mastery/Progress | #16B364, #0A9A4A |
-| Practice Purple | Assessment | #7B3FD0, #6B2FC1 |
-| Alert Red | Critical | #D92D20, #F04438 |
-| Background | Clean Gray-Blue | #F6F9FC |
-| Surface | White | #FFFFFF |
-
-### Components Updated
-- **Button** - ARC variants (primary, accent, success, practice, outline variants)
-- **Card** - ARC styling with navy headings
-- **Badge** - ARC variants (mastery, learning, practice, warning, alert, premium)
-- **Progress** - Color-coded progress bars
-- **Input** - ARC focus states
-- **Avatar** - ARC gradient fallback
-- **Sidebar** - Full ARC navy theme
-- **Navbar** - Full ARC styling
-
-### Pages with ARC Design
-- Landing page (all sections - Hallmark redesigned)
-- Login/Register
-- Dashboard (home, programs, practice, exams, analytics, achievements, settings, help)
-- Admin (dashboard, users, programs, questions, reports)
-- Programs listing
-- Pricing
-- About
-
-## Design Philosophy
-**NAVY → BLUE → ORANGE** as primary hierarchy
-**GREEN → PURPLE → RED** as functional colors
-
-Not colorful everywhere - controlled, purposeful use of colors
-
-## Tech Stack
-- Next.js 14 (App Router)
-- TypeScript
-- Tailwind CSS with custom ARC theme
-- ARC Design System colors
-- Hallmark design methodology
+## Recent Changes (Phase 14 + ProgramCard improvements)
+- Created `/admin/analytics` page with platform-wide stats dashboard
+- Updated admin sidebar "Analytics" link to point to `/admin/analytics`
+- Fixed program delete permissions: `content_admin` role now allowed for DELETE `/programs/:id` (was `super_admin` only)
+- Improved `ProgramCard` dropdown: fixed "View Detailsss" typo, enhanced trigger button styling, added border/shadow styling to dropdown content

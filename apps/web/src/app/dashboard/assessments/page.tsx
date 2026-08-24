@@ -123,6 +123,13 @@ export default function StudentAssessmentsPage() {
         title="Assessments"
         subtitle="Take assessments and track your mastery"
         breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Assessments" }]}
+        actions={
+          <Link href="/dashboard/assessments/history">
+            <Button variant="outline" size="sm">
+              View History
+            </Button>
+          </Link>
+        }
       />
 
       <div className="p-6">

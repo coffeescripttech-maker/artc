@@ -12,6 +12,9 @@ import {
   stats,
   getProgress,
   setProgress,
+  getProgressWithQuestions,
+  saveQuestionResponse,
+  getQuestionResponse,
 } from "./controller";
 import { authenticate, requireRole } from "../../middleware/auth";
 
@@ -27,7 +30,13 @@ router.get("/subject/:subjectId", bySubject);
 
 // Learner progress (authenticated)
 router.get("/:id/progress", authenticate, getProgress);
+router.get("/:id/progress/questions", authenticate, getProgressWithQuestions);
 router.put("/:id/progress", authenticate, setProgress);
+
+// Lesson question responses (authenticated learners) — must be registered
+// before any "/:id"-level catch-all that could swallow ":id" = "questions".
+router.post("/:id/questions/:questionId/respond", authenticate, requireRole("student", "content_admin", "super_admin"), saveQuestionResponse);
+router.get("/:id/questions/:questionId/response", authenticate, getQuestionResponse);
 
 // Protected admin routes
 router.post("/", authenticate, requireRole("content_admin", "super_admin"), create);

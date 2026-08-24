@@ -2,7 +2,7 @@
 export { Breadcrumbs } from "./breadcrumbs";
 export { WorkspaceHeader } from "./workspace-header";
 export { WorkspaceTabs } from "./workspace-tabs";
-export { ProgramCard } from "./program-card";
+export { ProgramCard, programTypeColors } from "./program-card";
 export { CurriculumJourney } from "./curriculum-journey";
 export { DraggableList, type DraggableItem } from "./draggable-list";
 export { CreateEntityModal } from "./create-entity-modal";

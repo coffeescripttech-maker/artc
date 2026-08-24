@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Button, Badge } from "@/components/ui";
-import { questionsApi } from "@/lib/api/client";
+import { questionsApi, lessonsApi } from "@/lib/api/client";
 import { toast } from "@/lib/toast";
 import {
   CheckCircle,
@@ -14,6 +14,7 @@ import {
   GripVertical,
   CheckSquare,
   Square,
+  Info,
 } from "lucide-react";
 
 interface QuestionOption {
@@ -31,6 +32,8 @@ interface QuestionData {
   correctAnswer?: any;
   tolerance?: number; // For NUMERIC type
   points?: number;
+  /** Optional instructor-provided explanation shown after answering. */
+  explanation?: string | null;
 }
 
 function parseOptions(options: QuestionData["options"]): QuestionOption[] {
@@ -74,12 +77,16 @@ function isOptionCorrect(question: QuestionData | null, option: QuestionOption):
 
 interface QuestionRendererProps {
   questionId: string;
+  lessonId?: string; // When set, responses are persisted to the lesson
+  blockId?: string;
   points?: number;
   onComplete?: (correct: boolean, earnedPoints: number) => void;
 }
 
 export function QuestionRenderer({
   questionId,
+  lessonId,
+  blockId,
   points = 1,
   onComplete,
 }: QuestionRendererProps) {
@@ -105,7 +112,7 @@ export function QuestionRenderer({
   const fetchQuestion = async () => {
     setIsLoading(true);
     setError(null);
-   try {
+    try {
       const data = await questionsApi.getById(questionId) as QuestionData;
       const normalized: QuestionData = {
         ...data,
@@ -116,11 +123,41 @@ export function QuestionRenderer({
         const shuffled = [...normalized.options].sort(() => Math.random() - 0.5);
         setOrderingAnswer(shuffled.map((o) => o.id));
       }
+
+      // Restore the learner's previous answer for this lesson question (if any)
+      // so a retry doesn't lose context — note: they can still retry via the
+      // Try Again button, which resets these state values locally.
+      if (lessonId) {
+        const prev = await lessonsApi.getQuestionResponse(lessonId, questionId);
+        if (prev) {
+          restoreAnswer(prev.answer);
+          setIsCorrect(prev.isCorrect);
+          setIsSubmitted(true);
+        }
+      }
     } catch (err) {
       console.error("Failed to fetch question:", err);
       setError("Failed to load question");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const restoreAnswer = (answer: unknown) => {
+    if (typeof answer === "string") {
+      // MULTIPLE_CHOICE / TRUE_FALSE
+      setSelectedOption(answer);
+    } else if (Array.isArray(answer)) {
+      // MULTIPLE_SELECT or ORDERING/MATCHING (array of option ids)
+      if (answer.every((a) => typeof a === "string")) {
+        if (answer.length === 1) {
+          setSelectedOption(answer[0]);
+        } else {
+          const strArr: string[] = answer as string[];
+          setSelectedOptions(new Set<string>(strArr));
+          setOrderingAnswer(strArr);
+        }
+      }
     }
   };
 
@@ -181,8 +218,14 @@ export function QuestionRenderer({
     setIsSubmitting(true);
 
     try {
-      // TODO: Call API to save response
-      // await lessonsApi.respondToQuestion(questionId, { answer: getAnswer() });
+      if (lessonId) {
+        await lessonsApi.respondToQuestion(lessonId, questionId, {
+          answer: getAnswer(),
+          isCorrect: correct,
+          pointsEarned: correct ? points : 0,
+          blockId,
+        });
+      }
 
       if (onComplete) {
         onComplete(correct, correct ? points : 0);
@@ -547,6 +590,16 @@ export function QuestionRenderer({
               <span className="text-sm font-medium text-red-700">Incorrect</span>
             </>
           )}
+        </div>
+      )}
+
+      {/* Explanation (shown after submission if available) */}
+      {isSubmitted && question.explanation && (
+        <div className="px-4 py-3 border-t border-arc-slate-200">
+          <div className="flex items-start gap-2.5 rounded-lg bg-arc-navy-50 px-3 py-2.5">
+            <Info className="h-4 w-4 text-arc-navy-600 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-arc-navy-800">{question.explanation}</p>
+          </div>
         </div>
       )}
 

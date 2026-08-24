@@ -17,7 +17,10 @@ import {
   submitAttempt,
   getAssessmentStats,
   getMyAttempts,
+  getRetryRecommendations,
+  getAttemptWithAnswers,
 } from "./service";
+import { prisma } from "@aratc/database";
 
 export async function list(
   req: Request,
@@ -249,6 +252,43 @@ export async function stats(
   try {
     const stats = await getAssessmentStats(req.params.id);
     res.json(stats);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function recommendations(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = getAuthUserId(req);
+    const learner = await prisma.learnerProfile.findUnique({ where: { userId } });
+    if (!learner) {
+      res.status(401).json({ error: "No learner profile found" });
+      return;
+    }
+    const result = await getRetryRecommendations(learner.id, req.params.id);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getAttempt(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = getAuthUserId(req);
+    const attempt = await getAttemptWithAnswers(req.params.id, userId);
+    if (!attempt) {
+      res.status(404).json({ error: "Attempt not found" });
+      return;
+    }
+    res.json(attempt);
   } catch (error) {
     next(error);
   }

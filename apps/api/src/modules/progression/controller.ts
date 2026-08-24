@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { getAuthUserId } from "../../lib/validate";
-import { getProgression } from "./service";
+import { getProgression, getLearnerActivity } from "./service";
 import { getWeakTopics } from "../assessments/service";
 import { getRetryRecommendations } from "../assessments/service";
 import { prisma } from "@aratc/database";
@@ -67,6 +67,25 @@ export async function assessmentRecommendations(
 
     const recommendations = await getRetryRecommendations(learner.id, assessmentId);
     res.json(recommendations);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * GET /progression/activity
+ * Get a chronological activity feed for the authenticated learner.
+ */
+export async function activity(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = getAuthUserId(req);
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 20;
+    const result = await getLearnerActivity(userId, limit);
+    res.json(result);
   } catch (error) {
     next(error);
   }

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DashboardHeader } from "@/components/dashboard";
 import { Card, CardHeader, CardTitle, CardContent, Badge, Progress, Button } from "@/components/ui";
-import { Progress as ProgressIcon, Lock, Unlock, Trophy, TrendingUp, Minus, AlertCircle, RefreshCw, ChevronRight, BookOpen } from "lucide-react";
+import { Gauge as ProgressIcon, Lock, Unlock, Trophy, TrendingUp, Minus, AlertCircle, RefreshCw, ChevronRight, BookOpen } from "lucide-react";
 import { progressApi } from "@/lib/api/client";
 import { DEFAULT_MASTERY_GATE, MASTERY_BANDS, MASTERY_BAND_CLASSES } from "@/lib/mastery-constants";
 import { cn } from "@aratc/ui";
