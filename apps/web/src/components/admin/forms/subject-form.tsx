@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Input, Button, Card, CardContent } from "@/components/ui";
 import { Sparkles, X, Loader2 } from "lucide-react";
+import { generateSlug } from "@/lib/utils/slug";
 
 // Subject colors
 const subjectColors = [
@@ -26,16 +27,6 @@ interface SubjectFormProps {
   onCancel: () => void;
   submitLabel?: string;
   isLoading?: boolean;
-}
-
-// Helper to generate slug from name
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .trim();
 }
 
 /**

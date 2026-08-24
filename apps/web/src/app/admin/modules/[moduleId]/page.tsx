@@ -1,22 +1,22 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { WorkspaceHeader, DraggableList, type DraggableItem, TopicForm } from "@/components/admin";
+import { WorkspaceHeader, DraggableList, type DraggableItem, TopicForm, ConfirmModal } from "@/components/admin";
 import { modulesApi, topicsApi } from "@/lib/api/client";
+import { PageLoader, NoDataEmpty, ErrorEmpty } from "@/components/branding";
 import { Card, CardContent, Button, Badge } from "@/components/ui";
 import { toast } from "@/lib/toast";
 import {
   Plus,
   GripVertical,
   FileText,
-  Edit,
   Trash2,
   ArrowRight,
   Video,
   FileCheck,
-  RefreshCw,
+  Edit,
   Send,
 } from "lucide-react";
 
@@ -43,23 +43,6 @@ interface Topic {
   _count?: { lessons: number };
 }
 
-const mockModule: Module = {
-  id: "2",
-  name: "Algebra",
-  slug: "algebra",
-  status: "PUBLISHED",
-  subject: { id: "1", name: "Mathematics", slug: "mathematics" },
-  _count: { topics: 5, lessons: 12 },
-};
-
-const mockTopics: Topic[] = [
-  { id: "1", name: "Algebraic Expressions", slug: "algebraic-expressions", orderIndex: 0, status: "PUBLISHED", _count: { lessons: 3 } },
-  { id: "2", name: "Linear Equations", slug: "linear-equations", orderIndex: 1, status: "PUBLISHED", _count: { lessons: 4 } },
-  { id: "3", name: "Inequalities", slug: "inequalities", orderIndex: 2, status: "PUBLISHED", _count: { lessons: 3 } },
-  { id: "4", name: "Word Problems", slug: "word-problems", orderIndex: 3, status: "DRAFT", _count: { lessons: 2 } },
-  { id: "5", name: "Systems of Equations", slug: "systems-of-equations", orderIndex: 4, status: "DRAFT", _count: { lessons: 2 } },
-];
-
 const statusColors: Record<string, string> = {
   PUBLISHED: "bg-green-100 text-green-700",
   DRAFT: "bg-yellow-100 text-yellow-700",
@@ -68,6 +51,7 @@ const statusColors: Record<string, string> = {
 
 export default function ModuleDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const moduleId = params.moduleId as string;
   const [module, setModule] = useState<Module | null>(null);
   const [topics, setTopics] = useState<Topic[]>([]);
@@ -76,6 +60,7 @@ export default function ModuleDetailPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [showTopicForm, setShowTopicForm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Topic | null>(null);
 
   // Fetch module and topics
   useEffect(() => {
@@ -87,26 +72,14 @@ export default function ModuleDetailPage() {
     setError(null);
     try {
       const [moduleData, topicsData] = await Promise.all([
-        modulesApi.getById(moduleId).catch(() => null),
-        topicsApi.list(moduleId).catch(() => null),
+        modulesApi.getById(moduleId),
+        topicsApi.list(moduleId),
       ]);
 
-      if (moduleData) {
-        setModule(moduleData as Module);
-      } else {
-        setModule(mockModule);
-      }
-
-      if (topicsData && Array.isArray(topicsData)) {
-        setTopics(topicsData as Topic[]);
-      } else {
-        setTopics(mockTopics);
-      }
+      setModule(moduleData as Module);
+      setTopics(Array.isArray(topicsData) ? (topicsData as Topic[]) : []);
     } catch (err) {
-      console.error("Failed to fetch module data:", err);
-      setError("Failed to load module data. Using demo data.");
-      setModule(mockModule);
-      setTopics(mockTopics);
+      setError("Failed to load module data.");
     } finally {
       setIsLoading(false);
     }
@@ -119,40 +92,33 @@ export default function ModuleDetailPage() {
     subjectId?: string;
   }) => {
     try {
-      const newTopic = await topicsApi.create(
-        {
-          name: data.name,
-          moduleId: data.moduleId || moduleId,
-          description: data.description
-        },
-        ""
-      );
+      const newTopic = await topicsApi.create({
+        name: data.name,
+        moduleId: data.moduleId || moduleId,
+        description: data.description,
+      });
       setTopics([...topics, newTopic as Topic]);
       setShowTopicForm(false);
-    } catch (err) {
-      // Fallback to local state for demo
-      const newTopic: Topic = {
-        id: Date.now().toString(),
-        name: data.name,
-        slug: data.name.toLowerCase().replace(/\s+/g, "-"),
-        orderIndex: topics.length,
-        status: "DRAFT",
-        _count: { lessons: 0 },
-      };
-      setTopics([...topics, newTopic]);
-      setShowTopicForm(false);
+      toast.success("Topic created successfully");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create topic. Please try again.");
     }
   };
 
-  const handleDeleteTopic = async (topicId: string) => {
-    if (!confirm("Are you sure you want to delete this topic?")) return;
+  const handleDeleteTopic = (topic: Topic) => {
+    setDeleteTarget(topic);
+  };
 
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await topicsApi.delete(topicId, "");
-      setTopics(topics.filter((t) => t.id !== topicId));
-    } catch (err) {
-      // Fallback to local state
-      setTopics(topics.filter((t) => t.id !== topicId));
+      await topicsApi.delete(deleteTarget.id);
+      setTopics(topics.filter((t) => t.id !== deleteTarget.id));
+      toast.success(`Deleted "${deleteTarget.name}" successfully`);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete topic. Please try again.");
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -163,9 +129,9 @@ export default function ModuleDetailPage() {
     subtitle: `${topic._count?.lessons || 0} Lessons`,
     badge: topic.status,
     badgeVariant: (topic.status === "PUBLISHED" ? "success" : topic.status === "DRAFT" ? "warning" : "default") as "success" | "warning" | "default",
-    onClick: () => {},
-    onEdit: () => console.log("Edit topic:", topic.id),
-    onDelete: () => handleDeleteTopic(topic.id),
+    onClick: () => router.push(`/admin/topics/${topic.id}`),
+    onEdit: () => router.push(`/admin/topics/${topic.id}`),
+    onDelete: () => handleDeleteTopic(topic),
   }));
 
   const handleReorderTopics = async (reorderedItems: DraggableItem[]) => {
@@ -180,10 +146,11 @@ export default function ModuleDetailPage() {
       await topicsApi.reorder(
         moduleId,
         reorderedItems.map((i) => i.id),
-        ""
       );
+      toast.success("Topic order saved");
     } catch (err) {
-      console.error("Failed to reorder topics:", err);
+      toast.error("Failed to save topic order. Please try again.");
+      fetchData();
     } finally {
       setIsSaving(false);
     }
@@ -196,14 +163,13 @@ export default function ModuleDetailPage() {
     setIsPublishing(true);
     try {
       await Promise.all(
-        draftTopics.map((t) => topicsApi.publish(t.id))
+        draftTopics.map((t) => topicsApi.publish(t.id)),
       );
       setTopics(topics.map((t) =>
         t.status !== "PUBLISHED" ? { ...t, status: "PUBLISHED" as const } : t
       ));
       toast.success(`Published ${draftTopics.length} topics`);
     } catch (err) {
-      console.error("Failed to publish topics:", err);
       toast.error("Failed to publish topics");
     } finally {
       setIsPublishing(false);
@@ -224,7 +190,6 @@ export default function ModuleDetailPage() {
       ));
       toast.success(`Topic ${newStatus === "PUBLISHED" ? "published" : "unpublished"}`);
     } catch (err) {
-      console.error("Failed to toggle topic status:", err);
       toast.error("Failed to update topic status");
     }
   };
@@ -232,24 +197,26 @@ export default function ModuleDetailPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="h-8 w-8 animate-spin text-arc-orange-500 mx-auto mb-4" />
-          <p className="text-arc-slate-500">Loading module...</p>
-        </div>
+        <PageLoader />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <ErrorEmpty onRetry={fetchData} />
       </div>
     );
   }
 
   if (!module) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-arc-navy-900 mb-2">Module not found</h2>
-          <p className="text-arc-slate-500 mb-4">The module you're looking for doesn't exist.</p>
-          <Link href="/admin/subjects">
-            <Button variant="accent">Back to Subjects</Button>
-          </Link>
-        </div>
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <NoDataEmpty
+          title="Module Not Found"
+          description="The module you're looking for doesn't exist or may have been deleted."
+        />
       </div>
     );
   }
@@ -280,12 +247,6 @@ export default function ModuleDetailPage() {
       />
 
       <div className="p-6 space-y-6">
-        {error && (
-          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-yellow-700 text-sm">{error}</p>
-          </div>
-        )}
-
         {/* Topic List Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -322,88 +283,95 @@ export default function ModuleDetailPage() {
         </div>
 
         {/* Topic List with Drag-and-Drop */}
-        <DraggableList
-          items={topicItems}
-          onReorder={handleReorderTopics}
-          renderItem={(item, dragHandleProps) => {
-            const topic = topics.find((t) => t.id === item.id);
-            if (!topic) return null;
+        {topics.length === 0 ? (
+          <NoDataEmpty
+            title="No Topics Yet"
+            description="Add your first topic to start building the module structure."
+          />
+        ) : (
+          <DraggableList
+            items={topicItems}
+            onReorder={handleReorderTopics}
+            renderItem={(item, dragHandleProps) => {
+              const topic = topics.find((t) => t.id === item.id);
+              if (!topic) return null;
 
-            return (
-              <Card className="hover:shadow-arc-md transition-shadow cursor-pointer">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <button
-                      {...dragHandleProps}
-                      className="cursor-grab active:cursor-grabbing p-1 text-arc-slate-400 hover:text-arc-slate-600"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <GripVertical className="h-5 w-5" />
-                    </button>
+              return (
+                <Card className="hover:shadow-arc-md transition-shadow cursor-pointer">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <button
+                        {...dragHandleProps}
+                        className="cursor-grab active:cursor-grabbing p-1 text-arc-slate-400 hover:text-arc-slate-600"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <GripVertical className="h-5 w-5" />
+                      </button>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium text-arc-slate-500 w-8">
-                          {String(topic.orderIndex + 1).padStart(2, "0")}
-                        </span>
-                        <h3 className="font-semibold text-arc-navy-900 truncate">{topic.name}</h3>
-                        <Badge className={statusColors[topic.status]}>
-                          {topic.status}
-                        </Badge>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-medium text-arc-slate-500 w-8">
+                            {String(topic.orderIndex + 1).padStart(2, "0")}
+                          </span>
+                          <h3 className="font-semibold text-arc-navy-900 truncate">{topic.name}</h3>
+                          <Badge className={statusColors[topic.status]}>
+                            {topic.status}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-4 mt-1 ml-11 text-sm text-arc-slate-500">
+                          <span className="flex items-center gap-1">
+                            <FileCheck className="h-3 w-3" />
+                            {topic._count?.lessons || 0} Lessons
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-4 mt-1 ml-11 text-sm text-arc-slate-500">
-                        <span className="flex items-center gap-1">
-                          <FileCheck className="h-3 w-3" />
-                          {topic._count?.lessons || 0} Lessons
-                        </span>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="px-2 py-1 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleTopicStatus(topic.id, topic.status);
+                          }}
+                        >
+                          {topic.status === "PUBLISHED" ? (
+                            <Badge variant="success" className="cursor-pointer">Published</Badge>
+                          ) : (
+                            <Badge className="bg-yellow-100 text-yellow-700 cursor-pointer">Draft</Badge>
+                          )}
+                        </button>
+                        <Link href={`/admin/topics/${topic.id}`}>
+                          <Button variant="ghost" size="sm">
+                            View Lessons
+                            <ArrowRight className="h-4 w-4 ml-1" />
+                          </Button>
+                        </Link>
+                        <button
+                          className="p-1.5 hover:bg-arc-slate-100 rounded"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/admin/topics/${topic.id}`);
+                          }}
+                        >
+                          <Edit className="h-4 w-4 text-arc-slate-500" />
+                        </button>
+                        <button
+                          className="p-1.5 hover:bg-red-50 rounded"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteTopic(topic);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-400" />
+                        </button>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="px-2 py-1 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleTopicStatus(topic.id, topic.status);
-                        }}
-                      >
-                        {topic.status === "PUBLISHED" ? (
-                          <Badge variant="success" className="cursor-pointer">Published</Badge>
-                        ) : (
-                          <Badge className="bg-yellow-100 text-yellow-700 cursor-pointer">Draft</Badge>
-                        )}
-                      </button>
-                      <Link href={`/admin/topics/${topic.id}`}>
-                        <Button variant="ghost" size="sm">
-                          View Lessons
-                          <ArrowRight className="h-4 w-4 ml-1" />
-                        </Button>
-                      </Link>
-                      <button
-                        className="p-1.5 hover:bg-arc-slate-100 rounded"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          console.log("Edit topic:", topic.id);
-                        }}
-                      >
-                        <Edit className="h-4 w-4 text-arc-slate-500" />
-                      </button>
-                      <button
-                        className="p-1.5 hover:bg-red-50 rounded"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteTopic(topic.id);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-400" />
-                      </button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          }}
-        />
+                  </CardContent>
+                </Card>
+              );
+            }}
+          />
+        )}
 
         {/* Quick Stats */}
         <div className="grid gap-4 md:grid-cols-2">
@@ -414,7 +382,7 @@ export default function ModuleDetailPage() {
               </div>
               <div>
                 <div className="text-2xl font-bold text-amber-900">
-                  {topics.filter((t) => t.status === "PUBLISHED").length}/{topics.length}
+                  {topics.filter((t) => t.status === "PUBLISHED").length}/{topics.length || 1}
                 </div>
                 <div className="text-sm text-amber-700">Topics Published</div>
               </div>
@@ -462,6 +430,17 @@ export default function ModuleDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Delete Topic"
+        description={`Are you sure you want to delete "${deleteTarget?.name}"? This will also remove all lessons within this topic.`}
+        confirmLabel="Delete Topic"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </>
   );
 }

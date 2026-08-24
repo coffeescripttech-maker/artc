@@ -3,8 +3,10 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { DashboardHeader } from "@/components/dashboard";
+import { WorkspaceHeader, ConfirmModal } from "@/components/admin";
 import { topicsApi } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
+import { CardSkeleton, NoResultsEmpty, NoDataEmpty } from "@/components/branding";
 import { Card, CardContent, Button, Badge, Input } from "@/components/ui";
 import {
   BookOpen,
@@ -15,8 +17,8 @@ import {
   Edit,
   Trash2,
   Eye,
-  RefreshCw,
   Filter,
+  AlertCircle,
 } from "lucide-react";
 
 interface Topic {
@@ -60,6 +62,7 @@ export default function TopicsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [moduleFilter, setModuleFilter] = useState("all");
+  const [deleteTarget, setDeleteTarget] = useState<Topic | null>(null);
 
   // Fetch topics on mount
   useEffect(() => {
@@ -73,7 +76,6 @@ export default function TopicsPage() {
       const data = await topicsApi.list() as Topic[];
       setTopics(data);
     } catch (err) {
-      console.error("Failed to fetch topics:", err);
       setError("Failed to load topics. Please try again.");
     } finally {
       setIsLoading(false);
@@ -112,34 +114,43 @@ export default function TopicsPage() {
     return acc;
   }, {} as Record<string, Topic[]>);
 
-  const handleDelete = async (topicId: string) => {
-    if (!confirm("Are you sure you want to delete this topic? This will also delete all associated lessons.")) {
-      return;
-    }
-
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await topicsApi.delete(topicId, "");
-      setTopics(topics.filter((t) => t.id !== topicId));
-    } catch (err) {
-      console.error("Failed to delete topic:", err);
-      alert("Failed to delete topic. Please try again.");
+      await topicsApi.delete(deleteTarget.id);
+      setTopics(topics.filter((t) => t.id !== deleteTarget.id));
+      toast.success("Topic deleted successfully");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete topic. Please try again.");
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
   return (
     <>
-      <DashboardHeader
+      <WorkspaceHeader
         title="Topics"
         subtitle="Manage topics within modules - leaf nodes of the curriculum"
+        actions={
+          <Button
+            variant="accent"
+            onClick={() => router.push("/admin/topics/new")}
+            disabled={isLoading}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create Topic
+          </Button>
+        }
       />
 
       <div className="p-6">
         {/* Error State */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
-            <p className="text-red-600 text-sm">{error}</p>
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+            <p className="text-red-700 text-sm flex-1">{error}</p>
             <Button variant="outline" size="sm" onClick={fetchTopics}>
-              <RefreshCw className="h-4 w-4 mr-2" />
               Retry
             </Button>
           </div>
@@ -257,11 +268,7 @@ export default function TopicsPage() {
         {isLoading && (
           <div className="space-y-4">
             {[1, 2, 3, 4, 5].map((i) => (
-              <Card key={i} className="animate-pulse">
-                <CardContent className="p-4">
-                  <div className="h-16 bg-arc-slate-200 rounded-lg" />
-                </CardContent>
-              </Card>
+              <CardSkeleton key={i} />
             ))}
           </div>
         )}
@@ -316,7 +323,7 @@ export default function TopicsPage() {
                                   <Eye className="h-4 w-4" />
                                 </Button>
                               </Link>
-                              <Link href={`/admin/topics/${topic.id}?edit=true`}>
+                              <Link href={`/admin/topics/${topic.id}`}>
                                 <Button variant="ghost" size="sm">
                                   <Edit className="h-4 w-4" />
                                 </Button>
@@ -324,7 +331,7 @@ export default function TopicsPage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleDelete(topic.id)}
+                                onClick={() => setDeleteTarget(topic)}
                                 className="hover:bg-red-50"
                               >
                                 <Trash2 className="h-4 w-4 text-red-400" />
@@ -343,27 +350,28 @@ export default function TopicsPage() {
 
         {/* Empty State */}
         {!isLoading && filteredTopics.length === 0 && (
-          <div className="text-center py-16">
-            <Layers className="h-16 w-16 text-arc-slate-300 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-arc-navy-900 mb-2">
-              {searchQuery || statusFilter !== "all" || moduleFilter !== "all"
-                ? "No topics found"
-                : "No topics yet"}
-            </h3>
-            <p className="text-arc-slate-500 mb-6 max-w-md mx-auto">
-              {searchQuery || statusFilter !== "all" || moduleFilter !== "all"
-                ? "Try adjusting your search or filters"
-                : "Topics organize lessons within modules. Create your first topic to get started."}
-            </p>
-            {!searchQuery && statusFilter === "all" && moduleFilter === "all" && (
-              <Button variant="accent" onClick={() => router.push("/admin/topics/new")}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Topic
-              </Button>
+          <div className="py-8">
+            {searchQuery || statusFilter !== "all" || moduleFilter !== "all" ? (
+              <NoResultsEmpty query={searchQuery || "your filter"} />
+            ) : (
+              <NoDataEmpty
+                title="No Topics Yet"
+                description="Topics organize lessons within modules. Create your first topic to get started."
+              />
             )}
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Delete Topic"
+        description={`Are you sure you want to delete "${deleteTarget?.name}"? This will also delete all associated lessons.`}
+        confirmLabel="Delete Topic"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </>
   );
 }

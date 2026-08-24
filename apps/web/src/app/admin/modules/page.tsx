@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { DashboardHeader } from "@/components/dashboard";
-import { modulesApi, subjectsApi } from "@/lib/api/client";
+import { WorkspaceHeader, ConfirmModal } from "@/components/admin";
+import { modulesApi } from "@/lib/api/client";
+import { TableSkeleton, NoResultsEmpty, NoDataEmpty } from "@/components/branding";
 import { Card, CardContent, Button, Badge, Input } from "@/components/ui";
 import { toast } from "@/lib/toast";
 import {
@@ -18,6 +19,7 @@ import {
   FileText,
   CheckCircle,
   RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 
 interface Module {
@@ -64,6 +66,7 @@ export default function ModulesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [isPublishing, setIsPublishing] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Module | null>(null);
 
   // Fetch modules on mount
   useEffect(() => {
@@ -77,7 +80,6 @@ export default function ModulesPage() {
       const data = await modulesApi.list() as Module[];
       setModules(data);
     } catch (err) {
-      console.error("Failed to fetch modules:", err);
       setError("Failed to load modules. Please try again.");
     } finally {
       setIsLoading(false);
@@ -109,17 +111,16 @@ export default function ModulesPage() {
   const publishedCount = modules.filter((m) => m.status === "PUBLISHED").length;
   const underReviewCount = modules.filter((m) => m.status === "UNDER_REVIEW").length;
 
-  const handleDelete = async (moduleId: string) => {
-    if (!confirm("Are you sure you want to delete this module? This will also delete all topics and lessons within it.")) {
-      return;
-    }
-
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await modulesApi.delete(moduleId, "");
-      setModules(modules.filter((m) => m.id !== moduleId));
-    } catch (err) {
-      console.error("Failed to delete module:", err);
-      toast.error("Failed to delete module. Please try again.");
+      await modulesApi.delete(deleteTarget.id);
+      setModules(modules.filter((m) => m.id !== deleteTarget.id));
+      toast.success("Module deleted successfully");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete module. Please try again.");
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -137,7 +138,6 @@ export default function ModulesPage() {
       ));
       toast.success(`Module ${newStatus === "PUBLISHED" ? "published" : "unpublished"}`);
     } catch (err) {
-      console.error("Failed to toggle module status:", err);
       toast.error("Failed to update module status");
     }
   };
@@ -156,7 +156,6 @@ export default function ModulesPage() {
       ));
       toast.success(`Published ${draftModules.length} modules`);
     } catch (err) {
-      console.error("Failed to publish modules:", err);
       toast.error("Failed to publish modules");
     } finally {
       setIsPublishing(false);
@@ -165,18 +164,28 @@ export default function ModulesPage() {
 
   return (
     <>
-      <DashboardHeader
+      <WorkspaceHeader
         title="Modules"
         subtitle="Manage content modules within subjects"
+        actions={
+          <Button
+            variant="accent"
+            onClick={() => router.push("/admin/modules/new")}
+            disabled={isLoading}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create Module
+          </Button>
+        }
       />
 
       <div className="p-6">
         {/* Error State */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
-            <p className="text-red-600 text-sm">{error}</p>
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+            <p className="text-red-700 text-sm flex-1">{error}</p>
             <Button variant="outline" size="sm" onClick={fetchModules}>
-              <RefreshCw className="h-4 w-4 mr-2" />
               Retry
             </Button>
           </div>
@@ -304,11 +313,7 @@ export default function ModulesPage() {
         {isLoading && (
           <Card>
             <CardContent className="p-0">
-              <div className="space-y-4 p-4">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="h-16 bg-arc-slate-200 rounded-lg animate-pulse" />
-                ))}
-              </div>
+              <TableSkeleton />
             </CardContent>
           </Card>
         )}
@@ -394,13 +399,15 @@ export default function ModulesPage() {
                                 <Eye className="h-4 w-4" />
                               </Button>
                             </Link>
-                            <Button variant="ghost" size="sm">
-                              <Edit className="h-4 w-4" />
-                            </Button>
+                            <Link href={`/admin/modules/${module.id}`}>
+                              <Button variant="ghost" size="sm">
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </Link>
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleDelete(module.id)}
+                              onClick={() => setDeleteTarget(module)}
                               className="hover:bg-red-50"
                             >
                               <Trash2 className="h-4 w-4 text-red-400" />
@@ -419,28 +426,29 @@ export default function ModulesPage() {
         {/* Empty State */}
         {!isLoading && filteredModules.length === 0 && (
           <Card>
-            <CardContent className="p-12 text-center">
-              <Layers className="h-12 w-12 text-arc-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">
-                {searchQuery || subjectFilter !== "all"
-                  ? "No modules found"
-                  : "No modules yet"}
-              </h3>
-              <p className="text-arc-slate-500 mb-4">
-                {searchQuery || subjectFilter !== "all"
-                  ? "Try adjusting your search or filters"
-                  : "Create your first module to get started"}
-              </p>
-              {!searchQuery && subjectFilter === "all" && (
-                <Button variant="accent" onClick={() => router.push("/admin/modules/new")}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Module
-                </Button>
+            <CardContent className="p-8">
+              {searchQuery || subjectFilter !== "all" ? (
+                <NoResultsEmpty query={searchQuery || "your filter"} />
+              ) : (
+                <NoDataEmpty
+                  title="No Modules Yet"
+                  description="Create your first module to get started."
+                />
               )}
             </CardContent>
           </Card>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Delete Module"
+        description={`Are you sure you want to delete "${deleteTarget?.name}"? This will also delete all topics and lessons within it.`}
+        confirmLabel="Delete Module"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </>
   );
 }

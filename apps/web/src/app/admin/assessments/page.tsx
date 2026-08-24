@@ -3,9 +3,11 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { WorkspaceHeader } from "@/components/admin";
+import { WorkspaceHeader, ConfirmModal } from "@/components/admin";
 import { assessmentsApi } from "@/lib/api/client";
+import { TableSkeleton, NoResultsEmpty, NoDataEmpty } from "@/components/branding";
 import { Card, CardContent, Button, Badge, Input } from "@/components/ui";
+import { toast } from "@/lib/toast";
 import {
   Plus,
   Search,
@@ -16,7 +18,7 @@ import {
   Clock,
   Users,
   ArrowRight,
-  RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 
 // Types
@@ -33,13 +35,6 @@ interface Assessment {
     attempts: number;
   };
 }
-
-const mockAssessments: Assessment[] = [
-  { id: "1", name: "Grade 9 Math Diagnostic", type: "DIAGNOSTIC", status: "PUBLISHED", questionCount: 50, timeLimitMinutes: 60, usageCount: 125 },
-  { id: "2", name: "Algebra Quiz 1", type: "QUIZ", status: "PUBLISHED", questionCount: 20, timeLimitMinutes: 30, usageCount: 340 },
-  { id: "3", name: "Grade 9 Midterm Exam", type: "MOCK_EXAM", status: "PUBLISHED", questionCount: 100, timeLimitMinutes: 120, usageCount: 89 },
-  { id: "4", name: "Linear Equations Practice", type: "PRACTICE", status: "DRAFT", questionCount: 30, usageCount: 0 },
-];
 
 const typeColors: Record<string, { bg: string; icon: React.ElementType }> = {
   QUIZ: { bg: "bg-blue-100", icon: Zap },
@@ -61,6 +56,7 @@ export default function AssessmentsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [deleteTarget, setDeleteTarget] = useState<Assessment | null>(null);
 
   // Fetch assessments
   useEffect(() => {
@@ -72,15 +68,10 @@ export default function AssessmentsPage() {
     setError(null);
     try {
       const data = await assessmentsApi.list();
-      if (Array.isArray(data)) {
-        setAssessments(data as Assessment[]);
-      } else {
-        setAssessments(mockAssessments);
-      }
+      setAssessments(Array.isArray(data) ? (data as Assessment[]) : []);
     } catch (err) {
-      console.error("Failed to fetch assessments:", err);
-      setError("Failed to load assessments. Using demo data.");
-      setAssessments(mockAssessments);
+      setError("Failed to load assessments.");
+      setAssessments([]);
     } finally {
       setIsLoading(false);
     }
@@ -94,6 +85,19 @@ export default function AssessmentsPage() {
 
   const handleCreateAssessment = () => {
     router.push("/admin/assessments/new");
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await assessmentsApi.delete(deleteTarget.id);
+      setAssessments(assessments.filter((a) => a.id !== deleteTarget.id));
+      toast.success(`Deleted "${deleteTarget.name}" successfully`);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete assessment. Please try again.");
+    } finally {
+      setDeleteTarget(null);
+    }
   };
 
   return (
@@ -112,10 +116,10 @@ export default function AssessmentsPage() {
       <div className="p-6 space-y-6">
         {/* Error banner */}
         {error && (
-          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
-            <p className="text-yellow-700 text-sm">{error}</p>
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+            <p className="text-red-700 text-sm flex-1">{error}</p>
             <Button variant="outline" size="sm" onClick={fetchAssessments}>
-              <RefreshCw className="h-4 w-4 mr-2" />
               Retry
             </Button>
           </div>
@@ -212,17 +216,7 @@ export default function AssessmentsPage() {
         {/* Assessment List */}
         <Card>
           <CardContent className="p-0">
-            {/* Loading skeleton */}
-            {isLoading && (
-              <div className="divide-y divide-arc-slate-100">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="p-4 animate-pulse">
-                    <div className="h-8 bg-arc-slate-200 rounded w-1/4 mb-2" />
-                    <div className="h-4 bg-arc-slate-200 rounded w-1/2" />
-                  </div>
-                ))}
-              </div>
-            )}
+            {isLoading && <TableSkeleton />}
 
             {/* Assessment rows */}
             {!isLoading && (
@@ -272,7 +266,10 @@ export default function AssessmentsPage() {
                               <ArrowRight className="h-4 w-4 ml-1" />
                             </Button>
                           </Link>
-                          <button className="p-1.5 hover:bg-red-50 rounded">
+                          <button
+                            className="p-1.5 hover:bg-red-50 rounded"
+                            onClick={() => setDeleteTarget(assessment)}
+                          >
                             <Trash2 className="h-4 w-4 text-red-400" />
                           </button>
                         </div>
@@ -285,25 +282,30 @@ export default function AssessmentsPage() {
 
             {/* Empty State */}
             {!isLoading && filteredAssessments.length === 0 && (
-              <div className="text-center py-12">
-                <Zap className="h-12 w-12 text-arc-slate-300 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">
-                  No assessments found
-                </h3>
-                <p className="text-arc-slate-500 mb-4">
-                  {searchQuery || typeFilter !== "all"
-                    ? "Try adjusting your filters"
-                    : "Create your first assessment to get started"}
-                </p>
-                <Button variant="accent" onClick={handleCreateAssessment}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Assessment
-                </Button>
+              <div className="py-8">
+                {searchQuery || typeFilter !== "all" ? (
+                  <NoResultsEmpty query={searchQuery || "your filter"} />
+                ) : (
+                  <NoDataEmpty
+                    title="No Assessments Yet"
+                    description="Create your first assessment to get started."
+                  />
+                )}
               </div>
             )}
           </CardContent>
         </Card>
       </div>
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Delete Assessment"
+        description={`Are you sure you want to delete "${deleteTarget?.name}"? This will permanently remove the assessment and all its question associations.`}
+        confirmLabel="Delete Assessment"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </>
   );
 }

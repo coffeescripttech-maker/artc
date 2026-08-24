@@ -3,6 +3,7 @@ import { Poppins, Nunito } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 import { QueryProvider } from "@/providers/query-provider";
+import { deriveBrandTokens, type BrandSettings } from "@aratc/shared";
 
 // Poppins - for headings, titles, buttons, and emphasis text
 const poppins = Poppins({
@@ -33,6 +34,36 @@ export const metadata: Metadata = {
   },
 };
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+
+/**
+ * Applies the organization's saved brand colors as CSS variable
+ * overrides. Rendered server-side so themed pages paint correctly
+ * on first frame (no flash). `no-store` keeps saves in
+ * /admin/settings visible immediately after router.refresh().
+ * Falls back silently to the globals.css defaults if the API is
+ * unreachable.
+ */
+async function BrandStyleOverrides() {
+  let tokens: Record<string, string> = {};
+  try {
+    const res = await fetch(`${API_URL}/settings/brand`, { cache: "no-store" });
+    if (res.ok) {
+      tokens = deriveBrandTokens((await res.json()) as BrandSettings);
+    }
+  } catch {
+    // API unreachable — defaults in globals.css apply
+  }
+
+  if (Object.keys(tokens).length === 0) return null;
+
+  const css = Object.entries(tokens)
+    .map(([name, value]) => `${name}:${value};`)
+    .join("");
+
+  return <style id="brand-overrides">{`:root{${css}}`}</style>;
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -41,6 +72,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${poppins.variable} ${nunito.variable}`}>
       <body>
+        <BrandStyleOverrides />
         <QueryProvider>
           {children}
           <Toaster

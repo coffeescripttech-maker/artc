@@ -3,16 +3,7 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { FileText, Loader2 } from "lucide-react";
-
-// Helper to generate slug from name
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .trim();
-}
+import { generateSlug } from "@/lib/utils/slug";
 
 interface TopicFormProps {
   onSubmit: (data: { name: string; slug: string; description: string; moduleId?: string; subjectId?: string }) => Promise<void>;

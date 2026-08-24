@@ -10,6 +10,7 @@ export const createProgramSchema = z.object({
   description: z.string().optional(),
   stage: z.nativeEnum(EDUCATIONAL_STAGES),
   gradeLevel: z.nativeEnum(GRADE_LEVELS).optional(),
+  imageUrl: z.string().optional(),
 });
 
 export type CreateProgramInput = z.infer<typeof createProgramSchema>;

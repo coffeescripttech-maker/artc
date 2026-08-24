@@ -7,38 +7,38 @@ const badgeVariants = cva(
   {
     variants: {
       variant: {
-        // ARC Badge Variants
-        default: "bg-arc-navy-100 text-arc-navy-700",
+        // ARC Badge Variants — semantic tokens
+        default: "bg-primary-subtle text-primary",
 
-        // Mastery - Green (Completed, Passed, On Track)
-        mastery: "bg-arc-green-100 text-arc-green-700",
+        // Mastery - Success (Completed, Passed, On Track)
+        mastery: "bg-success-subtle text-success-foreground",
 
-        // Learning - Navy (In Progress)
-        learning: "bg-arc-navy-100 text-arc-navy-700",
+        // Learning - Primary (In Progress)
+        learning: "bg-primary-subtle text-primary",
 
-        // Practice - Purple (Exercises, Quizzes)
+        // Practice - Purple (Exercises, Quizzes — fixed domain color)
         practice: "bg-arc-purple-100 text-arc-purple-700",
 
-        // Warning - Orange (Attention needed)
-        warning: "bg-arc-orange-100 text-arc-orange-700",
+        // Warning (Attention needed — draft/pending states)
+        warning: "bg-warning-subtle text-warning-foreground",
 
-        // Alert - Red (Failed, Critical)
-        alert: "bg-arc-red-100 text-arc-red-600",
+        // Alert - Danger (Failed, Critical)
+        alert: "bg-danger-subtle text-danger-foreground",
 
-        // Error - Red (alias for alert)
-        error: "bg-red-100 text-red-700",
+        // Error - Danger (alias for alert)
+        error: "bg-danger-subtle text-danger-foreground",
 
-        // Primary (Navy)
-        primary: "bg-arc-navy-900 text-white",
+        // Primary
+        primary: "bg-primary text-primary-foreground",
 
         // Secondary
-        secondary: "bg-arc-slate-100 text-arc-slate-700",
+        secondary: "bg-secondary text-secondary-foreground",
 
         // Success (alias for mastery)
-        success: "bg-green-100 text-green-700",
+        success: "bg-success-subtle text-success-foreground",
 
         // Info
-        info: "bg-arc-navy-100 text-arc-navy-700",
+        info: "bg-primary-subtle text-primary",
 
         // Outline
         outline: "border border-arc-slate-300 text-arc-slate-700",
@@ -47,19 +47,19 @@ const badgeVariants = cva(
         ghost: "bg-transparent text-arc-muted",
 
         // Premium/Featured
-        premium: "bg-gradient-to-r from-arc-orange-500 to-arc-orange-400 text-white",
+        premium: "bg-gradient-to-r from-accent to-accent-hover text-white",
 
         // Featured/Highlighted
-        featured: "bg-gradient-to-r from-arc-navy-900 to-arc-navy-700 text-white",
+        featured: "bg-gradient-to-r from-primary to-primary-hover text-white",
 
         // Draft status
-        draft: "bg-yellow-100 text-yellow-700",
+        draft: "bg-warning-subtle text-warning-foreground",
 
         // Published status
-        published: "bg-green-100 text-green-700",
+        published: "bg-success-subtle text-success-foreground",
 
         // Archived status
-        archived: "bg-gray-100 text-gray-600",
+        archived: "bg-secondary text-secondary-foreground",
       },
       size: {
         default: "px-2.5 py-0.5 text-xs",

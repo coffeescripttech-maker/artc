@@ -3,8 +3,10 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { DashboardHeader } from "@/components/dashboard";
-import { lessonsApi, topicsApi } from "@/lib/api/client";
+import { WorkspaceHeader, ConfirmModal } from "@/components/admin";
+import { lessonsApi } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
+import { TableSkeleton, NoResultsEmpty, NoDataEmpty } from "@/components/branding";
 import { Card, CardContent, Button, Badge, Input } from "@/components/ui";
 import {
   FileText,
@@ -18,7 +20,7 @@ import {
   BookOpen,
   Video,
   FileCheck,
-  RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 
 interface Lesson {
@@ -67,6 +69,7 @@ export default function LessonsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [deleteTarget, setDeleteTarget] = useState<Lesson | null>(null);
 
   // Fetch lessons on mount
   useEffect(() => {
@@ -80,7 +83,6 @@ export default function LessonsPage() {
       const data = await lessonsApi.list() as Lesson[];
       setLessons(data);
     } catch (err) {
-      console.error("Failed to fetch lessons:", err);
       setError("Failed to load lessons. Please try again.");
     } finally {
       setIsLoading(false);
@@ -101,38 +103,45 @@ export default function LessonsPage() {
   // Calculate stats
   const publishedCount = lessons.filter((l) => l.status === "PUBLISHED").length;
   const videoCount = lessons.filter((l) => l.type === "VIDEO").length;
-  const articleCount = lessons.filter((l) => l.type === "ARTICLE").length;
   const totalDuration = lessons.reduce((sum, l) => sum + (l.durationMinutes || 0), 0);
-  const underReviewCount = lessons.filter((l) => l.status === "UNDER_REVIEW").length;
 
-  const handleDelete = async (lessonId: string) => {
-    if (!confirm("Are you sure you want to delete this lesson?")) {
-      return;
-    }
-
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await lessonsApi.delete(lessonId, "");
-      setLessons(lessons.filter((l) => l.id !== lessonId));
-    } catch (err) {
-      console.error("Failed to delete lesson:", err);
-      alert("Failed to delete lesson. Please try again.");
+      await lessonsApi.delete(deleteTarget.id);
+      setLessons(lessons.filter((l) => l.id !== deleteTarget.id));
+      toast.success("Lesson deleted successfully");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete lesson. Please try again.");
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
   return (
     <>
-      <DashboardHeader
+      <WorkspaceHeader
         title="Lessons"
         subtitle="Manage learning content within topics"
+        actions={
+          <Button
+            variant="accent"
+            onClick={() => router.push("/admin/lessons/new")}
+            disabled={isLoading}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create Lesson
+          </Button>
+        }
       />
 
       <div className="p-6">
         {/* Error State */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
-            <p className="text-red-600 text-sm">{error}</p>
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+            <p className="text-red-700 text-sm flex-1">{error}</p>
             <Button variant="outline" size="sm" onClick={fetchLessons}>
-              <RefreshCw className="h-4 w-4 mr-2" />
               Retry
             </Button>
           </div>
@@ -249,11 +258,7 @@ export default function LessonsPage() {
         {isLoading && (
           <Card>
             <CardContent className="p-0">
-              <div className="space-y-4 p-4">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="h-16 bg-arc-slate-200 rounded-lg animate-pulse" />
-                ))}
-              </div>
+              <TableSkeleton />
             </CardContent>
           </Card>
         )}
@@ -344,13 +349,15 @@ export default function LessonsPage() {
                                   <Eye className="h-4 w-4" />
                                 </Button>
                               </Link>
-                              <Button variant="ghost" size="sm">
-                                <Edit className="h-4 w-4" />
-                              </Button>
+                              <Link href={`/admin/lessons/${lesson.id}`}>
+                                <Button variant="ghost" size="sm">
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                              </Link>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleDelete(lesson.id)}
+                                onClick={() => setDeleteTarget(lesson)}
                                 className="hover:bg-red-50"
                               >
                                 <Trash2 className="h-4 w-4 text-red-400" />
@@ -370,28 +377,29 @@ export default function LessonsPage() {
         {/* Empty State */}
         {!isLoading && filteredLessons.length === 0 && (
           <Card>
-            <CardContent className="p-12 text-center">
-              <FileText className="h-12 w-12 text-arc-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">
-                {searchQuery || typeFilter !== "all" || statusFilter !== "all"
-                  ? "No lessons found"
-                  : "No lessons yet"}
-              </h3>
-              <p className="text-arc-slate-500 mb-4">
-                {searchQuery || typeFilter !== "all" || statusFilter !== "all"
-                  ? "Try adjusting your search or filters"
-                  : "Create your first lesson to get started"}
-              </p>
-              {!searchQuery && typeFilter === "all" && statusFilter === "all" && (
-                <Button variant="accent" onClick={() => router.push("/admin/lessons/new")}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Lesson
-                </Button>
+            <CardContent className="p-8">
+              {searchQuery || typeFilter !== "all" || statusFilter !== "all" ? (
+                <NoResultsEmpty query={searchQuery || "your filter"} />
+              ) : (
+                <NoDataEmpty
+                  title="No Lessons Yet"
+                  description="Create your first lesson to get started."
+                />
               )}
             </CardContent>
           </Card>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Delete Lesson"
+        description={`Are you sure you want to delete "${deleteTarget?.title}"? This action cannot be undone.`}
+        confirmLabel="Delete Lesson"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </>
   );
 }

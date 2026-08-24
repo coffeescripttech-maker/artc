@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Input, Card, CardContent, Badge, Button } from "@/components/ui";
+import { Input, Card, CardContent, Badge } from "@/components/ui";
 import { Search, X, Check, Loader2, BookOpen, FileText, Box, Play, BookMarked } from "lucide-react";
 import { subjectsApi, modulesApi, topicsApi, lessonsApi } from "@/lib/api/client";
 
@@ -66,21 +66,19 @@ export function EntitySearchPicker({
   const [results, setResults] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
 
   // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
       if (query.length >= 2 || query.length === 0) {
-        searchEntities(1);
+        searchEntities();
       }
     }, 300);
 
     return () => clearTimeout(timer);
   }, [query]);
 
-  const searchEntities = async (pageNum: number) => {
+  const searchEntities = async () => {
     setIsLoading(true);
     try {
       let data: any[] = [];
@@ -133,14 +131,7 @@ export function EntitySearchPicker({
         (item) => !excludeIds.includes(item.id)
       );
 
-      if (pageNum === 1) {
-        setResults(filtered);
-      } else {
-        setResults((prev) => [...prev, ...filtered]);
-      }
-
-      setHasMore(filtered.length >= 10);
-      setPage(pageNum);
+      setResults(filtered);
     } catch (err) {
       console.error(`Failed to search ${type}:`, err);
       setResults([]);
@@ -253,23 +244,6 @@ export function EntitySearchPicker({
               </Card>
             );
           })}
-
-          {/* Load More */}
-          {hasMore && (
-            <div className="text-center pt-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => searchEntities(page + 1)}
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : null}
-                Load more
-              </Button>
-            </div>
-          )}
         </div>
       )}
 

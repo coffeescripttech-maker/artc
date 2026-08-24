@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { FileText, Video, BookOpen, Edit, Loader2 } from "lucide-react";
+import { generateSlug } from "@/lib/utils/slug";
 
 interface LessonFormProps {
   onSubmit: (data: {
@@ -21,16 +22,6 @@ interface LessonFormProps {
   topicId?: string;
   moduleId?: string;
   subjectId?: string;
-}
-
-// Helper to generate slug from name
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .trim();
 }
 
 const lessonTypes = [

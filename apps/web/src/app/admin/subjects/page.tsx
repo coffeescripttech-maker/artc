@@ -3,20 +3,20 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { DashboardHeader } from "@/components/dashboard";
+import { WorkspaceHeader, ConfirmModal } from "@/components/admin";
 import { subjectsApi } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
+import { CardSkeleton, NoResultsEmpty, NoDataEmpty } from "@/components/branding";
 import { Card, CardContent, Button, Badge, Input } from "@/components/ui";
 import {
   BookOpen,
   Plus,
   Search,
-  MoreVertical,
-  Edit,
   Trash2,
   Layers,
   FileText,
   Users,
-  RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 
 interface Subject {
@@ -75,6 +75,7 @@ export default function SubjectsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [deleteTarget, setDeleteTarget] = useState<Subject | null>(null);
 
   // Fetch subjects on mount
   useEffect(() => {
@@ -88,7 +89,6 @@ export default function SubjectsPage() {
       const data = await subjectsApi.list() as Subject[];
       setSubjects(data);
     } catch (err) {
-      console.error("Failed to fetch subjects:", err);
       setError("Failed to load subjects. Please try again.");
     } finally {
       setIsLoading(false);
@@ -104,17 +104,16 @@ export default function SubjectsPage() {
     return matchesSearch && matchesStatus;
   });
 
-  const handleDelete = async (subjectId: string) => {
-    if (!confirm("Are you sure you want to delete this subject? This will affect all linked curriculums.")) {
-      return;
-    }
-
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await subjectsApi.delete(subjectId, "");
-      setSubjects(subjects.filter((s) => s.id !== subjectId));
-    } catch (err) {
-      console.error("Failed to delete subject:", err);
-      alert("Failed to delete subject. Please try again.");
+      await subjectsApi.delete(deleteTarget.id);
+      setSubjects(subjects.filter((s) => s.id !== deleteTarget.id));
+      toast.success("Subject deleted successfully");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete subject. Please try again.");
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -125,18 +124,28 @@ export default function SubjectsPage() {
 
   return (
     <>
-      <DashboardHeader
+      <WorkspaceHeader
         title="Subjects"
         subtitle="Manage reusable subjects across all programs"
+        actions={
+          <Button
+            variant="accent"
+            onClick={() => router.push("/admin/subjects/new")}
+            disabled={isLoading}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create Subject
+          </Button>
+        }
       />
 
       <div className="p-6">
         {/* Error State */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
-            <p className="text-red-600 text-sm">{error}</p>
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+            <p className="text-red-700 text-sm flex-1">{error}</p>
             <Button variant="outline" size="sm" onClick={fetchSubjects}>
-              <RefreshCw className="h-4 w-4 mr-2" />
               Retry
             </Button>
           </div>
@@ -248,13 +257,7 @@ export default function SubjectsPage() {
         {isLoading && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <Card key={i} className="animate-pulse">
-                <CardContent className="p-6">
-                  <div className="h-14 w-14 rounded-xl bg-arc-slate-200 mb-4" />
-                  <div className="h-6 bg-arc-slate-200 rounded w-3/4 mb-2" />
-                  <div className="h-4 bg-arc-slate-200 rounded w-1/2" />
-                </CardContent>
-              </Card>
+              <CardSkeleton key={i} />
             ))}
           </div>
         )}
@@ -280,9 +283,6 @@ export default function SubjectsPage() {
                         <Badge className={statusColors[subject.status]}>
                           {subject.status.replace("_", " ")}
                         </Badge>
-                        <button className="p-1 hover:bg-arc-slate-100 rounded">
-                          <MoreVertical className="h-4 w-4 text-arc-slate-400" />
-                        </button>
                       </div>
                     </div>
 
@@ -331,7 +331,7 @@ export default function SubjectsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDelete(subject.id)}
+                        onClick={() => setDeleteTarget(subject)}
                         className="hover:bg-red-50"
                       >
                         <Trash2 className="h-4 w-4 text-red-400" />
@@ -346,27 +346,28 @@ export default function SubjectsPage() {
 
         {/* Empty State */}
         {!isLoading && filteredSubjects.length === 0 && (
-          <div className="text-center py-12">
-            <BookOpen className="h-12 w-12 text-arc-slate-300 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">
-              {searchQuery || statusFilter !== "all"
-                ? "No subjects found"
-                : "No subjects yet"}
-            </h3>
-            <p className="text-arc-slate-500 mb-4">
-              {searchQuery || statusFilter !== "all"
-                ? "Try adjusting your filters"
-                : "Create your first subject to get started"}
-            </p>
-            {!searchQuery && statusFilter === "all" && (
-              <Button variant="accent" onClick={() => router.push("/admin/subjects/new")}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Subject
-              </Button>
+          <div className="py-8">
+            {searchQuery || statusFilter !== "all" ? (
+              <NoResultsEmpty query={searchQuery || "your filter"} />
+            ) : (
+              <NoDataEmpty
+                title="No Subjects Yet"
+                description="Create your first subject to get started."
+              />
             )}
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Delete Subject"
+        description={`Are you sure you want to delete "${deleteTarget?.name}"? This will affect all linked curriculums.`}
+        confirmLabel="Delete Subject"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </>
   );
 }

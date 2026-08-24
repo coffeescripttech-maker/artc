@@ -12,6 +12,8 @@ import { LessonTemplates } from "@/components/admin/lesson-templates";
 import { LessonBlockRenderer } from "@/components/lesson/block-renderer";
 import { QuestionPickerModal } from "@/components/admin/question-picker-modal";
 import { lessonsApi } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
+import { PageLoader } from "@/components/branding";
 import { Button, Badge, Input } from "@/components/ui";
 import {
   normalizeLessonContent,
@@ -29,7 +31,6 @@ import {
   Send,
   Check,
   Clock,
-  RefreshCw,
   Archive,
   AlertCircle,
   FileText,
@@ -246,7 +247,6 @@ export default function LessonEditorPage() {
           }
         } catch {}
       } catch (err) {
-        console.error("Failed to load lesson:", err);
         if (active) setLoadError("Failed to load this lesson.");
       } finally {
         if (active) setIsLoading(false);
@@ -284,7 +284,6 @@ export default function LessonEditorPage() {
       } catch {}
       return true;
     } catch (err) {
-      console.error("Failed to save lesson:", err);
       setSaveStatus("error");
       try {
         localStorage.setItem(
@@ -321,8 +320,9 @@ export default function LessonEditorPage() {
     try {
       await lessonsApi.publish(lessonId);
       setStatus("PUBLISHED");
+      toast.success("Lesson published successfully");
     } catch (err) {
-      console.error("Failed to publish lesson:", err);
+      toast.error("Failed to publish lesson. Please try again.");
     }
   };
 
@@ -330,8 +330,9 @@ export default function LessonEditorPage() {
     try {
       await lessonsApi.archive(lessonId);
       setStatus("ARCHIVED");
+      toast.success("Lesson archived successfully");
     } catch (err) {
-      console.error("Failed to archive lesson:", err);
+      toast.error("Failed to archive lesson. Please try again.");
     }
   };
 
@@ -505,14 +506,7 @@ export default function LessonEditorPage() {
   }, [undoStack, redoStack, blocks, title, description, type, duration]);
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="h-8 w-8 animate-spin text-arc-orange-500 mx-auto mb-4" />
-          <p className="text-arc-slate-500">Loading lesson...</p>
-        </div>
-      </div>
-    );
+    return <PageLoader text="Loading lesson..." />;
   }
 
   if (loadError || !lesson) {

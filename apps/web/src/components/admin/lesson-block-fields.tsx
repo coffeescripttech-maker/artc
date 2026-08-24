@@ -247,7 +247,7 @@ function QuestionBlockFields({
             <Loader className="h-4 w-4 animate-spin text-arc-slate-400" />
           ) : (
             <a
-              href={`/admin/questions/${block.questionId}`}
+              href={`/admin/question-bank/${block.questionId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs text-arc-orange-600 hover:underline flex items-center gap-1"

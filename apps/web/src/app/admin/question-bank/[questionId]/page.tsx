@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
 import { WorkspaceHeader } from "@/components/admin";
 import { questionsApi, subjectsApi, topicsApi } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
+import { PageLoader, NoDataEmpty, ErrorEmpty } from "@/components/branding";
 import { Card, CardContent, Button, Badge } from "@/components/ui";
 import {
   Save,
@@ -12,13 +13,10 @@ import {
   Trash2,
   Plus,
   Check,
-  ArrowLeft,
   Link as LinkIcon,
   GripVertical,
   HelpCircle,
   BookOpen,
-  AlertCircle,
-  RefreshCw,
 } from "lucide-react";
 
 // Types
@@ -64,44 +62,6 @@ interface Topic {
   subjectId: string;
   subjectName?: string;
 }
-
-// Mock data
-const mockQuestion: Question = {
-  id: "1",
-  stem: "What is the value of x in the equation 2x + 5 = 15?",
-  type: "MULTIPLE_CHOICE",
-  difficulty: "MEDIUM",
-  status: "PUBLISHED",
-  options: [
-    { id: "1", text: "x = 5", isCorrect: false },
-    { id: "2", text: "x = 10", isCorrect: false },
-    { id: "3", text: "x = 7", isCorrect: true },
-    { id: "4", text: "x = 3", isCorrect: false },
-  ],
-  explanation: "To solve 2x + 5 = 15, subtract 5 from both sides: 2x = 10. Then divide by 2: x = 5.",
-  links: [
-    { id: "1", type: "SUBJECT", entityId: "1", entityName: "Mathematics" },
-    { id: "2", type: "TOPIC", entityId: "2", entityName: "Linear Equations" },
-  ],
-  _count: {
-    assessments: 3,
-    examUsage: 45,
-  },
-};
-
-const mockSubjects: Subject[] = [
-  { id: "1", name: "Mathematics", code: "MATH", _count: { topics: 12 } },
-  { id: "2", name: "English", code: "ENG", _count: { topics: 15 } },
-  { id: "3", name: "Science", code: "SCI", _count: { topics: 18 } },
-];
-
-const mockTopics: Topic[] = [
-  { id: "1", name: "Number System", subjectId: "1", subjectName: "Mathematics" },
-  { id: "2", name: "Linear Equations", subjectId: "1", subjectName: "Mathematics" },
-  { id: "3", name: "Geometry", subjectId: "1", subjectName: "Mathematics" },
-  { id: "4", name: "Grammar", subjectId: "2", subjectName: "English" },
-  { id: "5", name: "Chemistry", subjectId: "3", subjectName: "Science" },
-];
 
 const questionTypes = [
   { value: "MULTIPLE_CHOICE", label: "Multiple Choice", description: "Select one correct answer" },
@@ -158,10 +118,25 @@ export default function QuestionEditorPage() {
   const [selectedSubject, setSelectedSubject] = useState<string>("");
   const [filteredTopics, setFilteredTopics] = useState<Topic[]>([]);
 
+  // Real subjects & topics for the link modal
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [allTopics, setAllTopics] = useState<Topic[]>([]);
+
   // Fetch question
   useEffect(() => {
     fetchQuestion();
   }, [questionId]);
+
+  // Fetch subjects and topics for the link modal
+  useEffect(() => {
+    Promise.all([
+      subjectsApi.list().catch(() => []),
+      topicsApi.listAll().catch(() => []),
+    ]).then(([s, t]) => {
+      setSubjects(Array.isArray(s) ? (s as Subject[]) : []);
+      setAllTopics(Array.isArray(t) ? (t as Topic[]) : []);
+    });
+  }, []);
 
   // Track unsaved changes
   useEffect(() => {
@@ -182,7 +157,7 @@ export default function QuestionEditorPage() {
   // Filter topics when subject changes
   useEffect(() => {
     if (selectedSubject) {
-      setFilteredTopics(mockTopics.filter((t) => t.subjectId === selectedSubject));
+      setFilteredTopics(allTopics.filter((t) => t.subjectId === selectedSubject));
     }
   }, [selectedSubject]);
 
@@ -190,42 +165,19 @@ export default function QuestionEditorPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await questionsApi.getById(questionId).catch(() => null);
-      if (data) {
-        const q = data as Question;
-        setQuestion(q);
-        setStem(q.stem);
-        setType(q.type);
-        setDifficulty(q.difficulty);
-        setExplanation(q.explanation || "");
-        setOptions(q.options || []);
-        setLinks(q.links || []);
-        setCorrectAnswer(q.correctAnswer || "");
-        setTolerance(q.tolerance !== undefined ? String(q.tolerance) : "");
-      } else {
-        // Use mock data for demo
-        setQuestion(mockQuestion);
-        setStem(mockQuestion.stem);
-        setType(mockQuestion.type);
-        setDifficulty(mockQuestion.difficulty);
-        setExplanation(mockQuestion.explanation || "");
-        setOptions(mockQuestion.options || []);
-        setLinks(mockQuestion.links || []);
-        setCorrectAnswer("");
-        setTolerance("");
-      }
+      const data = await questionsApi.getById(questionId);
+      const q = data as Question;
+      setQuestion(q);
+      setStem(q.stem);
+      setType(q.type);
+      setDifficulty(q.difficulty);
+      setExplanation(q.explanation || "");
+      setOptions(q.options || []);
+      setLinks(q.links || []);
+      setCorrectAnswer(q.correctAnswer || "");
+      setTolerance(q.tolerance !== undefined ? String(q.tolerance) : "");
     } catch (err) {
-      console.error("Failed to fetch question:", err);
-      setError("Failed to load question. Using demo data.");
-      setQuestion(mockQuestion);
-      setStem(mockQuestion.stem);
-      setType(mockQuestion.type);
-      setDifficulty(mockQuestion.difficulty);
-      setExplanation(mockQuestion.explanation || "");
-      setOptions(mockQuestion.options || []);
-      setLinks(mockQuestion.links || []);
-      setCorrectAnswer("");
-      setTolerance("");
+      setError("Failed to load question data.");
     } finally {
       setIsLoading(false);
     }
@@ -237,23 +189,23 @@ export default function QuestionEditorPage() {
       await questionsApi.update(
         questionId,
         { stem, type, difficulty, explanation, options, correctAnswer: type === "NUMERIC" || type === "SHORT_ANSWER" || type === "FILL_IN_THE_BLANK" ? correctAnswer : undefined, tolerance: type === "NUMERIC" ? (tolerance ? Number(tolerance) : undefined) : undefined },
-        "" // Token would come from auth
       );
       setSaveStatus("saved");
-    } catch (err) {
-      console.error("Failed to save question:", err);
+      toast.success("Question saved");
+    } catch (err: any) {
       setSaveStatus("unsaved");
+      toast.error(err?.message || "Failed to save question. Please try again.");
     }
   };
 
   const handlePublish = async () => {
     setIsSubmitting(true);
     try {
-      await questionsApi.publish(questionId, "");
+      await questionsApi.publish(questionId);
+      toast.success("Question published");
       router.push("/admin/question-bank");
-    } catch (err) {
-      console.error("Failed to publish question:", err);
-      alert("Failed to publish question. Please try again.");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to publish question. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -307,25 +259,26 @@ export default function QuestionEditorPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="h-8 w-8 animate-spin text-arc-orange-500 mx-auto mb-4" />
-          <p className="text-arc-slate-500">Loading question...</p>
-        </div>
+        <PageLoader />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <ErrorEmpty onRetry={fetchQuestion} />
       </div>
     );
   }
 
   if (!question) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-arc-navy-900 mb-2">Question not found</h2>
-          <p className="text-arc-slate-500 mb-4">The question you're looking for doesn't exist.</p>
-          <Link href="/admin/question-bank">
-            <Button variant="accent">Back to Question Bank</Button>
-          </Link>
-        </div>
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <NoDataEmpty
+          title="Question Not Found"
+          description="The question you're looking for doesn't exist or may have been deleted."
+        />
       </div>
     );
   }
@@ -363,13 +316,6 @@ export default function QuestionEditorPage() {
         <div className="bg-yellow-50 border-b border-yellow-200 px-6 py-2 flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-yellow-500" />
           <span className="text-sm text-yellow-700">You have unsaved changes</span>
-        </div>
-      )}
-
-      {/* Error banner */}
-      {error && (
-        <div className="px-6 py-2 bg-yellow-50 border-b border-yellow-200">
-          <p className="text-sm text-yellow-700">{error}</p>
         </div>
       )}
 
@@ -923,7 +869,7 @@ export default function QuestionEditorPage() {
                     className="w-full h-10 px-3 border border-arc-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-arc-orange-500"
                   >
                     <option value="">Select subject...</option>
-                    {mockSubjects.map((s) => (
+                    {subjects.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name} ({s.code})
                       </option>
@@ -939,7 +885,7 @@ export default function QuestionEditorPage() {
                 </label>
                 <div className="max-h-48 overflow-y-auto border border-arc-slate-200 rounded-lg">
                   {linkType === "SUBJECT" ? (
-                    mockSubjects.map((subject) => (
+                    subjects.map((subject) => (
                       <button
                         key={subject.id}
                         onClick={() => handleAddLink({ type: "SUBJECT", entityId: subject.id, entityName: subject.name })}

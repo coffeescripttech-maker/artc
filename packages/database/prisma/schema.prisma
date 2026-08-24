@@ -95,6 +95,16 @@ model LearnerProfile {
   @@map("learner_profiles")
 }
 
+model SiteSettings {
+  id        String   @id @default("default")
+  brand     Json?
+  general   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("site_settings")
+}
+
 model Organization {
   id              String           @id @default(cuid())
   name            String

@@ -3,9 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiRequest } from "@/lib/api";
 import { EDUCATIONAL_STAGES, GRADE_LEVELS } from "@aratc/shared";
 import { WorkspaceHeader } from "@/components/admin";
+import { ButtonLoader } from "@/components/branding";
+import { programsApi } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
+import { generateSlug } from "@/lib/utils/slug";
 import {
   Button,
   Card,
@@ -16,18 +19,37 @@ import {
   Input,
   Label,
 } from "@/components/ui";
-import { ArrowLeft, Layers, Plus } from "lucide-react";
+import { ArrowLeft, Layers } from "lucide-react";
+
+function titleCaseKey(key: string): string {
+  return key
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export default function NewProgramPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
+  const [slugEdited, setSlugEdited] = useState(false);
   const [description, setDescription] = useState("");
   const [stage, setStage] = useState<string>("BASIC_EDUCATION");
   const [gradeLevel, setGradeLevel] = useState<string>("");
-  const [status, setStatus] = useState<string>("DRAFT");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  function handleNameChange(value: string) {
+    setName(value);
+    if (!slugEdited) {
+      setSlug(generateSlug(value));
+    }
+  }
+
+  function handleSlugChange(value: string) {
+    setSlugEdited(true);
+    setSlug(value.toLowerCase().replace(/\s+/g, "-"));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -35,20 +57,19 @@ export default function NewProgramPage() {
     setError(null);
 
     try {
-      await apiRequest("/api/programs", {
-        method: "POST",
-        body: JSON.stringify({
-          name,
-          slug,
-          description,
-          stage,
-          gradeLevel: gradeLevel || undefined,
-          status,
-        }),
+      await programsApi.create({
+        name,
+        slug,
+        description,
+        stage,
+        gradeLevel: gradeLevel || undefined,
       });
+      toast.success("Program created successfully");
       router.push("/admin/programs");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create program");
+      const message = err instanceof Error ? err.message : "Failed to create program";
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -63,6 +84,14 @@ export default function NewProgramPage() {
           { label: "Programs", href: "/admin/programs" },
           { label: "New Program" },
         ]}
+        actions={
+          <Link href="/admin/programs">
+            <Button variant="outline" size="sm">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Programs
+            </Button>
+          </Link>
+        }
       />
 
       <div className="p-6">
@@ -89,7 +118,7 @@ export default function NewProgramPage() {
                   <Input
                     id="name"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => handleNameChange(e.target.value)}
                     placeholder="e.g., Grade 7 Mathematics"
                     className="border-arc-slate-200 focus:border-arc-navy-500"
                     required
@@ -101,16 +130,14 @@ export default function NewProgramPage() {
                   <Input
                     id="slug"
                     value={slug}
-                    onChange={(e) =>
-                      setSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))
-                    }
+                    onChange={(e) => handleSlugChange(e.target.value)}
                     placeholder="e.g., grade-7-mathematics"
                     className="border-arc-slate-200 focus:border-arc-navy-500"
                     required
                     pattern="[a-z0-9-]+"
                   />
                   <p className="text-xs text-arc-slate-500">
-                    Lowercase letters, numbers, and hyphens only.
+                    Lowercase letters, numbers, and hyphens only. Auto-generated from name unless edited.
                   </p>
                 </div>
 
@@ -137,7 +164,7 @@ export default function NewProgramPage() {
                     >
                       {Object.keys(EDUCATIONAL_STAGES).map((key) => (
                         <option key={key} value={key}>
-                          {key.replace(/_/g, " ")}
+                          {titleCaseKey(key)}
                         </option>
                       ))}
                     </select>
@@ -154,32 +181,37 @@ export default function NewProgramPage() {
                       <option value="">None</option>
                       {Object.keys(GRADE_LEVELS).map((key) => (
                         <option key={key} value={key}>
-                          {key.replace(/_/g, " ")}
+                          {titleCaseKey(key)}
                         </option>
                       ))}
                     </select>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="status" className="text-sm font-semibold text-arc-navy-900">Status</Label>
-                  <select
-                    id="status"
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                    className="w-full h-10 px-3 rounded-lg border border-arc-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-arc-navy-500"
-                  >
-                    <option value="DRAFT">Draft</option>
-                    <option value="PUBLISHED">Published</option>
-                  </select>
+                <div className="rounded-lg bg-arc-slate-50 border border-arc-slate-200 p-3">
+                  <p className="text-xs text-arc-slate-600">
+                    New programs are created as <strong>Draft</strong> and can be published after setup.
+                  </p>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-end gap-3 border-t border-arc-slate-100 bg-arc-slate-50">
                 <Button variant="outline" asChild className="border-arc-slate-200">
                   <Link href="/admin/programs">Cancel</Link>
                 </Button>
-                <Button type="submit" disabled={loading} variant="accent" className="shadow-lg shadow-arc-orange-500/20">
-                  {loading ? "Creating..." : "Create Program"}
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  variant="accent"
+                  className="shadow-lg shadow-arc-orange-500/20"
+                >
+                  {loading ? (
+                    <>
+                      <ButtonLoader className="mr-2" />
+                      Creating...
+                    </>
+                  ) : (
+                    "Create Program"
+                  )}
                 </Button>
               </CardFooter>
             </Card>

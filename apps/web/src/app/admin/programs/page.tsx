@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { WorkspaceHeader } from "@/components/admin";
@@ -16,7 +16,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuLabel,
-  Progress,
 } from "@/components/ui";
 import { ProgramCard, ConfirmModal, programTypeColors } from "@/components/admin";
 import { programsApi } from "@/lib/api/client";
@@ -59,16 +58,27 @@ interface Program {
     modules: number;
     lessons: number;
     enrollments: number;
+    assessments: number;
   };
 }
 
-type SortField = "name" | "createdAt" | "enrollments";
-type SortDirection = "asc" | "desc";
+type SortOption =
+  | "createdAt-desc"
+  | "createdAt-asc"
+  | "name-asc"
+  | "name-desc"
+  | "enrollments-desc"
+  | "enrollments-asc";
 
-const SORT_OPTIONS: { value: SortField; label: string }[] = [
-  { value: "createdAt", label: "Date Created" },
-  { value: "name", label: "Name" },
-  { value: "enrollments", label: "Enrollments" },
+type ContentFilter = "none" | "hasCurriculums" | "hasEnrollments";
+
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: "createdAt-desc", label: "Newest first" },
+  { value: "createdAt-asc", label: "Oldest first" },
+  { value: "name-asc", label: "Name (A-Z)" },
+  { value: "name-desc", label: "Name (Z-A)" },
+  { value: "enrollments-desc", label: "Most enrollments" },
+  { value: "enrollments-asc", label: "Fewest enrollments" },
 ];
 
 // Build a unique, URL-safe slug for a duplicated program (slug is @unique in the DB).
@@ -76,34 +86,6 @@ function makeCopySlug(slug: string): string {
   const suffix = Math.random().toString(36).slice(2, 6);
   return `${slug}-copy-${suffix}`;
 }
-
-// Template population steps for progress display
-const POPULATE_STEPS = [
-  "Creating program...",
-  "Building Grade 9 curriculum...",
-  "Building Grade 10 curriculum...",
-  "Building Grade 11 curriculum...",
-  "Building Grade 12 curriculum...",
-  "Creating subjects & modules...",
-  "Generating topics & sample questions...",
-  "Finalizing...",
-];
-
-const CET_STEPS = [
-  "Resolving topic mappings...",
-  "Creating BUCET Mock Exam...",
-  "Creating SSU-CET Mock Exam...",
-  "Creating CSPC-CET Mock Exam...",
-  "Creating VSU-CET Mock Exam...",
-  "Creating BiISCAST-CET Mock Exam...",
-  "Creating CNU-CET Mock Exam...",
-  "Creating UPCAT Mock Exam...",
-  "Creating PUPCET Mock Exam...",
-  "Creating USTET Mock Exam...",
-  "Creating ACET Mock Exam...",
-  "Creating DECAT Mock Exam...",
-  "Finalizing...",
-];
 
 export default function ProgramsPageWrapper() {
   return (
@@ -127,20 +109,16 @@ function ProgramsPage() {
   const [viewMode, setViewMode] = useState<"grid" | "list">(
     (searchParams.get("view") as "grid" | "list") ?? "grid"
   );
-  const [sortField, setSortField] = useState<SortField>(
-    (searchParams.get("sort") as SortField) ?? "createdAt"
+  const [sortOption, setSortOption] = useState<SortOption>(
+    (searchParams.get("sort") as SortOption) ?? "createdAt-desc"
   );
-  const [sortDirection, setSortDirection] = useState<SortDirection>(
-    (searchParams.get("dir") as SortDirection) ?? "desc"
+  const [contentFilter, setContentFilter] = useState<ContentFilter>(
+    (searchParams.get("content") as ContentFilter) ?? "none"
   );
   const [programToDelete, setProgramToDelete] = useState<Program | null>(null);
   const [isPopulating, setIsPopulating] = useState(false);
   const [isGeneratingCet, setIsGeneratingCet] = useState(false);
-  const [cetTargetProgram, setCetTargetProgram] = useState<Program | null>(null);
-  const [populateProgress, setPopulateProgress] = useState(0);
-  const [populateStep, setPopulateStep] = useState("");
-  const [cetProgress, setCetProgress] = useState(0);
-  const [cetStep, setCetStep] = useState("");
+  const [showCetPicker, setShowCetPicker] = useState(false);
 
   // Debounce search input (300ms)
   useEffect(() => {
@@ -154,11 +132,11 @@ function ProgramsPage() {
     if (debouncedQuery) params.set("q", debouncedQuery);
     if (selectedStatus !== "all") params.set("status", selectedStatus);
     if (viewMode !== "grid") params.set("view", viewMode);
-    if (sortField !== "createdAt") params.set("sort", sortField);
-    if (sortDirection !== "desc") params.set("dir", sortDirection);
+    if (sortOption !== "createdAt-desc") params.set("sort", sortOption);
+    if (contentFilter !== "none") params.set("content", contentFilter);
     const qs = params.toString();
     router.replace(qs ? `/admin/programs?${qs}` : "/admin/programs", { scroll: false });
-  }, [debouncedQuery, selectedStatus, viewMode, sortField, sortDirection, router]);
+  }, [debouncedQuery, selectedStatus, viewMode, sortOption, contentFilter, router]);
 
   // Fetch programs on mount
   useEffect(() => {
@@ -172,27 +150,11 @@ function ProgramsPage() {
       const data = await programsApi.list();
       setPrograms(data as Program[]);
     } catch (err) {
-      console.error("Failed to fetch programs:", err);
       setError("Failed to load programs. Please try again.");
     } finally {
       setIsLoading(false);
     }
   }, []);
-
-  // Simulate progress steps for long-running operations
-  const runProgressSimulation = async (
-    steps: string[],
-    setProgress: (p: number) => void,
-    setStep: (s: string) => void,
-    durationMs: number
-  ) => {
-    const stepDuration = durationMs / steps.length;
-    for (let i = 0; i < steps.length; i++) {
-      setStep(steps[i]);
-      setProgress(((i + 1) / steps.length) * 100);
-      await new Promise((r) => setTimeout(r, stepDuration));
-    }
-  };
 
   // Filter + sort (client-side; the API already returns createdAt desc)
   const filteredPrograms = programs
@@ -205,35 +167,63 @@ function ProgramsPage() {
         program.slug.toLowerCase().includes(q);
       const matchesStatus =
         selectedStatus === "all" || program.status.toLowerCase() === selectedStatus;
-      return matchesSearch && matchesStatus;
+      const matchesContent =
+        contentFilter === "none" ||
+        (contentFilter === "hasCurriculums" && (program._count?.curriculums ?? 0) > 0) ||
+        (contentFilter === "hasEnrollments" && (program._count?.enrollments ?? 0) > 0);
+      return matchesSearch && matchesStatus && matchesContent;
     })
     .sort((a, b) => {
+      const [field, dir] = sortOption.split("-") as [string, "asc" | "desc"];
       let cmp = 0;
-      if (sortField === "name") {
+      if (field === "name") {
         cmp = a.name.localeCompare(b.name);
-      } else if (sortField === "enrollments") {
+      } else if (field === "enrollments") {
         cmp = (a._count?.enrollments ?? 0) - (b._count?.enrollments ?? 0);
       } else {
         // createdAt — fall back to original order if missing
         cmp = (b.createdAt ?? "").localeCompare(a.createdAt ?? "");
       }
-      return sortDirection === "asc" ? cmp : -cmp;
+      return dir === "asc" ? cmp : -cmp;
     });
 
-  const hasActiveFilters = !!debouncedQuery || selectedStatus !== "all";
+  const hasActiveFilters = !!debouncedQuery || selectedStatus !== "all" || contentFilter !== "none";
 
   const handleClearFilters = () => {
     setSearchInput("");
     setSelectedStatus("all");
+    setContentFilter("none");
   };
 
-  const handleToggleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+  const handleToggleSort = (field: "name" | "enrollments") => {
+    if (sortOption.startsWith(field)) {
+      // Same field — toggle direction
+      const dir = sortOption.split("-")[1] as "asc" | "desc";
+      setSortOption(`${field}-${dir === "asc" ? "desc" : "asc"}` as SortOption);
     } else {
-      setSortField(field);
-      setSortDirection(field === "name" ? "asc" : "desc");
+      // New field — set its default direction
+      setSortOption(`${field}-${field === "name" ? "asc" : "desc"}` as SortOption);
     }
+  };
+
+  const handleStatClick = (stat: "all" | "published" | "hasCurriculums" | "hasEnrollments") => {
+    if (stat === "all") {
+      setSelectedStatus("all");
+      setContentFilter("none");
+    } else if (stat === "published") {
+      setSelectedStatus(selectedStatus === "published" ? "all" : "published");
+      setContentFilter("none");
+    } else if (stat === "hasCurriculums") {
+      setContentFilter(contentFilter === "hasCurriculums" ? "none" : "hasCurriculums");
+    } else if (stat === "hasEnrollments") {
+      setContentFilter(contentFilter === "hasEnrollments" ? "none" : "hasEnrollments");
+    }
+  };
+
+  const isStatActive = (stat: "all" | "published" | "hasCurriculums" | "hasEnrollments") => {
+    if (stat === "all") return selectedStatus === "all" && contentFilter === "none";
+    if (stat === "published") return selectedStatus === "published" && contentFilter === "none";
+    return contentFilter === stat;
   };
 
   const handleCreateProgram = () => {
@@ -253,7 +243,6 @@ function ProgramsPage() {
       await fetchPrograms();
       toast.success(`Duplicated "${program.name}" successfully`);
     } catch (err: any) {
-      console.error("Failed to duplicate program:", err);
       const msg = err?.message || "Failed to duplicate program. Please try again.";
       setError(msg);
       toast.error(msg);
@@ -262,63 +251,35 @@ function ProgramsPage() {
 
   const handlePopulateCurriculum = async () => {
     setIsPopulating(true);
-    setPopulateProgress(0);
-    setPopulateStep("Starting...");
     setError(null);
 
-    // Start progress simulation (longer duration for the heavy transaction)
-    const progressPromise = runProgressSimulation(
-      POPULATE_STEPS,
-      setPopulateProgress,
-      setPopulateStep,
-      45000 // ~45s estimated
-    );
-
     try {
-      const result = await programsApi.createFromTemplate();
-      await progressPromise; // Wait for progress to complete
+      await programsApi.createFromTemplate();
       await fetchPrograms();
       toast.success("ARATC SHS Curriculum populated successfully!");
     } catch (err: any) {
-      console.error("Failed to populate curriculum:", err);
       const msg = err?.message || "Failed to populate curriculum. Please try again.";
       setError(msg);
       toast.error(msg);
     } finally {
       setIsPopulating(false);
-      setPopulateProgress(0);
-      setPopulateStep("");
     }
   };
 
   const handleGenerateCetExams = async (programId: string) => {
     setIsGeneratingCet(true);
-    setCetProgress(0);
-    setCetStep("Starting...");
     setError(null);
 
-    const progressPromise = runProgressSimulation(
-      CET_STEPS,
-      setCetProgress,
-      setCetStep,
-      15000 // ~15s estimated
-    );
-
     try {
-      const result = await programsApi.generateCetExams(programId);
-      await progressPromise;
+      await programsApi.generateCetExams(programId);
       await fetchPrograms();
       toast.success("CET Mock Exams generated successfully!");
     } catch (err: any) {
-      console.error("Failed to generate CET mock exams:", err);
       const msg = err?.message || "Failed to generate CET mock exams. Please try again.";
       setError(msg);
       toast.error(msg);
     } finally {
       setIsGeneratingCet(false);
-      setCetTargetProgram(null);
-      setCetProgress(0);
-      setCetStep("");
     }
   };
 
@@ -349,57 +310,69 @@ function ProgramsPage() {
       />
 
       <div className="p-6 space-y-6">
-        {/* Stats Cards - matching Curriculum page design */}
+        {/* Stats Cards — compact, clickable to filter */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-arc-navy-100 flex items-center justify-center">
-                <Layers className="h-5 w-5 text-arc-navy-600" />
+          <Card
+            onClick={() => handleStatClick("all")}
+            className={`cursor-pointer ${isStatActive("all") ? "ring-2 ring-arc-navy-400 border-transparent" : ""}`}
+          >
+            <CardContent className="p-3 flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-arc-navy-100 flex items-center justify-center">
+                <Layers className="h-4 w-4 text-arc-navy-600" />
               </div>
               <div>
-                <div className="text-2xl font-bold text-arc-navy-900">
+                <div className="text-xl font-bold text-arc-navy-900">
                   {isLoading ? "..." : programs.length}
                 </div>
-                <div className="text-sm text-arc-slate-500">Total Programs</div>
+                <div className="text-xs text-arc-slate-500">Total Programs</div>
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
-                <CheckCircle className="h-5 w-5 text-green-600" />
+          <Card
+            onClick={() => handleStatClick("published")}
+            className={`cursor-pointer ${isStatActive("published") ? "ring-2 ring-arc-navy-400 border-transparent" : ""}`}
+          >
+            <CardContent className="p-3 flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-green-100 flex items-center justify-center">
+                <CheckCircle className="h-4 w-4 text-green-600" />
               </div>
               <div>
-                <div className="text-2xl font-bold text-arc-navy-900">
+                <div className="text-xl font-bold text-arc-navy-900">
                   {isLoading ? "..." : publishedCount}
                 </div>
-                <div className="text-sm text-arc-slate-500">Published</div>
+                <div className="text-xs text-arc-slate-500">Published</div>
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <BookOpen className="h-5 w-5 text-blue-600" />
+          <Card
+            onClick={() => handleStatClick("hasCurriculums")}
+            className={`cursor-pointer ${isStatActive("hasCurriculums") ? "ring-2 ring-arc-navy-400 border-transparent" : ""}`}
+          >
+            <CardContent className="p-3 flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                <BookOpen className="h-4 w-4 text-blue-600" />
               </div>
               <div>
-                <div className="text-2xl font-bold text-arc-navy-900">
+                <div className="text-xl font-bold text-arc-navy-900">
                   {isLoading ? "..." : totalCurriculums}
                 </div>
-                <div className="text-sm text-arc-slate-500">Curriculums</div>
+                <div className="text-xs text-arc-slate-500">Curriculums</div>
               </div>
             </CardContent>
           </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                <Users className="h-5 w-5 text-purple-600" />
+          <Card
+            onClick={() => handleStatClick("hasEnrollments")}
+            className={`cursor-pointer ${isStatActive("hasEnrollments") ? "ring-2 ring-arc-navy-400 border-transparent" : ""}`}
+          >
+            <CardContent className="p-3 flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                <Users className="h-4 w-4 text-purple-600" />
               </div>
               <div>
-                <div className="text-2xl font-bold text-arc-navy-900">
+                <div className="text-xl font-bold text-arc-navy-900">
                   {isLoading ? "..." : totalEnrollments}
                 </div>
-                <div className="text-sm text-arc-slate-500">Enrollments</div>
+                <div className="text-xs text-arc-slate-500">Enrollments</div>
               </div>
             </CardContent>
           </Card>
@@ -451,18 +424,12 @@ function ProgramsPage() {
               <option value="archived">Archived</option>
             </select>
 
-            {/* Sort dropdown */}
+            {/* Sort dropdown — direction baked into the options, no standalone button */}
             <div className="relative">
               <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-arc-slate-400 pointer-events-none" />
               <select
-                value={sortField}
-                onChange={(e) => {
-                  const field = e.target.value as SortField;
-                  if (sortField !== field) {
-                    setSortField(field);
-                    setSortDirection(field === "name" ? "asc" : "desc");
-                  }
-                }}
+                value={sortOption}
+                onChange={(e) => setSortOption(e.target.value as SortOption)}
                 disabled={isLoading}
                 className="h-10 pl-10 pr-8 rounded-lg border border-arc-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-arc-navy-500 appearance-none cursor-pointer"
               >
@@ -474,20 +441,6 @@ function ProgramsPage() {
               </select>
               <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-arc-slate-400 pointer-events-none" />
             </div>
-
-            {/* Sort direction toggle */}
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
-              disabled={isLoading}
-              title={`Sort ${sortDirection === "asc" ? "ascending" : "descending"}`}
-              className="h-10 w-10"
-            >
-              <span className="text-xs font-bold text-arc-navy-700">
-                {sortDirection === "asc" ? "↑" : "↓"}
-              </span>
-            </Button>
 
             {hasActiveFilters && (
               <Button
@@ -560,21 +513,14 @@ function ProgramsPage() {
                     {isPopulating && <Loader2 className="h-4 w-4 animate-spin text-arc-orange-500" />}
                   </div>
                   {isPopulating && (
-                    <div className="mt-2">
-                      <Progress value={populateProgress} max={100} size="sm" variant="default" showLabel />
-                      <p className="text-xs text-arc-slate-500 mt-1">{populateStep}</p>
-                    </div>
+                    <p className="text-xs text-arc-slate-500 mt-1 pl-6">
+                      Building curriculum tree — this may take a minute.
+                    </p>
                   )}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-arc-slate-200 my-1 mx-1" />
                 <DropdownMenuItem
-                  onClick={() => {
-                    const target = programs[0];
-                    if (target) {
-                      setCetTargetProgram(target);
-                      handleGenerateCetExams(target.id);
-                    }
-                  }}
+                  onClick={() => setShowCetPicker(true)}
                   disabled={isGeneratingCet || programs.length === 0}
                   className="cursor-pointer px-3 py-2.5 hover:bg-arc-navy-50 rounded-md mx-1 mb-1"
                 >
@@ -586,10 +532,9 @@ function ProgramsPage() {
                     {isGeneratingCet && <Loader2 className="h-4 w-4 animate-spin text-arc-orange-500" />}
                   </div>
                   {isGeneratingCet && (
-                    <div className="mt-2">
-                      <Progress value={cetProgress} max={100} size="sm" variant="default" showLabel />
-                      <p className="text-xs text-arc-slate-500 mt-1">{cetStep}</p>
-                    </div>
+                    <p className="text-xs text-arc-slate-500 mt-1 pl-6">
+                      Generating exam blueprints — this may take a moment.
+                    </p>
                   )}
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -625,14 +570,13 @@ function ProgramsPage() {
             </p>
             {filteredPrograms.length > 0 && (
               <p className="text-xs text-arc-slate-400">
-                Sorted by {SORT_OPTIONS.find((o) => o.value === sortField)?.label ?? "Date Created"}{" "}
-                ({sortDirection === "asc" ? "ascending" : "descending"})
+                Sorted by {SORT_OPTIONS.find((o) => o.value === sortOption)?.label ?? "Newest first"}
               </p>
             )}
           </div>
         )}
 
-        {/* Global Progress Overlays for long operations */}
+        {/* Global loading overlay for long operations */}
         {(isPopulating || isGeneratingCet) && (
           <div className="fixed inset-0 bg-black/20 z-40 flex items-center justify-center p-4">
             <Card className="w-full max-w-md bg-white shadow-xl">
@@ -656,16 +600,14 @@ function ProgramsPage() {
                     </p>
                   </div>
                 </div>
-                <Progress
-                  value={isPopulating ? populateProgress : cetProgress}
-                  max={100}
-                  size="lg"
-                  variant="default"
-                  showLabel
-                />
-                <p className="text-sm text-arc-slate-500 mt-2 text-center">
-                  {isPopulating ? populateStep : cetStep}
-                </p>
+                <div className="flex items-center gap-3 py-2">
+                  <Loader2 className="h-5 w-5 animate-spin text-arc-orange-500" />
+                  <p className="text-sm text-arc-slate-600">
+                    {isPopulating
+                      ? "Building curriculum tree…"
+                      : "Generating exam blueprints…"}
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -675,18 +617,16 @@ function ProgramsPage() {
         {isLoading && (
           <>
             {viewMode === "grid" && (
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {[1, 2, 3].map((i) => (
-                  <Card key={i} className="animate-pulse">
-                    <CardContent className="p-5">
-                      <div className="h-1 bg-arc-slate-200 rounded mb-4" />
-                      <div className="h-6 w-12 bg-arc-slate-200 rounded mb-2" />
-                      <div className="h-4 w-20 bg-arc-slate-200 rounded mb-4" />
-                      <div className="grid grid-cols-2 gap-2">
-                        {[1, 2, 3, 4].map((j) => (
-                          <div key={j} className="h-10 bg-arc-slate-200 rounded" />
-                        ))}
-                      </div>
+                  <Card key={i} className="animate-pulse overflow-hidden">
+                    {/* Header skeleton */}
+                    <div className="h-24 bg-arc-slate-200" />
+                    <CardContent className="p-4 space-y-2.5">
+                      <div className="h-4 w-3/4 bg-arc-slate-200 rounded" />
+                      <div className="h-3 w-1/2 bg-arc-slate-200 rounded" />
+                      <div className="h-3 w-2/3 bg-arc-slate-200 rounded" />
+                      <div className="h-3 w-full bg-arc-slate-200 rounded mt-2" />
                     </CardContent>
                   </Card>
                 ))}
@@ -702,9 +642,7 @@ function ProgramsPage() {
                           {[
                             "Program",
                             "Type",
-                            "Subjects",
-                            "Modules",
-                            "Lessons",
+                            "Curriculums",
                             "Enrollments",
                             "Status",
                           ].map((h) => (
@@ -718,7 +656,7 @@ function ProgramsPage() {
                       <tbody className="divide-y divide-arc-slate-100">
                         {[1, 2, 3].map((i) => (
                           <tr key={i}>
-                            {Array.from({ length: 7 }).map((_, j) => (
+                            {Array.from({ length: 5 }).map((_, j) => (
                               <td key={j} className="px-4 py-3">
                                 <div className="h-4 bg-arc-slate-200 rounded w-3/4" />
                               </td>
@@ -767,8 +705,8 @@ function ProgramsPage() {
                       >
                         <span className="inline-flex items-center gap-1">
                           Program
-                          {sortField === "name" && (
-                            <span className="text-arc-orange-500">{sortDirection === "asc" ? "↑" : "↓"}</span>
+                          {sortOption.startsWith("name") && (
+                            <span className="text-arc-orange-500">{sortOption.endsWith("asc") ? "↑" : "↓"}</span>
                           )}
                         </span>
                       </th>
@@ -776,13 +714,7 @@ function ProgramsPage() {
                         Type
                       </th>
                       <th className="text-left px-4 py-3 text-sm font-semibold text-arc-navy-900">
-                        Subjects
-                      </th>
-                      <th className="text-left px-4 py-3 text-sm font-semibold text-arc-navy-900">
-                        Modules
-                      </th>
-                      <th className="text-left px-4 py-3 text-sm font-semibold text-arc-navy-900">
-                        Lessons
+                        Curriculums
                       </th>
                       <th
                         className="text-left px-4 py-3 text-sm font-semibold text-arc-navy-900 cursor-pointer select-none hover:text-arc-navy-700"
@@ -790,8 +722,8 @@ function ProgramsPage() {
                       >
                         <span className="inline-flex items-center gap-1">
                           Enrollments
-                          {sortField === "enrollments" && (
-                            <span className="text-arc-orange-500">{sortDirection === "asc" ? "↑" : "↓"}</span>
+                          {sortOption.startsWith("enrollments") && (
+                            <span className="text-arc-orange-500">{sortOption.endsWith("asc") ? "↑" : "↓"}</span>
                           )}
                         </span>
                       </th>
@@ -839,13 +771,7 @@ function ProgramsPage() {
                             </Badge>
                           </td>
                           <td className="px-4 py-3 text-sm text-arc-navy-800">
-                            {program._count?.subjects ?? 0}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-arc-navy-800">
-                            {program._count?.modules ?? 0}
-                          </td>
-                          <td className="px-4 py-3 text-sm text-arc-navy-800">
-                            {program._count?.lessons ?? 0}
+                            {program._count?.curriculums ?? 0}
                           </td>
                           <td className="px-4 py-3 text-sm text-arc-navy-800">
                             {program._count?.enrollments ?? 0}
@@ -995,6 +921,51 @@ function ProgramsPage() {
             )
           }
         />
+
+        {/* CET Exam Program Picker */}
+        {showCetPicker && (
+          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+            <Card className="w-full max-w-md bg-white shadow-xl">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="h-10 w-10 rounded-xl bg-arc-orange-100 flex items-center justify-center">
+                    <Layers className="h-5 w-5 text-arc-orange-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-arc-navy-900">Generate CET Mock Exams</h3>
+                    <p className="text-sm text-arc-slate-500">Select a program to generate exams for.</p>
+                  </div>
+                </div>
+                <div className="max-h-64 overflow-y-auto space-y-2 mb-4">
+                  {programs.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        setShowCetPicker(false);
+                        handleGenerateCetExams(p.id);
+                      }}
+                      disabled={isGeneratingCet}
+                      className="w-full flex items-center justify-between p-3 rounded-lg border border-arc-slate-200 hover:border-arc-orange-400 hover:bg-arc-orange-50 transition-colors text-left disabled:opacity-50"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium text-arc-navy-900 truncate">{p.name}</div>
+                        <div className="text-xs text-arc-slate-500">
+                          {p._count?.curriculums ?? 0} curriculums · {p._count?.assessments ?? 0} assessments
+                        </div>
+                      </div>
+                      <ChevronDown className="h-4 w-4 text-arc-slate-400 rotate-[-90deg] flex-shrink-0" />
+                    </button>
+                  ))}
+                </div>
+                <div className="flex justify-end">
+                  <Button variant="outline" onClick={() => setShowCetPicker(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </>
   );

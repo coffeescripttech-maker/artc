@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { WorkspaceHeader } from "@/components/admin";
 import { lessonsApi, topicsApi } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
+import { generateSlug } from "@/lib/utils/slug";
 import { Button, Input, Card, CardContent } from "@/components/ui";
 import {
   ArrowLeft,
@@ -38,15 +40,6 @@ const lessonTypes = [
   { value: "ACTIVITY", label: "Activity", icon: Play, description: "Interactive learning activity" },
 ];
 
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .trim();
-}
-
 export default function NewLessonPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,8 +66,7 @@ export default function NewLessonPage() {
     try {
       const data = await topicsApi.list() as Topic[];
       setTopics(data);
-    } catch (err) {
-      console.error("Failed to fetch topics:", err);
+    } catch {
     } finally {
       setIsLoadingTopics(false);
     }
@@ -91,7 +83,6 @@ export default function NewLessonPage() {
     setError(null);
 
     try {
-      // Token is automatically retrieved from localStorage by apiFetch
       const payload = {
         topicId: formData.topicId,
         title: formData.title,
@@ -102,9 +93,9 @@ export default function NewLessonPage() {
         videoUrl: formData.videoUrl || undefined,
       };
       await lessonsApi.create(payload);
+      toast.success("Lesson created successfully");
       router.push("/admin/lessons");
     } catch (err: any) {
-      console.error("Failed to create lesson:", err);
       setError(err.message || "Failed to create lesson. Please try again.");
     } finally {
       setIsSubmitting(false);

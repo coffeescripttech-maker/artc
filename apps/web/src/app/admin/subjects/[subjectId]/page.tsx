@@ -1,24 +1,23 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { WorkspaceHeader, DraggableList, type DraggableItem, ModuleForm } from "@/components/admin";
+import { WorkspaceHeader, DraggableList, type DraggableItem, ModuleForm, ConfirmModal } from "@/components/admin";
 import { subjectsApi, modulesApi } from "@/lib/api/client";
+import { PageLoader, NoDataEmpty, ErrorEmpty } from "@/components/branding";
 import { Card, CardContent, Button, Badge } from "@/components/ui";
 import { toast } from "@/lib/toast";
 import {
   Plus,
   BookOpen,
   FileText,
-  Edit,
   Trash2,
-  Settings,
   Layers,
   ArrowRight,
   GripVertical,
-  RefreshCw,
   Send,
+  AlertCircle,
 } from "lucide-react";
 
 // Types
@@ -48,29 +47,6 @@ interface Module {
   _count?: { topics: number; lessons: number };
 }
 
-const mockSubject: Subject = {
-  id: "1",
-  name: "Mathematics",
-  slug: "mathematics",
-  code: "MATH",
-  icon: "🧮",
-  color: "blue",
-  status: "PUBLISHED",
-  _count: {
-    modules: 4,
-    lessons: 18,
-    questions: 120,
-    assessments: 8,
-  },
-};
-
-const mockModules: Module[] = [
-  { id: "1", name: "Number System", slug: "number-system", orderIndex: 0, status: "PUBLISHED", _count: { topics: 4, lessons: 8 } },
-  { id: "2", name: "Algebra", slug: "algebra", orderIndex: 1, status: "PUBLISHED", _count: { topics: 5, lessons: 12 } },
-  { id: "3", name: "Geometry", slug: "geometry", orderIndex: 2, status: "PUBLISHED", _count: { topics: 4, lessons: 10 } },
-  { id: "4", name: "Statistics", slug: "statistics", orderIndex: 3, status: "DRAFT", _count: { topics: 3, lessons: 7 } },
-];
-
 const statusColors: Record<string, string> = {
   PUBLISHED: "bg-green-100 text-green-700",
   DRAFT: "bg-yellow-100 text-yellow-700",
@@ -79,6 +55,7 @@ const statusColors: Record<string, string> = {
 
 export default function SubjectDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const subjectId = params.subjectId as string;
   const [subject, setSubject] = useState<Subject | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
@@ -87,6 +64,7 @@ export default function SubjectDetailPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [showModuleForm, setShowModuleForm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Module | null>(null);
 
   // Fetch subject and modules
   useEffect(() => {
@@ -97,28 +75,15 @@ export default function SubjectDetailPage() {
     setIsLoading(true);
     setError(null);
     try {
-      // Try to fetch from API
       const [subjectData, modulesData] = await Promise.all([
-        subjectsApi.getById(subjectId).catch(() => null),
-        modulesApi.list(subjectId).catch(() => null),
+        subjectsApi.getById(subjectId),
+        modulesApi.list(subjectId),
       ]);
 
-      if (subjectData) {
-        setSubject(subjectData as Subject);
-      } else {
-        setSubject(mockSubject);
-      }
-
-      if (modulesData && Array.isArray(modulesData)) {
-        setModules(modulesData as Module[]);
-      } else {
-        setModules(mockModules);
-      }
+      setSubject(subjectData as Subject);
+      setModules(Array.isArray(modulesData) ? (modulesData as Module[]) : []);
     } catch (err) {
-      console.error("Failed to fetch subject data:", err);
-      setError("Failed to load subject data. Using demo data.");
-      setSubject(mockSubject);
-      setModules(mockModules);
+      setError("Failed to load subject data.");
     } finally {
       setIsLoading(false);
     }
@@ -130,40 +95,34 @@ export default function SubjectDetailPage() {
     subjectId?: string;
   }) => {
     try {
-      const newModule = await modulesApi.create(
-        {
-          name: data.name,
-          subjectId: data.subjectId || subjectId,
-          description: data.description
-        },
-        "" // Token would come from auth context
-      );
+      const newModule = await modulesApi.create({
+        name: data.name,
+        subjectId: data.subjectId || subjectId,
+        description: data.description,
+      });
       setModules([...modules, newModule as Module]);
       setShowModuleForm(false);
-    } catch (err) {
-      // Fallback to local state for demo
-      const newModule: Module = {
-        id: Date.now().toString(),
-        name: data.name,
-        slug: data.name.toLowerCase().replace(/\s+/g, "-"),
-        orderIndex: modules.length,
-        status: "DRAFT",
-        _count: { topics: 0, lessons: 0 },
-      };
-      setModules([...modules, newModule]);
-      setShowModuleForm(false);
+      toast.success("Module created successfully");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create module. Please try again.");
     }
   };
 
-  const handleDeleteModule = async (moduleId: string) => {
-    if (!confirm("Are you sure you want to delete this module?")) return;
+  const handleDeleteModule = (module: Module) => {
+    setDeleteTarget(module);
+  };
 
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await modulesApi.delete(moduleId, "");
-      setModules(modules.filter((m) => m.id !== moduleId));
-    } catch (err) {
-      // Fallback to local state for demo
-      setModules(modules.filter((m) => m.id !== moduleId));
+      await modulesApi.delete(deleteTarget.id);
+      setModules(modules.filter((m) => m.id !== deleteTarget.id));
+      toast.success(`Deleted "${deleteTarget.name}" successfully`);
+    } catch (err: any) {
+      const msg = err?.message || "Failed to delete module. Please try again.";
+      toast.error(msg);
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -174,9 +133,9 @@ export default function SubjectDetailPage() {
     subtitle: `${module._count?.topics || 0} Topics • ${module._count?.lessons || 0} Lessons`,
     badge: module.status,
     badgeVariant: (module.status === "PUBLISHED" ? "success" : module.status === "DRAFT" ? "warning" : "default") as "success" | "warning" | "default",
-    onClick: () => {},
-    onEdit: () => console.log("Edit module:", module.id),
-    onDelete: () => handleDeleteModule(module.id),
+    onClick: () => router.push(`/admin/modules/${module.id}`),
+    onEdit: () => router.push(`/admin/modules/${module.id}`),
+    onDelete: () => handleDeleteModule(module),
   }));
 
   const handleReorderModules = async (reorderedItems: DraggableItem[]) => {
@@ -194,11 +153,11 @@ export default function SubjectDetailPage() {
       await modulesApi.reorder(
         subjectId,
         reorderedItems.map((i) => i.id),
-        ""
       );
+      toast.success("Module order saved");
     } catch (err) {
-      console.error("Failed to reorder modules:", err);
-      // Revert on error - would need to store original state
+      toast.error("Failed to save module order. Please try again.");
+      fetchData(); // Reload to revert
     } finally {
       setIsSaving(false);
     }
@@ -211,14 +170,13 @@ export default function SubjectDetailPage() {
     setIsPublishing(true);
     try {
       await Promise.all(
-        draftModules.map((m) => modulesApi.publish(m.id))
+        draftModules.map((m) => modulesApi.publish(m.id)),
       );
       setModules(modules.map((m) =>
-        m.status !== "PUBLISHED" ? { ...m, status: "PUBLISHED" as const } : m
+        m.status !== "PUBLISHED" ? { ...m, status: "PUBLISHED" as const } : m,
       ));
       toast.success(`Published ${draftModules.length} modules`);
     } catch (err) {
-      console.error("Failed to publish modules:", err);
       toast.error("Failed to publish modules");
     } finally {
       setIsPublishing(false);
@@ -235,11 +193,10 @@ export default function SubjectDetailPage() {
         await modulesApi.archive(moduleId);
       }
       setModules(modules.map((m) =>
-        m.id === moduleId ? { ...m, status: newStatus as Module["status"] } : m
+        m.id === moduleId ? { ...m, status: newStatus as Module["status"] } : m,
       ));
       toast.success(`Module ${newStatus === "PUBLISHED" ? "published" : "unpublished"}`);
     } catch (err) {
-      console.error("Failed to toggle module status:", err);
       toast.error("Failed to update module status");
     }
   };
@@ -247,24 +204,26 @@ export default function SubjectDetailPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="h-8 w-8 animate-spin text-arc-orange-500 mx-auto mb-4" />
-          <p className="text-arc-slate-500">Loading subject...</p>
-        </div>
+        <PageLoader />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <ErrorEmpty onRetry={fetchData} />
       </div>
     );
   }
 
   if (!subject) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-arc-navy-900 mb-2">Subject not found</h2>
-          <p className="text-arc-slate-500 mb-4">The subject you're looking for doesn't exist.</p>
-          <Link href="/admin/subjects">
-            <Button variant="accent">Back to Subjects</Button>
-          </Link>
-        </div>
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <NoDataEmpty
+          title="Subject Not Found"
+          description="The subject you're looking for doesn't exist or may have been deleted."
+        />
       </div>
     );
   }
@@ -286,22 +245,9 @@ export default function SubjectDetailPage() {
           { label: "Questions", value: subject._count?.questions || 0 },
           { label: "Assessments", value: subject._count?.assessments || 0 },
         ]}
-        actions={
-          <Button variant="outline" size="sm">
-            <Settings className="h-4 w-4 mr-2" />
-            Settings
-          </Button>
-        }
       />
 
       <div className="space-y-6 p-6">
-        {/* Error banner */}
-        {error && (
-          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-yellow-700 text-sm">{error}</p>
-          </div>
-        )}
-
         {/* Module List with Drag-and-Drop */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -342,87 +288,85 @@ export default function SubjectDetailPage() {
           </p>
         </div>
 
-        <DraggableList
-          items={moduleItems}
-          onReorder={handleReorderModules}
-          renderItem={(item, dragHandleProps) => {
-            const module = modules.find((m) => m.id === item.id);
-            if (!module) return null;
+        {modules.length === 0 ? (
+          <NoDataEmpty
+            title="No Modules Yet"
+            description="Add your first module to start building the subject structure."
+          />
+        ) : (
+          <DraggableList
+            items={moduleItems}
+            onReorder={handleReorderModules}
+            renderItem={(item, dragHandleProps) => {
+              const module = modules.find((m) => m.id === item.id);
+              if (!module) return null;
 
-            return (
-              <Card className="hover:shadow-arc-md transition-shadow cursor-pointer">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <button
-                      {...dragHandleProps}
-                      className="cursor-grab active:cursor-grabbing p-1 text-arc-slate-400 hover:text-arc-slate-600"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <GripVertical className="h-5 w-5" />
-                    </button>
+              return (
+                <Card className="hover:shadow-arc-md transition-shadow cursor-pointer">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <button
+                        {...dragHandleProps}
+                        className="cursor-grab active:cursor-grabbing p-1 text-arc-slate-400 hover:text-arc-slate-600"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <GripVertical className="h-5 w-5" />
+                      </button>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium text-arc-slate-500 w-8">
-                          {String(module.orderIndex + 1).padStart(2, "0")}
-                        </span>
-                        <h3 className="font-semibold text-arc-navy-900 truncate">{module.name}</h3>
-                        <Badge className={statusColors[module.status]}>
-                          {module.status}
-                        </Badge>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-medium text-arc-slate-500 w-8">
+                            {String(module.orderIndex + 1).padStart(2, "0")}
+                          </span>
+                          <h3 className="font-semibold text-arc-navy-900 truncate">{module.name}</h3>
+                          <Badge className={statusColors[module.status]}>
+                            {module.status}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-4 mt-1 ml-11 text-sm text-arc-slate-500">
+                          <span>{module._count?.topics || 0} Topics</span>
+                          <span>•</span>
+                          <span>{module._count?.lessons || 0} Lessons</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-4 mt-1 ml-11 text-sm text-arc-slate-500">
-                        <span>{module._count?.topics || 0} Topics</span>
-                        <span>•</span>
-                        <span>{module._count?.lessons || 0} Lessons</span>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="px-2 py-1 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleModuleStatus(module.id, module.status);
+                          }}
+                        >
+                          {module.status === "PUBLISHED" ? (
+                            <Badge variant="success" className="cursor-pointer">Published</Badge>
+                          ) : (
+                            <Badge className="bg-yellow-100 text-yellow-700 cursor-pointer">Draft</Badge>
+                          )}
+                        </button>
+                        <Link href={`/admin/modules/${module.id}`}>
+                          <Button variant="ghost" size="sm">
+                            Manage
+                            <ArrowRight className="h-4 w-4 ml-1" />
+                          </Button>
+                        </Link>
+                        <button
+                          className="p-1.5 hover:bg-red-50 rounded"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteModule(module);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-400" />
+                        </button>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="px-2 py-1 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleModuleStatus(module.id, module.status);
-                        }}
-                      >
-                        {module.status === "PUBLISHED" ? (
-                          <Badge variant="success" className="cursor-pointer">Published</Badge>
-                        ) : (
-                          <Badge className="bg-yellow-100 text-yellow-700 cursor-pointer">Draft</Badge>
-                        )}
-                      </button>
-                      <Link href={`/admin/modules/${module.id}`}>
-                        <Button variant="ghost" size="sm">
-                          Manage
-                          <ArrowRight className="h-4 w-4 ml-1" />
-                        </Button>
-                      </Link>
-                      <button
-                        className="p-1.5 hover:bg-arc-slate-100 rounded"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          console.log("Edit module:", module.id);
-                        }}
-                      >
-                        <Edit className="h-4 w-4 text-arc-slate-500" />
-                      </button>
-                      <button
-                        className="p-1.5 hover:bg-red-50 rounded"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteModule(module.id);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-400" />
-                      </button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          }}
-        />
+                  </CardContent>
+                </Card>
+              );
+            }}
+          />
+        )}
 
         {/* Quick Stats */}
         <div className="grid gap-4 md:grid-cols-3">
@@ -454,8 +398,8 @@ export default function SubjectDetailPage() {
                 <Layers className="h-5 w-5 text-white" />
               </div>
               <div>
-                <div className="text-2xl font-bold text-green-900">78%</div>
-                <div className="text-sm text-green-700">Content Complete</div>
+                <div className="text-2xl font-bold text-green-900">{modules.filter((m) => m.status === "PUBLISHED").length}/{modules.length || 1}</div>
+                <div className="text-sm text-green-700">Modules Published</div>
               </div>
             </CardContent>
           </Card>
@@ -487,6 +431,17 @@ export default function SubjectDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Delete Module"
+        description={`Are you sure you want to delete "${deleteTarget?.name}"? This will also remove all topics and lessons within this module.`}
+        confirmLabel="Delete Module"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </>
   );
 }

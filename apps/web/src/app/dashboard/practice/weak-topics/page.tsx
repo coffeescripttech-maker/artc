@@ -140,8 +140,7 @@ export default function WeakTopicsPage() {
                         </div>
                         <Progress
                           value={completion}
-                          className="h-2"
-                          indicatorClassName="bg-red-500"
+                          variant="alert"
                         />
                       </div>
 

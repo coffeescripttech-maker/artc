@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import {
   list,
+  getById,
   getBySlug,
   create,
   update,
@@ -15,6 +16,7 @@ const router: IRouter = Router();
 
 // Public routes
 router.get("/", list);
+router.get("/by-id/:id", getById);
 router.get("/:slug", getBySlug);
 
 // Template trigger routes (content_admin+)

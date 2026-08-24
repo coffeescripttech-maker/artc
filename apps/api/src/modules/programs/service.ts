@@ -22,6 +22,35 @@ export async function listPrograms(args?: { status?: "DRAFT" | "PUBLISHED" | "AR
   });
 }
 
+export async function getProgramById(id: string) {
+  const program = await prisma.program.findUnique({
+    where: { id },
+    include: {
+      _count: {
+        select: {
+          curriculums: true,
+          enrollments: true,
+          assessments: true,
+        },
+      },
+      curriculums: {
+        orderBy: { orderIndex: "asc" },
+        include: {
+          _count: {
+            select: { items: true },
+          },
+        },
+      },
+    },
+  });
+
+  if (!program) {
+    throw new NotFoundError("Program not found");
+  }
+
+  return program;
+}
+
 export async function getProgramBySlug(slug: string) {
   const program = await prisma.program.findUnique({
     where: { slug },
@@ -90,6 +119,7 @@ export async function createProgram(input: CreateProgramInput) {
       description: input.description,
       // Validator exposes `stage`; the DB column is `programType`.
       programType: input.stage,
+      imageUrl: input.imageUrl || undefined,
       status: "DRAFT",
     },
   });
@@ -101,12 +131,22 @@ export async function updateProgram(id: string, input: Partial<CreateProgramInpu
     throw new NotFoundError("Program not found");
   }
 
+  // Validate slug uniqueness if slug is being changed
+  if (input.slug && input.slug !== existing.slug) {
+    const slugConflict = await prisma.program.findUnique({ where: { slug: input.slug } });
+    if (slugConflict) {
+      throw new ValidationError("A program with this slug already exists");
+    }
+  }
+
   return prisma.program.update({
     where: { id },
     data: {
       name: input.name,
+      slug: input.slug,
       description: input.description,
       programType: input.stage ?? undefined,
+      imageUrl: input.imageUrl ?? undefined,
     },
   });
 }
@@ -129,7 +169,15 @@ export async function deleteProgram(id: string) {
     throw new NotFoundError("Program not found");
   }
 
-  return prisma.program.delete({ where: { id } });
+  // Delete associated records first to avoid FK constraint errors,
+  // since Curriculum.programId and Assessment.programId are optional
+  // relations with no onDelete: Cascade.
+  return prisma.$transaction(async (tx) => {
+    await tx.assessment.deleteMany({ where: { programId: id } });
+    await tx.enrollment.deleteMany({ where: { programId: id } });
+    await tx.curriculum.deleteMany({ where: { programId: id } });
+    return tx.program.delete({ where: { id } });
+  });
 }
 
 // ============================================================
@@ -186,7 +234,10 @@ export async function createProgramFromTemplate(
     // 2. For each grade, create a Curriculum with linked Subjects (upsert)
     for (const grade of template.grades) {
       const gradeLabel = grade.gradeLevel.replace("GRADE_", "Grade ");
-      const curriculumSlug = `${template.program.slug}-${grade.gradeLevel.toLowerCase()}`;
+      // Use program.slug (not template.program.slug) so each program gets
+      // its own curriculums — running the template twice no longer steals
+      // curriculums from a previously created program.
+      const curriculumSlug = `${program.slug}-${grade.gradeLevel.toLowerCase()}`;
 
       const curriculum = await tx.curriculum.upsert({
         where: { slug: curriculumSlug },

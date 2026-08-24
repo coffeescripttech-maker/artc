@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { WorkspaceHeader, DraggableList, type DraggableItem, LessonForm } from "@/components/admin";
+import { WorkspaceHeader, DraggableList, type DraggableItem, LessonForm, ConfirmModal } from "@/components/admin";
 import { topicsApi, lessonsApi } from "@/lib/api/client";
+import { PageLoader, NoDataEmpty, ErrorEmpty } from "@/components/branding";
 import { Card, CardContent, Button, Badge } from "@/components/ui";
 import { toast } from "@/lib/toast";
 import {
@@ -17,7 +18,7 @@ import {
   Trash2,
   Eye,
   Clock,
-  RefreshCw,
+  Send,
 } from "lucide-react";
 
 // Types
@@ -49,27 +50,6 @@ interface Lesson {
   orderIndex: number;
 }
 
-const mockTopic: Topic = {
-  id: "2",
-  name: "Linear Equations",
-  slug: "linear-equations",
-  status: "PUBLISHED",
-  module: {
-    id: "2",
-    name: "Algebra",
-    slug: "algebra",
-    subject: { id: "1", name: "Mathematics", slug: "mathematics" },
-  },
-  _count: { lessons: 4 },
-};
-
-const mockLessons: Lesson[] = [
-  { id: "1", title: "Introduction to Linear Equations", slug: "introduction-to-linear-equations", type: "VIDEO", durationMinutes: 8, status: "PUBLISHED", orderIndex: 0 },
-  { id: "2", title: "Solving One-Step Equations", slug: "solving-one-step-equations", type: "VIDEO", durationMinutes: 6, status: "PUBLISHED", orderIndex: 1 },
-  { id: "3", title: "Solving Multi-Step Equations", slug: "solving-multi-step-equations", type: "MIXED", durationMinutes: 12, status: "PUBLISHED", orderIndex: 2 },
-  { id: "4", title: "Practice: Linear Equations", slug: "practice-linear-equations", type: "PRACTICE", durationMinutes: 15, status: "DRAFT", orderIndex: 3 },
-];
-
 const typeConfig: Record<string, { icon: React.ElementType; color: string; bg: string; label: string }> = {
   VIDEO: { icon: Video, color: "text-red-600", bg: "bg-red-100", label: "Video" },
   ARTICLE: { icon: FileText, color: "text-blue-600", bg: "bg-blue-100", label: "Article" },
@@ -85,6 +65,7 @@ const statusColors: Record<string, string> = {
 
 export default function TopicDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const topicId = params.topicId as string;
   const [topic, setTopic] = useState<Topic | null>(null);
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -93,6 +74,7 @@ export default function TopicDetailPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [showLessonForm, setShowLessonForm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Lesson | null>(null);
 
   // Fetch topic and lessons
   useEffect(() => {
@@ -104,26 +86,14 @@ export default function TopicDetailPage() {
     setError(null);
     try {
       const [topicData, lessonsData] = await Promise.all([
-        topicsApi.getById(topicId).catch(() => null),
-        lessonsApi.list(topicId).catch(() => null),
+        topicsApi.getById(topicId),
+        lessonsApi.list(topicId),
       ]);
 
-      if (topicData) {
-        setTopic(topicData as Topic);
-      } else {
-        setTopic(mockTopic);
-      }
-
-      if (lessonsData && Array.isArray(lessonsData)) {
-        setLessons(lessonsData as Lesson[]);
-      } else {
-        setLessons(mockLessons);
-      }
+      setTopic(topicData as Topic);
+      setLessons(Array.isArray(lessonsData) ? (lessonsData as Lesson[]) : []);
     } catch (err) {
-      console.error("Failed to fetch topic data:", err);
-      setError("Failed to load topic data. Using demo data.");
-      setTopic(mockTopic);
-      setLessons(mockLessons);
+      setError("Failed to load topic data.");
     } finally {
       setIsLoading(false);
     }
@@ -139,28 +109,37 @@ export default function TopicDetailPage() {
     subjectId?: string;
     durationMinutes?: number;
   }) => {
-    // Let errors propagate so the LessonForm surfaces them instead of silently
-    // faking a local lesson that never persists.
-    const newLesson = await lessonsApi.create({
-      title: data.title,
-      slug: data.slug,
-      topicId: data.topicId || topicId,
-      description: data.description || undefined,
-      type: data.type,
-      durationMinutes: data.durationMinutes,
-    });
-    setLessons([...lessons, newLesson as Lesson]);
-    setShowLessonForm(false);
+    try {
+      const newLesson = await lessonsApi.create({
+        title: data.title,
+        slug: data.slug,
+        topicId: data.topicId || topicId,
+        description: data.description || undefined,
+        type: data.type,
+        durationMinutes: data.durationMinutes,
+      });
+      setLessons([...lessons, newLesson as Lesson]);
+      setShowLessonForm(false);
+      toast.success("Lesson created successfully");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create lesson. Please try again.");
+    }
   };
 
-  const handleDeleteLesson = async (lessonId: string) => {
-    if (!confirm("Are you sure you want to delete this lesson?")) return;
+  const handleDeleteLesson = (lesson: Lesson) => {
+    setDeleteTarget(lesson);
+  };
 
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await lessonsApi.delete(lessonId, "");
-      setLessons(lessons.filter((l) => l.id !== lessonId));
-    } catch (err) {
-      setLessons(lessons.filter((l) => l.id !== lessonId));
+      await lessonsApi.delete(deleteTarget.id);
+      setLessons(lessons.filter((l) => l.id !== deleteTarget.id));
+      toast.success(`Deleted "${deleteTarget.title}" successfully`);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete lesson. Please try again.");
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -178,7 +157,6 @@ export default function TopicDetailPage() {
       ));
       toast.success(`Lesson ${newStatus === "PUBLISHED" ? "published" : "unpublished"}`);
     } catch (err) {
-      console.error("Failed to toggle lesson status:", err);
       toast.error("Failed to update lesson status");
     }
   };
@@ -190,14 +168,13 @@ export default function TopicDetailPage() {
     setIsPublishing(true);
     try {
       await Promise.all(
-        draftLessons.map((l) => lessonsApi.publish(l.id))
+        draftLessons.map((l) => lessonsApi.publish(l.id)),
       );
       setLessons(lessons.map((l) =>
         l.status !== "PUBLISHED" ? { ...l, status: "PUBLISHED" as const } : l
       ));
       toast.success(`Published ${draftLessons.length} lessons`);
     } catch (err) {
-      console.error("Failed to publish lessons:", err);
       toast.error("Failed to publish lessons");
     } finally {
       setIsPublishing(false);
@@ -211,9 +188,9 @@ export default function TopicDetailPage() {
     subtitle: `${typeConfig[lesson.type]?.label || "Lesson"}${lesson.durationMinutes ? ` • ${lesson.durationMinutes} min` : ""}`,
     badge: lesson.status,
     badgeVariant: (lesson.status === "PUBLISHED" ? "success" : lesson.status === "DRAFT" ? "warning" : "default") as "success" | "warning" | "default",
-    onClick: () => {},
-    onEdit: () => console.log("Edit lesson:", lesson.id),
-    onDelete: () => handleDeleteLesson(lesson.id),
+    onClick: () => router.push(`/admin/lessons/${lesson.id}`),
+    onEdit: () => router.push(`/admin/lessons/${lesson.id}`),
+    onDelete: () => handleDeleteLesson(lesson),
   }));
 
   const handleReorderLessons = async (reorderedItems: DraggableItem[]) => {
@@ -228,10 +205,11 @@ export default function TopicDetailPage() {
       await lessonsApi.reorder(
         topicId,
         reorderedItems.map((i) => i.id),
-        ""
       );
+      toast.success("Lesson order saved");
     } catch (err) {
-      console.error("Failed to reorder lessons:", err);
+      toast.error("Failed to save lesson order. Please try again.");
+      fetchData();
     } finally {
       setIsSaving(false);
     }
@@ -240,24 +218,26 @@ export default function TopicDetailPage() {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="h-8 w-8 animate-spin text-arc-orange-500 mx-auto mb-4" />
-          <p className="text-arc-slate-500">Loading topic...</p>
-        </div>
+        <PageLoader />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <ErrorEmpty onRetry={fetchData} />
       </div>
     );
   }
 
   if (!topic) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-arc-navy-900 mb-2">Topic not found</h2>
-          <p className="text-arc-slate-500 mb-4">The topic you're looking for doesn't exist.</p>
-          <Link href="/admin/modules">
-            <Button variant="accent">Back to Modules</Button>
-          </Link>
-        </div>
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <NoDataEmpty
+          title="Topic Not Found"
+          description="The topic you're looking for doesn't exist or may have been deleted."
+        />
       </div>
     );
   }
@@ -288,12 +268,6 @@ export default function TopicDetailPage() {
       />
 
       <div className="p-6 space-y-6">
-        {error && (
-          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-yellow-700 text-sm">{error}</p>
-          </div>
-        )}
-
         {/* Lesson List Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -315,17 +289,8 @@ export default function TopicDetailPage() {
               onClick={handlePublishAllLessons}
               disabled={isPublishing}
             >
-              {isPublishing ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Publishing...
-                </>
-              ) : (
-                <>
-                  <Video className="h-4 w-4 mr-2" />
-                  Publish All ({lessons.filter((l) => l.status !== "PUBLISHED").length})
-                </>
-              )}
+              <Send className="h-4 w-4 mr-2" />
+              {isPublishing ? "Publishing..." : `Publish All (${lessons.filter((l) => l.status !== "PUBLISHED").length})`}
             </Button>
           )}
         </div>
@@ -339,105 +304,112 @@ export default function TopicDetailPage() {
         </div>
 
         {/* Lesson List with Drag-and-Drop */}
-        <DraggableList
-          items={lessonItems}
-          onReorder={handleReorderLessons}
-          renderItem={(item, dragHandleProps) => {
-            const lesson = lessons.find((l) => l.id === item.id);
-            if (!lesson) return null;
+        {lessons.length === 0 ? (
+          <NoDataEmpty
+            title="No Lessons Yet"
+            description="Add your first lesson to start building the topic content."
+          />
+        ) : (
+          <DraggableList
+            items={lessonItems}
+            onReorder={handleReorderLessons}
+            renderItem={(item, dragHandleProps) => {
+              const lesson = lessons.find((l) => l.id === item.id);
+              if (!lesson) return null;
 
-            const config = typeConfig[lesson.type] || typeConfig.ARTICLE;
-            const TypeIcon = config.icon;
+              const config = typeConfig[lesson.type] || typeConfig.ARTICLE;
+              const TypeIcon = config.icon;
 
-            return (
-              <Card className="hover:shadow-arc-md transition-shadow cursor-pointer">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-3">
-                    <button
-                      {...dragHandleProps}
-                      className="cursor-grab active:cursor-grabbing p-1 text-arc-slate-400 hover:text-arc-slate-600"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <GripVertical className="h-5 w-5" />
-                    </button>
+              return (
+                <Card className="hover:shadow-arc-md transition-shadow cursor-pointer">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <button
+                        {...dragHandleProps}
+                        className="cursor-grab active:cursor-grabbing p-1 text-arc-slate-400 hover:text-arc-slate-600"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <GripVertical className="h-5 w-5" />
+                      </button>
 
-                    <div className="w-8 text-center">
-                      <span className="text-sm font-medium text-arc-slate-500">
-                        {String(lesson.orderIndex + 1).padStart(2, "0")}
-                      </span>
-                    </div>
+                      <div className="w-8 text-center">
+                        <span className="text-sm font-medium text-arc-slate-500">
+                          {String(lesson.orderIndex + 1).padStart(2, "0")}
+                        </span>
+                      </div>
 
-                    <div className={`h-8 w-8 rounded-lg ${config.bg} flex items-center justify-center flex-shrink-0`}>
-                      <TypeIcon className={`h-4 w-4 ${config.color}`} />
-                    </div>
+                      <div className={`h-8 w-8 rounded-lg ${config.bg} flex items-center justify-center flex-shrink-0`}>
+                        <TypeIcon className={`h-4 w-4 ${config.color}`} />
+                      </div>
 
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3">
+                          <Link href={`/admin/lessons/${lesson.id}`}>
+                            <h3 className="font-medium text-arc-navy-900 hover:text-arc-orange-600 transition-colors truncate">
+                              {lesson.title}
+                            </h3>
+                          </Link>
+                          <Badge className={`${config.bg} ${config.color} text-xs`}>
+                            {config.label}
+                          </Badge>
+                          <Badge className={statusColors[lesson.status]}>
+                            {lesson.status}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {lesson.durationMinutes && (
+                        <div className="flex items-center gap-1 text-sm text-arc-slate-500">
+                          <Clock className="h-4 w-4" />
+                          <span>{lesson.durationMinutes} min</span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          className="px-2 py-1 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleLessonStatus(lesson.id, lesson.status);
+                          }}
+                        >
+                          {lesson.status === "PUBLISHED" ? (
+                            <Badge variant="success" className="cursor-pointer">Published</Badge>
+                          ) : (
+                            <Badge className="bg-yellow-100 text-yellow-700 cursor-pointer">Draft</Badge>
+                          )}
+                        </button>
                         <Link href={`/admin/lessons/${lesson.id}`}>
-                          <h3 className="font-medium text-arc-navy-900 hover:text-arc-orange-600 transition-colors truncate">
-                            {lesson.title}
-                          </h3>
+                          <Button variant="ghost" size="sm">
+                            <Eye className="h-4 w-4" />
+                          </Button>
                         </Link>
-                        <Badge className={`${config.bg} ${config.color} text-xs`}>
-                          {config.label}
-                        </Badge>
-                        <Badge className={statusColors[lesson.status]}>
-                          {lesson.status}
-                        </Badge>
+                        <button
+                          className="p-1.5 hover:bg-arc-slate-100 rounded"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(`/admin/lessons/${lesson.id}`);
+                          }}
+                        >
+                          <Edit className="h-4 w-4 text-arc-slate-500" />
+                        </button>
+                        <button
+                          className="p-1.5 hover:bg-red-50 rounded"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteLesson(lesson);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-400" />
+                        </button>
                       </div>
                     </div>
-
-                    {lesson.durationMinutes && (
-                      <div className="flex items-center gap-1 text-sm text-arc-slate-500">
-                        <Clock className="h-4 w-4" />
-                        <span>{lesson.durationMinutes} min</span>
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-1">
-                      <button
-                        className="px-2 py-1 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggleLessonStatus(lesson.id, lesson.status);
-                        }}
-                      >
-                        {lesson.status === "PUBLISHED" ? (
-                          <Badge variant="success" className="cursor-pointer">Published</Badge>
-                        ) : (
-                          <Badge className="bg-yellow-100 text-yellow-700 cursor-pointer">Draft</Badge>
-                        )}
-                      </button>
-                      <Link href={`/admin/lessons/${lesson.id}`}>
-                        <Button variant="ghost" size="sm">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                      <button
-                        className="p-1.5 hover:bg-arc-slate-100 rounded"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          console.log("Edit lesson:", lesson.id);
-                        }}
-                      >
-                        <Edit className="h-4 w-4 text-arc-slate-500" />
-                      </button>
-                      <button
-                        className="p-1.5 hover:bg-red-50 rounded"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteLesson(lesson.id);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-400" />
-                      </button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          }}
-        />
+                  </CardContent>
+                </Card>
+              );
+            }}
+          />
+        )}
 
         {/* Quick Stats */}
         <div className="grid gap-4 md:grid-cols-3">
@@ -510,6 +482,17 @@ export default function TopicDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Delete Lesson"
+        description={`Are you sure you want to delete "${deleteTarget?.title}"? This action cannot be undone.`}
+        confirmLabel="Delete Lesson"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </>
   );
 }

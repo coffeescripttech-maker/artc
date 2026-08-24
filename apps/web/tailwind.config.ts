@@ -90,6 +90,48 @@ const config: Config = {
         "arc-border": "#E5E7EB",
         "arc-text": "#111827",
         "arc-muted": "#64748B",
+        /* ============================================================
+           SEMANTIC DESIGN TOKENS — themeable roles.
+           Values are CSS vars set in globals.css :root, so the admin
+           Branding settings can override them at runtime. Use these
+           (bg-primary, text-success-foreground, bg-warning-subtle …)
+           instead of raw arc-* steps in components and pages.
+           ============================================================ */
+        primary: {
+          DEFAULT: "var(--primary)",
+          hover: "var(--primary-hover)",
+          foreground: "var(--primary-foreground)",
+          subtle: "var(--primary-subtle)",
+        },
+        secondary: {
+          DEFAULT: "var(--secondary)",
+          hover: "var(--secondary-hover)",
+          foreground: "var(--secondary-foreground)",
+        },
+        accent: {
+          DEFAULT: "var(--accent)",
+          hover: "var(--accent-hover)",
+          foreground: "var(--accent-foreground)",
+          subtle: "var(--accent-subtle)",
+        },
+        success: {
+          DEFAULT: "var(--success)",
+          hover: "var(--success-hover)",
+          foreground: "var(--success-foreground)",
+          subtle: "var(--success-subtle)",
+        },
+        warning: {
+          DEFAULT: "var(--warning)",
+          hover: "var(--warning-hover)",
+          foreground: "var(--warning-foreground)",
+          subtle: "var(--warning-subtle)",
+        },
+        danger: {
+          DEFAULT: "var(--danger)",
+          hover: "var(--danger-hover)",
+          foreground: "var(--danger-foreground)",
+          subtle: "var(--danger-subtle)",
+        },
         /* Extended Colors */
         "arc-cyan": {
           600: "#0891B2",

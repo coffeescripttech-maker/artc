@@ -5,13 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { WorkspaceHeader, WorkspaceTabs, CurriculumSubjectManager } from "@/components/admin";
 import { curriculumApi } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
+import { PageLoader, EmptyState, NoDataEmpty } from "@/components/branding";
 import { Card, CardContent, Badge, Button } from "@/components/ui";
 import {
-  RefreshCw,
   BookOpen,
   Layers,
   FileText,
-  Settings,
+  AlertCircle,
 } from "lucide-react";
 
 interface Subject {
@@ -62,7 +63,6 @@ export default function CurriculumDetailPage() {
 
   const [curriculum, setCurriculum] = useState<Curriculum | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
 
@@ -80,15 +80,10 @@ export default function CurriculumDetailPage() {
         setCurriculum(data);
       }
     } catch (err) {
-      console.error("Failed to fetch curriculum:", err);
       setError("Failed to load curriculum");
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleAddSubject = () => {
-    // Triggered by the CurriculumSubjectManager
   };
 
   const handlePublish = async () => {
@@ -96,9 +91,9 @@ export default function CurriculumDetailPage() {
     try {
       await curriculumApi.publish(curriculumId);
       setCurriculum({ ...curriculum, status: "PUBLISHED" });
+      toast.success("Curriculum published successfully");
     } catch (err) {
-      console.error("Failed to publish curriculum:", err);
-      alert("Failed to publish curriculum");
+      toast.error("Failed to publish curriculum");
     }
   };
 
@@ -109,26 +104,17 @@ export default function CurriculumDetailPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="h-8 w-8 animate-spin text-arc-orange-500 mx-auto mb-4" />
-          <p className="text-arc-slate-500">Loading curriculum...</p>
-        </div>
-      </div>
-    );
+    return <PageLoader text="Loading curriculum..." />;
   }
 
   if (!curriculum) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-arc-navy-900 mb-2">Curriculum not found</h2>
-          <p className="text-arc-slate-500 mb-4">The curriculum you are looking for does not exist.</p>
-          <Link href="/admin/curriculums">
-            <Button variant="accent">Back to Curriculums</Button>
-          </Link>
-        </div>
+      <div className="p-6">
+        <EmptyState
+          title="Curriculum Not Found"
+          description="The curriculum you are looking for does not exist."
+          action={{ label: "Back to Curriculums", href: "/admin/curriculums" }}
+        />
       </div>
     );
   }
@@ -152,17 +138,11 @@ export default function CurriculumDetailPage() {
         badgeVariant={curriculum.status.toLowerCase() as "published" | "draft" | "archived" | "default"}
         stats={stats}
         actions={
-          <div className="flex items-center gap-2">
-            {curriculum.status === "DRAFT" && (
-              <Button variant="accent" size="sm" onClick={handlePublish}>
-                Publish Curriculum
-              </Button>
-            )}
-            <Button variant="outline" size="sm">
-              <Settings className="h-4 w-4 mr-2" />
-              Settings
+          curriculum.status === "DRAFT" ? (
+            <Button variant="accent" size="sm" onClick={handlePublish}>
+              Publish Curriculum
             </Button>
-          </div>
+          ) : null
         }
       />
 
@@ -178,10 +158,10 @@ export default function CurriculumDetailPage() {
 
       <div className="p-6">
         {error && (
-          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
-            <p className="text-yellow-700 text-sm">{error}</p>
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+            <p className="text-red-700 text-sm flex-1">{error}</p>
             <Button variant="outline" size="sm" onClick={fetchCurriculum}>
-              <RefreshCw className="h-4 w-4 mr-2" />
               Retry
             </Button>
           </div>
@@ -270,17 +250,10 @@ export default function CurriculumDetailPage() {
 
         {/* Learners Tab */}
         {activeTab === "learners" && (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <Layers className="h-12 w-12 text-arc-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">
-                No Learners Enrolled
-              </h3>
-              <p className="text-arc-slate-500">
-                Learners will appear here when they enroll in this curriculum.
-              </p>
-            </CardContent>
-          </Card>
+          <NoDataEmpty
+            title="No Learners Enrolled"
+            description="Learners will appear here when they enroll in this curriculum."
+          />
         )}
       </div>
     </>

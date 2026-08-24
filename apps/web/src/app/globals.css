@@ -53,45 +53,87 @@
     --arc-slate-100: #F3F4F6;
     --arc-slate-50: #F8FAFC;
 
-    /* Semantic */
+    /* Semantic surfaces (themeable neutrals) */
     --arc-bg: #F6F9FC;
     --arc-surface: #FFFFFF;
     --arc-border: #E5E7EB;
     --arc-text: #111827;
     --arc-muted: #64748B;
 
-    /* Legacy shadcn compatibility */
+    /* ============================================================
+       SEMANTIC DESIGN TOKENS — the themeable layer.
+       Components consume these roles (bg-primary, text-success-
+       foreground, bg-warning-subtle, …). Change them here — or
+       via the admin Branding settings — and the entire app
+       updates. The raw arc-* palette above stays fixed.
+       ============================================================ */
+
+    /* Primary — main actions, titles, links (was arc-navy-900) */
+    --primary: #0B2553;
+    --primary-hover: #164C91;
+    --primary-foreground: #FFFFFF;
+    --primary-subtle: #DCEBFA;
+
+    /* Secondary — subtle buttons, muted fills (was arc-slate-100) */
+    --secondary: #F3F4F6;
+    --secondary-hover: #E5E7EB;
+    --secondary-foreground: #111827;
+
+    /* Accent — CTAs, highlights, active nav (was arc-orange-500) */
+    --accent: #F26522;
+    --accent-hover: #E45100;
+    --accent-foreground: #FFFFFF;
+    --accent-subtle: #FFF5EF;
+
+    /* Success — published, mastery, positive (was arc-green-*) */
+    --success: #16B364;
+    --success-hover: #0A9A4A;
+    --success-subtle: #D8F7E5;
+    --success-foreground: #087A3D;
+
+    /* Warning — draft, pending, attention (consolidated on amber) */
+    --warning: #F59E0B;
+    --warning-hover: #D97706;
+    --warning-subtle: #FEF3C7;
+    --warning-foreground: #B45309;
+
+    /* Danger — destructive, errors (was arc-red-*) */
+    --danger: #F04438;
+    --danger-hover: #D92D20;
+    --danger-subtle: #FEE4E2;
+    --danger-foreground: #B42318;
+
+    /* Legacy shadcn compatibility — derived from semantic tokens */
     --background: var(--arc-bg);
     --foreground: var(--arc-text);
     --card: var(--arc-surface);
     --card-foreground: var(--arc-text);
     --popover: var(--arc-surface);
     --popover-foreground: var(--arc-text);
-    --primary: var(--arc-navy-900);
-    --primary-foreground: #FFFFFF;
-    --secondary: var(--arc-slate-100);
-    --secondary-foreground: var(--arc-navy-900);
-    --muted: var(--arc-slate-100);
+    --muted: var(--secondary);
     --muted-foreground: var(--arc-muted);
-    --accent: var(--arc-orange-500);
-    --accent-foreground: #FFFFFF;
-    --destructive: var(--arc-red-500);
+    --destructive: var(--danger);
     --destructive-foreground: #FFFFFF;
     --border: var(--arc-border);
     --input: var(--arc-border);
-    --ring: var(--arc-navy-500);
+    --ring: var(--primary-hover);
     --radius: 0.5rem;
   }
 
-  /* Dark Mode */
+  /* Dark Mode — semantic token remap
+     (fixes pre-existing undefined --arc-navy-400 reference) */
   .dark {
     --arc-bg: #0B1220;
     --arc-surface: #1F2937;
     --arc-border: #374151;
     --arc-text: #F9FAFB;
     --arc-muted: #9CA3AF;
-    --primary: var(--arc-navy-400);
-    --secondary: var(--arc-slate-700);
+    --primary: #216FD1;
+    --primary-hover: #78AEE8;
+    --primary-subtle: #123A73;
+    --secondary: #374151;
+    --secondary-hover: #4B5563;
+    --secondary-foreground: #F9FAFB;
     --muted: var(--arc-slate-800);
   }
 
@@ -189,30 +231,30 @@
 }
 
 @layer components {
-  /* ARC Button Variants */
+  /* ARC Button Variants — semantic tokens */
   .btn-arc-primary {
-    @apply bg-arc-navy-900 text-white hover:bg-arc-navy-700 font-heading font-semibold;
+    @apply bg-primary text-primary-foreground hover:bg-primary-hover font-heading font-semibold;
   }
 
   .btn-arc-accent {
-    @apply bg-arc-orange-500 text-white hover:bg-arc-orange-600 font-heading font-semibold;
+    @apply bg-accent text-accent-foreground hover:bg-accent-hover font-heading font-semibold;
   }
 
   .btn-arc-success {
-    @apply bg-arc-green-500 text-white hover:bg-arc-green-600 font-heading font-semibold;
+    @apply bg-success text-white hover:bg-success-hover font-heading font-semibold;
   }
 
   .btn-arc-practice {
     @apply bg-arc-purple-500 text-white hover:bg-arc-purple-600 font-heading font-semibold;
   }
 
-  /* ARC Badge Variants */
+  /* ARC Badge Variants — semantic tokens */
   .badge-arc-mastery {
-    @apply bg-arc-green-100 text-arc-green-700 border-0;
+    @apply bg-success-subtle text-success-foreground border-0;
   }
 
   .badge-arc-progress {
-    @apply bg-arc-navy-100 text-arc-navy-700 border-0;
+    @apply bg-primary-subtle text-primary border-0;
   }
 
   .badge-arc-practice {
@@ -220,11 +262,11 @@
   }
 
   .badge-arc-warning {
-    @apply bg-arc-orange-100 text-arc-orange-700 border-0;
+    @apply bg-warning-subtle text-warning-foreground border-0;
   }
 
   .badge-arc-alert {
-    @apply bg-arc-red-100 text-arc-red-600 border-0;
+    @apply bg-danger-subtle text-danger-foreground border-0;
   }
 
   /* ARC Card Styles */
@@ -238,16 +280,16 @@
 
   /* ARC Input Styles */
   .input-arc {
-    @apply border-arc-border bg-white focus:border-arc-navy-500 focus:ring-arc-navy-500;
+    @apply border-arc-border bg-white focus:border-primary-hover focus:ring-primary-hover;
   }
 
   /* Progress Bar Colors */
   .progress-mastery {
-    @apply bg-arc-green-500;
+    @apply bg-success;
   }
 
   .progress-learning {
-    @apply bg-arc-navy-500;
+    @apply bg-primary-hover;
   }
 
   .progress-practice {
@@ -255,40 +297,40 @@
   }
 
   .progress-warning {
-    @apply bg-arc-orange-500;
+    @apply bg-warning;
   }
 }
 
 @layer utilities {
-  /* ARC Gradient Utilities */
+  /* ARC Gradient Utilities — semantic tokens */
   .bg-arc-gradient-primary {
-    background: linear-gradient(135deg, var(--arc-navy-900) 0%, var(--arc-navy-700) 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
   }
 
   .bg-arc-gradient-accent {
-    background: linear-gradient(135deg, var(--arc-orange-500) 0%, var(--arc-orange-400) 100%);
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
   }
 
   .bg-arc-gradient-hero {
-    background: linear-gradient(135deg, var(--arc-navy-900) 0%, var(--arc-navy-700) 50%, var(--arc-purple-600) 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 50%, var(--arc-purple-600) 100%);
   }
 
   /* Text Gradient */
   .text-gradient-arc {
     @apply bg-clip-text text-transparent;
-    background-image: linear-gradient(135deg, var(--arc-navy-600) 0%, var(--arc-purple-600) 100%);
+    background-image: linear-gradient(135deg, var(--primary-hover) 0%, var(--arc-purple-600) 100%);
   }
 
   /* Focus Ring */
   .focus-ring-arc {
-    @apply focus:outline-none focus:ring-2 focus:ring-arc-navy-500 focus:ring-offset-2;
+    @apply focus:outline-none focus:ring-2 focus:ring-primary-hover focus:ring-offset-2;
   }
 
   /* Selection Color */
   .selection-arc {
     ::selection {
-      background-color: var(--arc-navy-200);
-      color: var(--arc-navy-900);
+      background-color: var(--primary-subtle);
+      color: var(--primary);
     }
   }
 }
@@ -323,7 +365,7 @@
   margin: 0 0 0.5rem;
 }
 .rich-text a {
-  color: var(--arc-orange-600, #e45100);
+  color: var(--accent-hover, #e45100);
   text-decoration: underline;
 }
 .rich-text strong {

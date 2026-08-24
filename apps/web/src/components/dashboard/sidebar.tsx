@@ -37,7 +37,7 @@ import LogoImage from "../../../assets/images/logo/logo.png";
 export const SIDEBAR_WIDTH = 256; // w-64
 export const SIDEBAR_COLLAPSED_WIDTH = 72; // w-[72px]
 
-interface NavItem {
+export interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;

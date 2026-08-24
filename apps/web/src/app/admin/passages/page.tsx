@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { WorkspaceHeader } from "@/components/admin";
+import { WorkspaceHeader, ConfirmModal } from "@/components/admin";
 import { passagesApi } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
+import { TableSkeleton, NoResultsEmpty, NoDataEmpty } from "@/components/branding";
 import { Card, CardContent, Button, Badge, Input } from "@/components/ui";
 import {
   Plus,
@@ -12,8 +14,8 @@ import {
   Eye,
   BookOpen,
   ExternalLink,
-  RefreshCw,
   FileText,
+  AlertCircle,
 } from "lucide-react";
 
 interface Passage {
@@ -48,6 +50,7 @@ export default function PassagesPage() {
     status: "DRAFT",
   });
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Passage | null>(null);
 
   useEffect(() => {
     fetchPassages();
@@ -57,11 +60,9 @@ export default function PassagesPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem("token") || undefined;
-      const data = await passagesApi.list(token) as Passage[];
+      const data = await passagesApi.list() as Passage[];
       setPassages(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error("Failed to fetch passages:", err);
       setError("Failed to load passages");
       setPassages([]);
     } finally {
@@ -79,42 +80,42 @@ export default function PassagesPage() {
     setSaving(true);
     setError(null);
     try {
-      const token = localStorage.getItem("token") || undefined;
       if (editingPassage) {
-        await passagesApi.update(editingPassage.id, formData, token);
+        await passagesApi.update(editingPassage.id, formData);
+        toast.success("Passage updated successfully");
       } else {
-        await passagesApi.create(formData, token);
+        await passagesApi.create(formData);
+        toast.success("Passage created successfully");
       }
       resetForm();
       await fetchPassages();
-    } catch (err) {
-      console.error("Failed to save passage:", err);
-      setError("Failed to save passage");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save passage");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this passage?")) return;
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      const token = localStorage.getItem("token") || undefined;
-      await passagesApi.delete(id, token);
+      await passagesApi.delete(deleteTarget.id);
       await fetchPassages();
-    } catch (err) {
-      console.error("Failed to delete passage:", err);
-      setError("Failed to delete passage");
+      toast.success("Passage deleted successfully");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete passage");
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
   const handlePublish = async (id: string) => {
     try {
-      const token = localStorage.getItem("token") || undefined;
-      await passagesApi.publish(id, token);
+      await passagesApi.publish(id);
       await fetchPassages();
-    } catch (err) {
-      console.error("Failed to publish passage:", err);
-      setError("Failed to publish passage");
+      toast.success("Passage published successfully");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to publish passage");
     }
   };
 
@@ -166,10 +167,10 @@ export default function PassagesPage() {
       <div className="space-y-6 p-6">
         {/* Error banner */}
         {error && (
-          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
-            <p className="text-yellow-700 text-sm">{error}</p>
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+            <p className="text-red-700 text-sm flex-1">{error}</p>
             <Button variant="outline" size="sm" onClick={fetchPassages}>
-              <RefreshCw className="h-4 w-4 mr-2" />
               Retry
             </Button>
           </div>
@@ -234,17 +235,7 @@ export default function PassagesPage() {
         <Card>
           <CardContent className="p-0">
             {/* Loading skeleton */}
-            {isLoading && (
-              <div className="divide-y divide-arc-slate-100">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="p-4 animate-pulse">
-                    <div className="h-4 bg-arc-slate-200 rounded w-1/4 mb-2" />
-                    <div className="h-6 bg-arc-slate-200 rounded w-3/4 mb-2" />
-                    <div className="h-4 bg-arc-slate-200 rounded w-1/2" />
-                  </div>
-                ))}
-              </div>
-            )}
+            {isLoading && <TableSkeleton />}
 
             {/* Passages */}
             {!isLoading && (
@@ -315,7 +306,7 @@ export default function PassagesPage() {
                           </button>
                         )}
                         <button
-                          onClick={() => handleDelete(passage.id)}
+                          onClick={() => setDeleteTarget(passage)}
                           className="p-1.5 hover:bg-red-50 rounded"
                           title="Delete"
                         >
@@ -330,20 +321,15 @@ export default function PassagesPage() {
 
             {/* Empty State */}
             {!isLoading && filteredPassages.length === 0 && (
-              <div className="text-center py-12">
-                <FileText className="h-12 w-12 text-arc-slate-300 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">
-                  No passages found
-                </h3>
-                <p className="text-arc-slate-500 mb-4">
-                  {searchQuery
-                    ? "Try adjusting your search"
-                    : "Create your first reading passage to get started"}
-                </p>
-                <Button variant="accent" onClick={() => setShowForm(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Passage
-                </Button>
+              <div className="py-8">
+                {searchQuery ? (
+                  <NoResultsEmpty query={searchQuery} />
+                ) : (
+                  <NoDataEmpty
+                    title="No Passages Yet"
+                    description="Create your first reading passage to get started."
+                  />
+                )}
               </div>
             )}
           </CardContent>
@@ -452,6 +438,16 @@ export default function PassagesPage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Delete Passage"
+        description={`Are you sure you want to delete "${deleteTarget?.title}"? This action cannot be undone.`}
+        confirmLabel="Delete Passage"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </>
   );
 }

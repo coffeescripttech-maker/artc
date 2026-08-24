@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { WorkspaceHeader, TopicPickerCompact } from "@/components/admin";
 import { assessmentsApi, programsApi, curriculumApi, subjectsApi } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
+import { generateSlug } from "@/lib/utils/slug";
 import { Button, Input, Card, CardContent } from "@/components/ui";
 import {
   ArrowLeft,
@@ -14,9 +16,6 @@ import {
   Check,
   ChevronRight,
   ChevronLeft,
-  Award,
-  Settings,
-  HelpCircle,
 } from "lucide-react";
 
 interface Program {
@@ -48,15 +47,6 @@ const steps = [
   { id: 2, label: "Configure", description: "Questions, time, scoring" },
   { id: 3, label: "Review", description: "Confirm and create" },
 ];
-
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .trim();
-}
 
 export default function NewAssessmentPage() {
   const router = useRouter();
@@ -115,8 +105,7 @@ export default function NewAssessmentPage() {
       if (urlProgramId) {
         setFormData((prev) => ({ ...prev, programId: urlProgramId }));
       }
-    } catch (err) {
-      console.error("Failed to fetch programs:", err);
+    } catch {
     } finally {
       setIsLoadingPrograms(false);
     }
@@ -127,8 +116,7 @@ export default function NewAssessmentPage() {
       const data = await curriculumApi.list(programId) as Curriculum[] | { curriculums: Curriculum[] };
       const list = "curriculums" in data ? data.curriculums : data;
       setCurriculums(list || []);
-    } catch (err) {
-      console.error("Failed to fetch curriculums:", err);
+    } catch {
     }
   };
 
@@ -137,8 +125,7 @@ export default function NewAssessmentPage() {
       const data = await subjectsApi.list() as Subject[] | { subjects: Subject[] };
       const list = "subjects" in data ? data.subjects : data;
       setSubjects(list || []);
-    } catch (err) {
-      console.error("Failed to fetch subjects:", err);
+    } catch {
     }
   };
 
@@ -185,9 +172,9 @@ export default function NewAssessmentPage() {
       }
 
       await assessmentsApi.create(payload);
+      toast.success("Assessment created successfully");
       router.push("/admin/assessments");
     } catch (err: any) {
-      console.error("Failed to create assessment:", err);
       setError(err.message || "Failed to create assessment. Please try again.");
     } finally {
       setIsSubmitting(false);

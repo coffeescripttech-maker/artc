@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { WorkspaceHeader } from "@/components/admin";
 import { subjectsApi } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
+import { generateSlug } from "@/lib/utils/slug";
 import { Button, Input, Card, CardContent } from "@/components/ui";
 import {
   ArrowLeft,
@@ -21,15 +23,6 @@ const colorOptions = [
   { name: "red", bg: "bg-red-100", border: "border-red-300", text: "text-red-600", label: "Red" },
   { name: "yellow", bg: "bg-yellow-100", border: "border-yellow-300", text: "text-yellow-600", label: "Yellow" },
 ];
-
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .trim();
-}
 
 function generateCode(name: string): string {
   const words = name.split(/\s+/);
@@ -69,11 +62,10 @@ export default function NewSubjectPage() {
     setError(null);
 
     try {
-      // Token is automatically retrieved from localStorage by apiFetch
       await subjectsApi.create(formData);
+      toast.success("Subject created successfully");
       router.push("/admin/subjects");
     } catch (err: any) {
-      console.error("Failed to create subject:", err);
       setError(err.message || "Failed to create subject. Please try again.");
     } finally {
       setIsSubmitting(false);

@@ -3,14 +3,14 @@
 // Keeps the same API (toast.success/error/info) so callers need no changes.
 import { toast as sonnerToast } from "sonner";
 
-export const toast = {
-  success: (message: string) => sonnerToast.success(message),
-  error: (message: string) => sonnerToast.error(message),
-  info: (message: string) => sonnerToast.info(message),
-  warning: (message: string) => sonnerToast.warning(message),
-  message: (message: string) => sonnerToast.message(message),
-  promise: sonnerToast.promise,
-  loading: sonnerToast.loading,
-};
+type ToastFn = (message: string) => void;
+
+const success: ToastFn = (message) => sonnerToast.success(message);
+const error: ToastFn = (message) => sonnerToast.error(message);
+const info: ToastFn = (message) => sonnerToast.info(message);
+const warning: ToastFn = (message) => sonnerToast.warning(message);
+const message: ToastFn = (message) => sonnerToast.message(message);
+
+export const toast = { success, error, info, warning, message };
 
 export default toast;

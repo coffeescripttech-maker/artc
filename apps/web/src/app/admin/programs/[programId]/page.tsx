@@ -3,8 +3,10 @@
 import { useState, useEffect, Suspense } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { WorkspaceHeader, WorkspaceTabs, CurriculumJourney } from "@/components/admin";
+import { WorkspaceHeader, WorkspaceTabs, CurriculumJourney, ConfirmModal } from "@/components/admin";
+import { PageLoader } from "@/components/branding";
 import { programsApi, curriculumApi, questionsApi, assessmentsApi } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
 import { Card, CardContent, Badge, Button } from "@/components/ui";
 import {
   BookOpen,
@@ -236,6 +238,7 @@ function ProgramOverviewContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [showPublishModal, setShowPublishModal] = useState(false);
 
   // Search and expand state for list views
   const [searchQuery, setSearchQuery] = useState("");
@@ -292,37 +295,15 @@ function ProgramOverviewContent() {
     setError(null);
     try {
       // Fetch all data in parallel
-      const [programsData, curriculumsData, questionsData, assessmentsData] = await Promise.all([
-        programsApi.list().catch((e) => {
-          console.error("Programs API error:", e);
-          return [];
-        }),
-        curriculumApi.list(programId).catch((e) => {
-          console.error("Curriculum API error:", e);
-          return [];
-        }),
-        questionsApi.list().catch((e) => {
-          console.error("Questions API error:", e);
-          return [];
-        }),
-        assessmentsApi.list({ programId }).catch((e) => {
-          console.error("Assessments API error:", e);
-          return [];
-        }),
+      const [programData, curriculumsData, questionsData, assessmentsData] = await Promise.all([
+        programsApi.getById(programId).catch(() => null),
+        curriculumApi.list(programId).catch(() => []),
+        questionsApi.list().catch(() => []),
+        assessmentsApi.list({ programId }).catch(() => []),
       ]);
 
-      console.log("Programs:", programsData);
-      console.log("Curriculums:", curriculumsData);
-
-      // Find the specific program from the list
-      if (Array.isArray(programsData)) {
-        const found = programsData.find((p: any) => p.id === programId);
-        if (found) {
-          setProgram(found as Program);
-        } else {
-          setProgram((programsData as Program[])[0] || null);
-        }
-      }
+      // Set program data (null if not found — no fallback to wrong program)
+      setProgram(programData as Program | null);
 
       // Set curriculums
       if (curriculumsData && Array.isArray(curriculumsData)) {
@@ -428,11 +409,6 @@ function ProgramOverviewContent() {
         setModules(allModules);
         setTopics(allTopics);
         setLessons(allLessons);
-
-        console.log("Extracted subjects:", allSubjects);
-        console.log("Extracted modules:", allModules);
-        console.log("Extracted topics:", allTopics);
-        console.log("Extracted lessons:", allLessons);
       }
 
       // Set questions and assessments
@@ -443,7 +419,6 @@ function ProgramOverviewContent() {
         setAssessments(assessmentsData as Assessment[]);
       }
     } catch (err) {
-      console.error("Failed to fetch program data:", err);
       setError("Failed to load program data.");
     } finally {
       setIsLoading(false);
@@ -467,9 +442,10 @@ function ProgramOverviewContent() {
     try {
       await programsApi.publish(programId);
       setProgram({ ...program, status: "PUBLISHED" });
+      toast.success("Program published successfully");
+      setShowPublishModal(false);
     } catch (err) {
-      console.error("Failed to publish program:", err);
-      alert("Failed to publish program");
+      toast.error("Failed to publish program");
     }
   };
 
@@ -499,14 +475,7 @@ function ProgramOverviewContent() {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="h-8 w-8 animate-spin text-arc-orange-500 mx-auto mb-4" />
-          <p className="text-arc-slate-500">Loading program...</p>
-        </div>
-      </div>
-    );
+    return <PageLoader text="Loading program..." />;
   }
 
   if (!program) {
@@ -551,7 +520,7 @@ function ProgramOverviewContent() {
               Edit Program
             </Button>
             {program.status === "DRAFT" && (
-              <Button variant="accent" size="sm" onClick={handlePublishProgram}>
+              <Button variant="accent" size="sm" onClick={() => setShowPublishModal(true)}>
                 Publish Program
               </Button>
             )}
@@ -576,8 +545,8 @@ function ProgramOverviewContent() {
 
       <div className="p-6 bg-white">
         {error && (
-          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
-            <p className="text-yellow-700 text-sm">{error}</p>
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
+            <p className="text-red-700 text-sm">{error}</p>
             <Button variant="outline" size="sm" onClick={fetchData}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Retry
@@ -1390,6 +1359,21 @@ function ProgramOverviewContent() {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={showPublishModal}
+        onClose={() => setShowPublishModal(false)}
+        onConfirm={handlePublishProgram}
+        title="Publish Program"
+        description={
+          <>
+            Publishing <strong>{program.name}</strong> will make it visible to learners. Make sure
+            all curriculums and content are ready before publishing.
+          </>
+        }
+        confirmLabel="Publish Program"
+        busyLabel="Publishing..."
+      />
     </>
   );
 }

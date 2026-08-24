@@ -4,14 +4,15 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { WorkspaceHeader, WorkspaceTabs, CurriculumSubjectManager } from "@/components/admin";
+import { PageLoader } from "@/components/branding";
 import { curriculumApi } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
 import { Card, CardContent, Badge, Button } from "@/components/ui";
 import {
   RefreshCw,
   BookOpen,
   Layers,
   FileText,
-  Settings,
 } from "lucide-react";
 
 interface Module {
@@ -86,7 +87,6 @@ export default function CurriculumDetailPage() {
 
   const [curriculum, setCurriculum] = useState<Curriculum | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
 
@@ -110,7 +110,6 @@ export default function CurriculumDetailPage() {
         setCurriculum(data);
       }
     } catch (err) {
-      console.error("Failed to fetch curriculum:", err);
       setError("Failed to load curriculum");
     } finally {
       setIsLoading(false);
@@ -122,21 +121,14 @@ export default function CurriculumDetailPage() {
     try {
       await curriculumApi.publish(curriculumId);
       setCurriculum({ ...curriculum, status: "PUBLISHED" });
+      toast.success("Curriculum published successfully");
     } catch (err) {
-      console.error("Failed to publish curriculum:", err);
-      alert("Failed to publish curriculum");
+      toast.error("Failed to publish curriculum");
     }
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="h-8 w-8 animate-spin text-arc-orange-500 mx-auto mb-4" />
-          <p className="text-arc-slate-500">Loading curriculum...</p>
-        </div>
-      </div>
-    );
+    return <PageLoader text="Loading curriculum..." />;
   }
 
   if (!curriculum) {
@@ -180,10 +172,6 @@ export default function CurriculumDetailPage() {
                 Publish Curriculum
               </Button>
             )}
-            <Button variant="outline" size="sm">
-              <Settings className="h-4 w-4 mr-2" />
-              Settings
-            </Button>
           </div>
         }
       />
@@ -200,8 +188,8 @@ export default function CurriculumDetailPage() {
 
       <div className="p-6">
         {error && (
-          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
-            <p className="text-yellow-700 text-sm">{error}</p>
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
+            <p className="text-red-700 text-sm">{error}</p>
             <Button variant="outline" size="sm" onClick={fetchCurriculum}>
               <RefreshCw className="h-4 w-4 mr-2" />
               Retry

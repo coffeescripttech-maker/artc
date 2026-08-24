@@ -3,20 +3,20 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { DashboardHeader } from "@/components/dashboard";
+import { WorkspaceHeader, ConfirmModal } from "@/components/admin";
 import { curriculumApi } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
+import { CardSkeleton, NoResultsEmpty, NoDataEmpty } from "@/components/branding";
 import { Card, CardContent, Button, Badge, Input } from "@/components/ui";
 import {
   BookOpen,
   Plus,
   Search,
-  Edit,
   Trash2,
   Eye,
-  ChevronRight,
   GraduationCap,
-  RefreshCw,
   Users,
+  AlertCircle,
 } from "lucide-react";
 
 interface Curriculum {
@@ -72,6 +72,7 @@ export default function CurriculumsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [deleteTarget, setDeleteTarget] = useState<Curriculum | null>(null);
 
   // Fetch curriculums on mount
   useEffect(() => {
@@ -85,7 +86,6 @@ export default function CurriculumsPage() {
       const data = await curriculumApi.list() as Curriculum[];
       setCurriculums(data);
     } catch (err) {
-      console.error("Failed to fetch curriculums:", err);
       setError("Failed to load curriculums. Please try again.");
     } finally {
       setIsLoading(false);
@@ -108,34 +108,43 @@ export default function CurriculumsPage() {
   const totalItems = curriculums.reduce((sum, c) => sum + (c._count?.items || 0), 0);
   const totalLearners = curriculums.reduce((sum, c) => sum + (c._count?.learnerProfiles || 0), 0);
 
-  const handleDelete = async (curriculumId: string) => {
-    if (!confirm("Are you sure you want to delete this curriculum?")) {
-      return;
-    }
-
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await curriculumApi.delete(curriculumId, "");
-      setCurriculums(curriculums.filter((c) => c.id !== curriculumId));
-    } catch (err) {
-      console.error("Failed to delete curriculum:", err);
-      alert("Failed to delete curriculum. Please try again.");
+      await curriculumApi.delete(deleteTarget.id);
+      setCurriculums(curriculums.filter((c) => c.id !== deleteTarget.id));
+      toast.success("Curriculum deleted successfully");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete curriculum. Please try again.");
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
   return (
     <>
-      <DashboardHeader
+      <WorkspaceHeader
         title="Curriculums"
         subtitle="Manage learning paths and grade levels"
+        actions={
+          <Button
+            variant="accent"
+            onClick={() => router.push("/admin/curriculums/new")}
+            disabled={isLoading}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create Curriculum
+          </Button>
+        }
       />
 
       <div className="p-6">
         {/* Error State */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
-            <p className="text-red-600 text-sm">{error}</p>
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+            <p className="text-red-700 text-sm flex-1">{error}</p>
             <Button variant="outline" size="sm" onClick={fetchCurriculums}>
-              <RefreshCw className="h-4 w-4 mr-2" />
               Retry
             </Button>
           </div>
@@ -239,13 +248,7 @@ export default function CurriculumsPage() {
         {isLoading && (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3, 4].map((i) => (
-              <Card key={i} className="animate-pulse">
-                <CardContent className="p-6">
-                  <div className="h-12 w-12 rounded-xl bg-arc-slate-200 mb-4" />
-                  <div className="h-6 bg-arc-slate-200 rounded w-3/4 mb-2" />
-                  <div className="h-4 bg-arc-slate-200 rounded w-1/2" />
-                </CardContent>
-              </Card>
+              <CardSkeleton key={i} />
             ))}
           </div>
         )}
@@ -267,9 +270,11 @@ export default function CurriculumsPage() {
                       <Badge className={statusColors[curriculum.status]}>
                         {curriculum.status.replace("_", " ")}
                       </Badge>
-                      <button className="p-1 hover:bg-arc-slate-100 rounded">
-                        <Eye className="h-4 w-4 text-arc-slate-400" />
-                      </button>
+                      <Link href={`/admin/curriculums/${curriculum.id}`}>
+                        <button className="p-1 hover:bg-arc-slate-100 rounded">
+                          <Eye className="h-4 w-4 text-arc-slate-400" />
+                        </button>
+                      </Link>
                     </div>
                   </div>
 
@@ -317,7 +322,7 @@ export default function CurriculumsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDelete(curriculum.id)}
+                        onClick={() => setDeleteTarget(curriculum)}
                         className="hover:bg-red-50"
                       >
                         <Trash2 className="h-4 w-4 text-red-400" />
@@ -333,28 +338,29 @@ export default function CurriculumsPage() {
         {/* Empty State */}
         {!isLoading && filteredCurriculums.length === 0 && (
           <Card>
-            <CardContent className="p-12 text-center">
-              <GraduationCap className="h-12 w-12 text-arc-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">
-                {searchQuery || statusFilter !== "all"
-                  ? "No curriculums found"
-                  : "No curriculums yet"}
-              </h3>
-              <p className="text-arc-slate-500 mb-4">
-                {searchQuery || statusFilter !== "all"
-                  ? "Try adjusting your search or filters"
-                  : "Create your first curriculum to get started"}
-              </p>
-              {!searchQuery && statusFilter === "all" && (
-                <Button variant="accent" onClick={() => router.push("/admin/curriculums/new")}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Curriculum
-                </Button>
+            <CardContent className="p-8">
+              {searchQuery || statusFilter !== "all" ? (
+                <NoResultsEmpty query={searchQuery || "your filter"} />
+              ) : (
+                <NoDataEmpty
+                  title="No Curriculums Yet"
+                  description="Create your first curriculum to get started."
+                />
               )}
             </CardContent>
           </Card>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Delete Curriculum"
+        description={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
+        confirmLabel="Delete Curriculum"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </>
   );
 }

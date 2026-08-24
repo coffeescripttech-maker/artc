@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { WorkspaceHeader } from "@/components/admin";
 import { modulesApi, subjectsApi } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
+import { generateSlug } from "@/lib/utils/slug";
 import { Button, Input, Card, CardContent } from "@/components/ui";
 import {
   ArrowLeft,
@@ -17,15 +19,6 @@ interface Subject {
   id: string;
   name: string;
   code?: string;
-}
-
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .trim();
 }
 
 export default function NewModulePage() {
@@ -51,8 +44,7 @@ export default function NewModulePage() {
     try {
       const data = await subjectsApi.list() as Subject[];
       setSubjects(data);
-    } catch (err) {
-      console.error("Failed to fetch subjects:", err);
+    } catch {
     } finally {
       setIsLoadingSubjects(false);
     }
@@ -69,11 +61,10 @@ export default function NewModulePage() {
     setError(null);
 
     try {
-      // Token is automatically retrieved from localStorage by apiFetch
       await modulesApi.create(formData);
+      toast.success("Module created successfully");
       router.push("/admin/modules");
     } catch (err: any) {
-      console.error("Failed to create module:", err);
       setError(err.message || "Failed to create module. Please try again.");
     } finally {
       setIsSubmitting(false);

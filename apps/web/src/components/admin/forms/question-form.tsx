@@ -52,7 +52,7 @@ const difficulties = [
 
 export function QuestionForm({ isOpen, onClose, onSubmit, passages = [], onCreatePassage }: QuestionFormProps) {
   const [stem, setStem] = useState("");
-  const [type, setType] = useState(QUESTION_TYPES.MULTIPLE_CHOICE);
+  const [type, setType] = useState<string>(QUESTION_TYPES.MULTIPLE_CHOICE);
   const [difficulty, setDifficulty] = useState("MEDIUM");
   const [explanation, setExplanation] = useState("");
   const [passageId, setPassageId] = useState("");

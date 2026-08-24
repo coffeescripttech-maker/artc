@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { WorkspaceHeader } from "@/components/admin";
 import { CurriculumJourney } from "@/components/admin";
+import { PageLoader, ErrorEmpty, EmptyState } from "@/components/branding";
 import { Card, CardContent, Button, Badge } from "@/components/ui";
-import { Plus, Settings, Users, RefreshCw, Loader2 } from "lucide-react";
+import { Plus, Users } from "lucide-react";
 import { programsApi, curriculumApi } from "@/lib/api/client";
 
 interface Program {
@@ -14,12 +15,6 @@ interface Program {
   slug: string;
   status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
   description?: string;
-  _count?: {
-    curriculums?: number;
-    subjects?: number;
-    modules?: number;
-    lessons?: number;
-  };
 }
 
 interface Curriculum {
@@ -45,35 +40,36 @@ export default function ProgramCurriculumPage() {
   const [program, setProgram] = useState<Program | null>(null);
   const [curriculums, setCurriculums] = useState<Curriculum[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  const [notFound, setNotFound] = useState(false);
 
-  // Fetch program and curriculums
-  useEffect(() => {
-    fetchData();
-  }, [programId]);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
-    setError(null);
+    setError(false);
+    setNotFound(false);
     try {
-      // Fetch program details
-      const programData = await programsApi.list() as Program[];
-      const foundProgram = programData.find((p) => p.id === programId);
-      setProgram(foundProgram || null);
+      const [programData, curriculumData] = await Promise.all([
+        programsApi.getById(programId),
+        curriculumApi.list(programId),
+      ]);
+      setProgram(programData as Program);
 
-      // Fetch curriculums for this program
-      const curriculumData = await curriculumApi.list(programId) as Curriculum[] | { curriculums: Curriculum[] };
-      const curriculumList = "curriculums" in curriculumData
-        ? curriculumData.curriculums
-        : curriculumData;
-      setCurriculums(curriculumList || []);
-    } catch (err) {
-      console.error("Failed to fetch data:", err);
-      setError("Failed to load program data");
+      const curriculumList = curriculumData as Curriculum[] | { curriculums: Curriculum[] };
+      setCurriculums("curriculums" in curriculumList ? curriculumList.curriculums : curriculumList);
+    } catch (err: any) {
+      if (err?.message?.includes("not found")) {
+        setNotFound(true);
+      } else {
+        setError(true);
+      }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [programId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleAddCurriculum = () => {
     router.push(`/admin/curriculums/new?programId=${programId}`);
@@ -84,28 +80,23 @@ export default function ProgramCurriculumPage() {
   };
 
   if (isLoading) {
+    return <PageLoader text="Loading curriculum..." />;
+  }
+
+  if (notFound || !program) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-arc-orange-500 mx-auto mb-4" />
-          <p className="text-arc-slate-500">Loading curriculum...</p>
-        </div>
+      <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+        <h2 className="text-xl font-semibold text-arc-navy-900 mb-2">Program not found</h2>
+        <p className="text-arc-slate-500 mb-4">The program you are looking for does not exist.</p>
+        <Button variant="accent" onClick={() => router.push("/admin/programs")}>
+          Back to Programs
+        </Button>
       </div>
     );
   }
 
-  if (!program) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-arc-navy-900 mb-2">Program not found</h2>
-          <p className="text-arc-slate-500 mb-4">The program you are looking for does not exist.</p>
-          <Button variant="accent" onClick={() => router.push("/admin/programs")}>
-            Back to Programs
-          </Button>
-        </div>
-      </div>
-    );
+  if (error) {
+    return <ErrorEmpty onRetry={fetchData} />;
   }
 
   return (
@@ -118,6 +109,10 @@ export default function ProgramCurriculumPage() {
           { label: program.name, href: `/admin/programs/${programId}` },
           { label: "Curriculum" },
         ]}
+        badge={program.status}
+        badgeVariant={
+          program.status === "PUBLISHED" ? "published" : program.status === "ARCHIVED" ? "archived" : "draft"
+        }
         actions={
           <Button variant="accent" size="sm" onClick={handleAddCurriculum}>
             <Plus className="h-4 w-4 mr-2" />
@@ -127,16 +122,6 @@ export default function ProgramCurriculumPage() {
       />
 
       <div className="p-6 space-y-6">
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-center justify-between">
-            <p className="text-red-700 text-sm">{error}</p>
-            <Button variant="outline" size="sm" onClick={fetchData}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Retry
-            </Button>
-          </div>
-        )}
-
         {/* Journey Visualization */}
         {curriculums.length > 0 && (
           <section>
@@ -167,23 +152,15 @@ export default function ProgramCurriculumPage() {
           </h2>
 
           {curriculums.length === 0 ? (
-            <Card>
-              <CardContent className="p-12 text-center">
-                <div className="h-16 w-16 rounded-full bg-arc-orange-100 flex items-center justify-center mx-auto mb-4">
-                  <Plus className="h-8 w-8 text-arc-orange-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">
-                  No Curriculums Yet
-                </h3>
-                <p className="text-arc-slate-500 mb-4 max-w-md mx-auto">
-                  Create your first curriculum to start building the learning path for {program.name}.
-                </p>
-                <Button variant="accent" onClick={handleAddCurriculum}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Curriculum
-                </Button>
-              </CardContent>
-            </Card>
+            <EmptyState
+              icon="book"
+              title="No Curriculums Yet"
+              description={`Create your first curriculum to start building the learning path for ${program.name}.`}
+              action={{
+                label: "Add Curriculum",
+                onClick: handleAddCurriculum,
+              }}
+            />
           ) : (
             <div className="grid gap-4">
               {curriculums
@@ -240,16 +217,6 @@ export default function ProgramCurriculumPage() {
                           >
                             {curriculum.status}
                           </Badge>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              // TODO: Open curriculum settings
-                            }}
-                          >
-                            <Settings className="h-4 w-4" />
-                          </Button>
                         </div>
                       </div>
                     </CardContent>
@@ -265,7 +232,6 @@ export default function ProgramCurriculumPage() {
             <Users className="h-5 w-5 text-arc-navy-600 flex-shrink-0" />
             <p className="text-sm text-arc-navy-800">
               <strong>Tip:</strong> Click on any curriculum card above to manage its subjects, modules, and lessons.
-              You can also drag to reorder curriculums to change the learning sequence.
             </p>
           </CardContent>
         </Card>

@@ -4,6 +4,7 @@ import { createProgramSchema } from "@aratc/shared";
 import { validateRequest } from "../../lib/validate";
 import {
   listPrograms,
+  getProgramById,
   getProgramBySlug,
   createProgram,
   updateProgram,
@@ -22,6 +23,19 @@ export async function list(
   try {
     const programs = await listPrograms();
     res.json(programs);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getById(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const program = await getProgramById(req.params.id);
+    res.json(program);
   } catch (error) {
     next(error);
   }

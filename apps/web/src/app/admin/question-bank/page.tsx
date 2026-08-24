@@ -1,23 +1,22 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { WorkspaceHeader, QuestionForm } from "@/components/admin";
+import Link from "next/link";
+import { WorkspaceHeader, QuestionForm, ConfirmModal } from "@/components/admin";
 import { questionsApi } from "@/lib/api/client";
+import { TableSkeleton, NoResultsEmpty, NoDataEmpty } from "@/components/branding";
 import { Card, CardContent, Button, Badge, Input } from "@/components/ui";
 import { toast } from "@/lib/toast";
 import {
   Plus,
   Search,
-  Filter,
   Edit,
   Trash2,
-  Copy,
-  MoreVertical,
   FileText,
   BookOpen,
   Award,
   Link as LinkIcon,
-  RefreshCw,
+  AlertCircle,
 } from "lucide-react";
 
 // Types
@@ -31,14 +30,6 @@ interface Question {
   usageCount?: number;
   createdAt?: string;
 }
-
-const mockQuestions: Question[] = [
-  { id: "1", type: "MULTIPLE_CHOICE", difficulty: "MEDIUM", stem: "What is the value of x in the equation 2x + 5 = 15?", status: "PUBLISHED", linkedTo: [{ type: "Subject", name: "Mathematics" }, { type: "Topic", name: "Linear Equations" }], usageCount: 3, createdAt: "Aug 10, 2026" },
-  { id: "2", type: "MULTIPLE_CHOICE", difficulty: "EASY", stem: "Which of the following is a prime number?", status: "PUBLISHED", linkedTo: [{ type: "Subject", name: "Mathematics" }, { type: "Topic", name: "Number System" }], usageCount: 5, createdAt: "Aug 9, 2026" },
-  { id: "3", type: "TRUE_FALSE", difficulty: "MEDIUM", stem: "The square root of 144 is 12.", status: "UNDER_REVIEW", linkedTo: [{ type: "Subject", name: "Mathematics" }, { type: "Exam", name: "UPCAT" }], usageCount: 2, createdAt: "Aug 8, 2026" },
-  { id: "4", type: "MULTIPLE_CHOICE", difficulty: "HARD", stem: "Which of the following sentences contains a metaphor?", status: "DRAFT", linkedTo: [{ type: "Subject", name: "English" }], usageCount: 0, createdAt: "Aug 7, 2026" },
-  { id: "5", type: "ESSAY", difficulty: "HARD", stem: "Explain the impact of the Spanish colonization on Philippine society.", status: "PUBLISHED", linkedTo: [{ type: "Subject", name: "Araling Panlipunan" }, { type: "Topic", name: "Philippine History" }], usageCount: 8, createdAt: "Aug 6, 2026" },
-];
 
 const typeConfig: Record<string, { label: string; color: string }> = {
   MULTIPLE_CHOICE: { label: "Multiple Choice", color: "bg-blue-100 text-blue-700" },
@@ -71,6 +62,7 @@ export default function QuestionBankPage() {
   const [selectedType, setSelectedType] = useState("all");
   const [selectedDifficulty, setSelectedDifficulty] = useState("all");
   const [showQuestionForm, setShowQuestionForm] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Question | null>(null);
 
   // Fetch questions
   useEffect(() => {
@@ -82,15 +74,10 @@ export default function QuestionBankPage() {
     setError(null);
     try {
       const data = await questionsApi.list();
-      if (Array.isArray(data)) {
-        setQuestions(data as Question[]);
-      } else {
-        setQuestions(mockQuestions);
-      }
+      setQuestions(Array.isArray(data) ? (data as Question[]) : []);
     } catch (err) {
-      console.error("Failed to fetch questions:", err);
-      setError("Failed to load questions. Using demo data.");
-      setQuestions(mockQuestions);
+      setError("Failed to load questions.");
+      setQuestions([]);
     } finally {
       setIsLoading(false);
     }
@@ -120,20 +107,8 @@ export default function QuestionBankPage() {
       setQuestions([newQuestion as Question, ...questions]);
       setShowQuestionForm(false);
       toast.success("Question created successfully");
-    } catch (err) {
-      // Fallback to local state for demo
-      const newQuestion: Question = {
-        id: Date.now().toString(),
-        type: data.type,
-        difficulty: data.difficulty as Question["difficulty"],
-        stem: data.stem,
-        status: "DRAFT",
-        usageCount: 0,
-        createdAt: new Date().toLocaleDateString(),
-      };
-      setQuestions([newQuestion, ...questions]);
-      setShowQuestionForm(false);
-      toast.success("Question created (demo mode)");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create question. Please try again.");
     }
   };
 
@@ -144,6 +119,19 @@ export default function QuestionBankPage() {
     return matchesSearch && matchesType && matchesDifficulty;
   });
 
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await questionsApi.delete(deleteTarget.id);
+      setQuestions(questions.filter((q) => q.id !== deleteTarget.id));
+      toast.success("Question deleted successfully");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to delete question. Please try again.");
+    } finally {
+      setDeleteTarget(null);
+    }
+  };
+
   return (
     <>
       <WorkspaceHeader
@@ -151,10 +139,12 @@ export default function QuestionBankPage() {
         subtitle="Manage reusable questions across all subjects and exams"
         actions={
           <div className="flex gap-2">
-            <Button variant="outline" size="sm">
-              <FileText className="h-4 w-4 mr-2" />
-              Import
-            </Button>
+            <Link href="/admin/question-bank/import">
+              <Button variant="outline" size="sm">
+                <FileText className="h-4 w-4 mr-2" />
+                Import
+              </Button>
+            </Link>
             <Button variant="accent" size="sm" onClick={() => setShowQuestionForm(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Create Question
@@ -166,10 +156,10 @@ export default function QuestionBankPage() {
       <div className="space-y-6 p-6">
         {/* Error banner */}
         {error && (
-          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center justify-between">
-            <p className="text-yellow-700 text-sm">{error}</p>
+          <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3">
+            <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />
+            <p className="text-red-700 text-sm flex-1">{error}</p>
             <Button variant="outline" size="sm" onClick={fetchQuestions}>
-              <RefreshCw className="h-4 w-4 mr-2" />
               Retry
             </Button>
           </div>
@@ -275,18 +265,7 @@ export default function QuestionBankPage() {
         {/* Question List */}
         <Card>
           <CardContent className="p-0">
-            {/* Loading skeleton */}
-            {isLoading && (
-              <div className="divide-y divide-arc-slate-100">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="p-4 animate-pulse">
-                    <div className="h-4 bg-arc-slate-200 rounded w-1/4 mb-2" />
-                    <div className="h-6 bg-arc-slate-200 rounded w-3/4 mb-2" />
-                    <div className="h-4 bg-arc-slate-200 rounded w-1/2" />
-                  </div>
-                ))}
-              </div>
-            )}
+            {isLoading && <TableSkeleton />}
 
             {/* Questions */}
             {!isLoading && (
@@ -337,13 +316,15 @@ export default function QuestionBankPage() {
 
                         {/* Actions */}
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button className="p-1.5 hover:bg-arc-slate-100 rounded">
-                            <Edit className="h-4 w-4 text-arc-slate-500" />
-                          </button>
-                          <button className="p-1.5 hover:bg-arc-slate-100 rounded">
-                            <Copy className="h-4 w-4 text-arc-slate-500" />
-                          </button>
-                          <button className="p-1.5 hover:bg-red-50 rounded">
+                          <Link href={`/admin/question-bank/${question.id}`}>
+                            <button className="p-1.5 hover:bg-arc-slate-100 rounded">
+                              <Edit className="h-4 w-4 text-arc-slate-500" />
+                            </button>
+                          </Link>
+                          <button
+                            className="p-1.5 hover:bg-red-50 rounded"
+                            onClick={() => setDeleteTarget(question)}
+                          >
                             <Trash2 className="h-4 w-4 text-red-400" />
                           </button>
                         </div>
@@ -356,20 +337,15 @@ export default function QuestionBankPage() {
 
             {/* Empty State */}
             {!isLoading && filteredQuestions.length === 0 && (
-              <div className="text-center py-12">
-                <FileText className="h-12 w-12 text-arc-slate-300 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">
-                  No questions found
-                </h3>
-                <p className="text-arc-slate-500 mb-4">
-                  {searchQuery || selectedType !== "all" || selectedDifficulty !== "all"
-                    ? "Try adjusting your filters"
-                    : "Create your first question to get started"}
-                </p>
-                <Button variant="accent" onClick={() => setShowQuestionForm(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Question
-                </Button>
+              <div className="py-8">
+                {searchQuery || selectedType !== "all" || selectedDifficulty !== "all" ? (
+                  <NoResultsEmpty query={searchQuery || "your filter"} />
+                ) : (
+                  <NoDataEmpty
+                    title="No Questions Yet"
+                    description="Create your first question to get started."
+                  />
+                )}
               </div>
             )}
           </CardContent>
@@ -381,6 +357,17 @@ export default function QuestionBankPage() {
         isOpen={showQuestionForm}
         onClose={() => setShowQuestionForm(false)}
         onSubmit={handleCreateQuestion}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Delete Question"
+        description={`Are you sure you want to delete this question? It will be removed from all assessments and exams that use it.`}
+        confirmLabel="Delete Question"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteTarget(null)}
       />
     </>
   );

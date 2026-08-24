@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { WorkspaceHeader } from "@/components/admin";
 import { topicsApi, modulesApi } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
+import { generateSlug } from "@/lib/utils/slug";
 import { Button, Input, Card, CardContent } from "@/components/ui";
 import {
   ArrowLeft,
@@ -20,15 +22,6 @@ interface Module {
     id: string;
     name: string;
   };
-}
-
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .trim();
 }
 
 export default function NewTopicPage() {
@@ -54,8 +47,7 @@ export default function NewTopicPage() {
     try {
       const data = await modulesApi.list() as Module[];
       setModules(data);
-    } catch (err) {
-      console.error("Failed to fetch modules:", err);
+    } catch {
     } finally {
       setIsLoadingModules(false);
     }
@@ -72,11 +64,10 @@ export default function NewTopicPage() {
     setError(null);
 
     try {
-      // Token is automatically retrieved from localStorage by apiFetch
       await topicsApi.create(formData);
+      toast.success("Topic created successfully");
       router.push("/admin/topics");
     } catch (err: any) {
-      console.error("Failed to create topic:", err);
       setError(err.message || "Failed to create topic. Please try again.");
     } finally {
       setIsSubmitting(false);

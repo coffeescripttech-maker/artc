@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { WorkspaceHeader, DraggableList, type DraggableItem, QuestionForm, TopicPicker, TopicPickerCompact } from "@/components/admin";
+import { WorkspaceHeader, DraggableList, type DraggableItem, QuestionForm, TopicPicker, TopicPickerCompact, ConfirmModal } from "@/components/admin";
 import { assessmentsApi, questionsApi } from "@/lib/api/client";
+import { PageLoader, NoDataEmpty, ErrorEmpty } from "@/components/branding";
 import { Card, CardContent, Button, Badge, Input } from "@/components/ui";
 import { toast } from "@/lib/toast";
 import {
@@ -20,7 +21,6 @@ import {
   RefreshCw,
   ArrowLeft,
   X,
-  ChevronDown,
 } from "lucide-react";
 
 // Types
@@ -54,29 +54,6 @@ interface Question {
   difficulty: "EASY" | "MEDIUM" | "HARD";
   score: number;
 }
-
-const mockAssessment: Assessment = {
-  id: "1",
-  name: "Grade 9 Algebra Quiz",
-  slug: "grade-9-algebra-quiz",
-  type: "QUIZ",
-  status: "DRAFT",
-  description: "Quiz covering basic algebraic expressions and linear equations",
-  questionCount: 20,
-  timeLimitMinutes: 30,
-  passingScore: 70,
-  randomizeQuestions: true,
-  showExplanations: true,
-  _count: { questions: 5, attempts: 0 },
-};
-
-const mockQuestions: Question[] = [
-  { id: "1", stem: "What is the value of x in 2x + 5 = 15?", type: "MULTIPLE_CHOICE", difficulty: "EASY", score: 1 },
-  { id: "2", stem: "Solve for y: 3y - 9 = 0", type: "MULTIPLE_CHOICE", difficulty: "EASY", score: 1 },
-  { id: "3", stem: "Which of the following is an algebraic expression?", type: "MULTIPLE_CHOICE", difficulty: "MEDIUM", score: 1 },
-  { id: "4", stem: "Simplify: 4(x + 2) - 3x", type: "MULTIPLE_CHOICE", difficulty: "MEDIUM", score: 1 },
-  { id: "5", stem: "The square root of 144 is 12.", type: "TRUE_FALSE", difficulty: "EASY", score: 1 },
-];
 
 const difficultyColors: Record<string, string> = {
   EASY: "bg-green-100 text-green-700",
@@ -117,6 +94,7 @@ export default function AssessmentBuilderPage() {
   const [autoGenQuestionCount, setAutoGenQuestionCount] = useState("10");
   const [autoGenDifficulty, setAutoGenDifficulty] = useState<"ALL" | "EASY" | "MEDIUM" | "HARD">("ALL");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Question | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -127,11 +105,11 @@ export default function AssessmentBuilderPage() {
     setError(null);
     try {
       const [assessmentData, questionsData] = await Promise.all([
-        assessmentsApi.getById(assessmentId).catch(() => null),
-        questionsApi.getByAssessment(assessmentId).catch(() => null),
+        assessmentsApi.getById(assessmentId),
+        questionsApi.getByAssessment(assessmentId).catch(() => []),
       ]);
 
-      const a = ((assessmentData as Assessment) || mockAssessment) as Assessment;
+      const a = assessmentData as Assessment;
       setAssessment(a);
       setName(a.name);
       setType(a.type || "QUIZ");
@@ -146,23 +124,17 @@ export default function AssessmentBuilderPage() {
       setMaxAttempts(a.maxAttempts != null ? String(a.maxAttempts) : "");
       setSelectedTopicIds(a.topicIds || []);
 
-      if (questionsData && Array.isArray(questionsData)) {
-        // API returns AssessmentQuestion objects with nested question - extract the question data
+      // API returns AssessmentQuestion objects with nested question - extract the question data
+      if (Array.isArray(questionsData)) {
         const extracted = (questionsData as any[]).map((aq: any) => ({
           ...aq.question,
           score: aq.score,
           orderIndex: aq.orderIndex,
         }));
         setQuestions(extracted as Question[]);
-      } else {
-        setQuestions(mockQuestions);
       }
     } catch (err) {
-      console.error("Failed to fetch assessment:", err);
-      setError("Failed to load assessment. Using demo data.");
-      setAssessment(mockAssessment);
-      setName(mockAssessment.name);
-      setQuestions(mockQuestions);
+      setError("Failed to load assessment data.");
     } finally {
       setIsLoading(false);
     }
@@ -174,9 +146,9 @@ export default function AssessmentBuilderPage() {
     subtitle: `${question.type.replace("_", " ")} • ${question.score} point${question.score !== 1 ? "s" : ""}`,
     badge: question.difficulty,
     badgeVariant: (difficultyBadgeVariant[question.difficulty] || "default") as "success" | "warning" | "error" | "default",
-    onClick: () => console.log("Edit question:", question.id),
-    onEdit: () => console.log("Edit question:", question.id),
-    onDelete: () => handleDeleteQuestion(question.id),
+    onClick: () => router.push(`/admin/question-bank/${question.id}`),
+    onEdit: () => router.push(`/admin/question-bank/${question.id}`),
+    onDelete: () => handleDeleteQuestion(question),
   }));
 
   const handleSave = async () => {
@@ -201,8 +173,9 @@ export default function AssessmentBuilderPage() {
         topicIds: selectedTopicIds,
         questionCount: selectedTopicIds.length > 0 ? parseInt(autoGenQuestionCount) || 10 : undefined,
       });
-    } catch (err) {
-      console.error("Failed to save:", err);
+      toast.success("Assessment saved");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to save assessment. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -211,11 +184,11 @@ export default function AssessmentBuilderPage() {
   const handlePublish = async () => {
     setIsSubmitting(true);
     try {
-      await assessmentsApi.publish(assessmentId, "");
+      await assessmentsApi.publish(assessmentId);
+      toast.success("Assessment published");
       router.push("/admin/assessments");
-    } catch (err) {
-      console.error("Failed to publish:", err);
-      toast.error("Failed to publish. Please try again.");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to publish. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -254,9 +227,8 @@ export default function AssessmentBuilderPage() {
 
       setShowAutoGenerate(false);
       toast.success(`Added ${Array.isArray(result) ? result.length : 0} questions to the assessment`);
-    } catch (err) {
-      console.error("Failed to auto-generate:", err);
-      toast.error("Failed to generate questions. Please try again.");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to generate questions. Please try again.");
     } finally {
       setIsGenerating(false);
     }
@@ -281,23 +253,15 @@ export default function AssessmentBuilderPage() {
       const createdQ = newQuestion as Question;
       try {
         await assessmentsApi.addQuestion(assessmentId, { questionId: createdQ.id, score: 1 });
-      } catch (linkErr) {
-        console.error("Failed to link question to assessment:", linkErr);
+      } catch (linkErr: any) {
+        toast.error("Question created but failed to link to assessment");
       }
 
       setQuestions([...questions, { ...createdQ, score: 1 }]);
       setShowQuestionForm(false);
-    } catch (err) {
-      // Fallback to local state for demo
-      const newQuestion: Question = {
-        id: Date.now().toString(),
-        stem: data.stem,
-        type: data.type,
-        difficulty: data.difficulty as Question["difficulty"],
-        score: 1,
-      };
-      setQuestions([...questions, newQuestion]);
-      setShowQuestionForm(false);
+      toast.success("Question added to assessment");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create question. Please try again.");
     }
   };
 
@@ -311,44 +275,55 @@ export default function AssessmentBuilderPage() {
     setIsSaving(true);
     try {
       await assessmentsApi.reorderQuestions(assessmentId, reorderedItems.map((i) => i.id));
+      toast.success("Question order saved");
     } catch (err) {
-      console.error("Failed to reorder:", err);
+      toast.error("Failed to save question order. Please try again.");
+      fetchData();
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDeleteQuestion = async (questionId: string) => {
-    if (!confirm("Are you sure you want to remove this question?")) return;
+  const handleDeleteQuestion = (question: Question) => {
+    setDeleteTarget(question);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      await assessmentsApi.removeQuestion(assessmentId, questionId);
-      setQuestions(questions.filter((q) => q.id !== questionId));
-    } catch (err) {
-      setQuestions(questions.filter((q) => q.id !== questionId));
+      await assessmentsApi.removeQuestion(assessmentId, deleteTarget.id);
+      setQuestions(questions.filter((q) => q.id !== deleteTarget.id));
+      toast.success("Question removed from assessment");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to remove question. Please try again.");
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="h-8 w-8 animate-spin text-arc-orange-500 mx-auto mb-4" />
-          <p className="text-arc-slate-500">Loading assessment...</p>
-        </div>
+        <PageLoader />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <ErrorEmpty onRetry={fetchData} />
       </div>
     );
   }
 
   if (!assessment) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-arc-navy-900 mb-2">Assessment not found</h2>
-          <p className="text-arc-slate-500 mb-4">The assessment you're looking for doesn't exist.</p>
-          <Button variant="accent" onClick={() => router.push("/admin/assessments")}>
-            Back to Assessments
-          </Button>
-        </div>
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <NoDataEmpty
+          title="Assessment Not Found"
+          description="The assessment you're looking for doesn't exist or may have been deleted."
+        />
       </div>
     );
   }
@@ -383,12 +358,6 @@ export default function AssessmentBuilderPage() {
       />
 
       <div className="p-6">
-        {error && (
-          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-yellow-700 text-sm">{error}</p>
-          </div>
-        )}
-
         <div className="flex gap-6">
           {/* Builder Panel */}
           <div className="flex-1 space-y-6">
@@ -482,7 +451,7 @@ export default function AssessmentBuilderPage() {
                             <span className="text-xs text-arc-slate-500">{question.score} point{question.score !== 1 ? "s" : ""}</span>
                           </div>
                         </div>
-                        <button className="p-1.5 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); handleDeleteQuestion(question.id); }}>
+                        <button className="p-1.5 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); handleDeleteQuestion(question); }}>
                           <Trash2 className="h-4 w-4 text-red-400" />
                         </button>
                       </div>
@@ -706,6 +675,17 @@ export default function AssessmentBuilderPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Remove Question"
+        description={`Are you sure you want to remove this question from the assessment? "${deleteTarget?.stem}" will no longer appear in this assessment.`}
+        confirmLabel="Remove Question"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
     </>
   );
 }

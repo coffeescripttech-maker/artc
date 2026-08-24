@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Card, CardContent, Badge, Button } from "@/components/ui";
-import { ChevronRight, Layers, BookOpen, FileText, Eye, Plus, Users } from "lucide-react";
+import { Layers, BookOpen, FileText, Eye, Plus, Users } from "lucide-react";
 
 interface CurriculumItem {
   id: string;
@@ -104,7 +104,7 @@ export function CurriculumJourney({ curriculums, programId, onView, onAdd }: Cur
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2 text-xs text-arc-slate-600">
                     <Layers className="h-3.5 w-3.5 text-arc-slate-400" />
-                    <span>{(curriculum as any).items?.length || 0} Subjects</span>
+                    <span>{curriculum._count?.items || curriculum._count?.subjects || 0} Subjects</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs text-arc-slate-600">
                     <Users className="h-3.5 w-3.5 text-arc-slate-400" />

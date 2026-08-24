@@ -8,6 +8,7 @@ import { EntitySearchPicker } from "./entity-search-picker";
 import { ModuleForm } from "./forms/module-form";
 import { TopicForm } from "./forms/topic-form";
 import { LessonForm } from "./forms/lesson-form";
+import { ConfirmModal } from "./confirm-modal";
 import {
   Plus,
   Search,
@@ -35,6 +36,7 @@ import {
   GripHorizontal,
 } from "lucide-react";
 import { curriculumApi, subjectsApi, modulesApi, topicsApi, lessonsApi } from "@/lib/api/client";
+import { toast as showToast } from "@/lib/toast";
 import { useRouter } from "next/navigation";
 
 interface Subject {
@@ -93,28 +95,6 @@ interface CurriculumSubjectManagerProps {
   onUpdate?: (items: CurriculumItem[]) => void;
 }
 
-// Toast helper (simple implementation)
-const showToast = {
-  success: (message: string) => {
-    if (typeof window !== "undefined") {
-      const toast = document.createElement("div");
-      toast.className = "fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in";
-      toast.textContent = message;
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 3000);
-    }
-  },
-  error: (message: string) => {
-    if (typeof window !== "undefined") {
-      const toast = document.createElement("div");
-      toast.className = "fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in";
-      toast.textContent = message;
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 3000);
-    }
-  },
-};
-
 export function CurriculumSubjectManager({
   curriculumId,
   programId,
@@ -155,6 +135,9 @@ export function CurriculumSubjectManager({
   // Move modal state
   const [showMoveModal, setShowMoveModal] = useState(false);
   const [itemToMove, setItemToMove] = useState<{ type: string; id: string; name: string; currentParentId?: string } | null>(null);
+
+  // Remove confirmation state
+  const [removeTarget, setRemoveTarget] = useState<{ itemId: string; subjectName: string } | null>(null);
 
   // Update items when initialItems changes
   useEffect(() => {
@@ -371,20 +354,11 @@ export function CurriculumSubjectManager({
     setShowMoveModal(true);
   };
 
-  const moveItem = async (newParentId: string) => {
+  const moveItem = async (_newParentId: string) => {
     if (!itemToMove) return;
-    setIsLoading(true);
-    try {
-      // Note: This would require API support for moving items
-      showToast.success(`${itemToMove.type} moved successfully`);
-      setShowMoveModal(false);
-      setItemToMove(null);
-      await refreshItems();
-    } catch (err: any) {
-      showToast.error(err.message || "Failed to move");
-    } finally {
-      setIsLoading(false);
-    }
+    showToast.info("Moving items is not yet available");
+    setShowMoveModal(false);
+    setItemToMove(null);
   };
 
   // Drag and drop handlers
@@ -406,15 +380,13 @@ export function CurriculumSubjectManager({
     setDropTarget({ type, id });
   };
 
-  const handleDrop = async (e: React.DragEvent, targetType: string, targetId: string) => {
+  const handleDrop = async (e: React.DragEvent, _targetType: string, _targetId: string) => {
     e.preventDefault();
     if (!draggedItem) return;
-
-    // Handle reordering within same parent
-    showToast.success(`Reordered ${draggedItem.type}`);
+    // Reordering is not yet supported — no backend endpoint exists.
+    showToast.info("Reordering is not yet available");
     setDraggedItem(null);
     setDropTarget(null);
-    await refreshItems();
   };
 
   // Create handlers
@@ -479,7 +451,7 @@ export function CurriculumSubjectManager({
       await refreshItems();
       // Auto-expand parent subject
       if (data.subjectId) {
-        setExpandedSubjects((prev) => new Set([...prev, data.subjectId]));
+        setExpandedSubjects((prev) => new Set([...prev, data.subjectId as string]));
         setExpandedModules((prev) => {
           const next = new Set(prev);
           // The new module will be at the end, so we'll expand to show it
@@ -508,7 +480,7 @@ export function CurriculumSubjectManager({
       await refreshItems();
       // Auto-expand parents
       if (data.moduleId) {
-        setExpandedModules((prev) => new Set([...prev, data.moduleId]));
+        setExpandedModules((prev) => new Set([...prev, data.moduleId as string]));
       }
       showToast.success("Topic created");
       setQuickAddModule(null);
@@ -519,13 +491,18 @@ export function CurriculumSubjectManager({
     }
   };
 
-  const handleRemoveItem = async (itemId: string) => {
-    if (!confirm("Remove this subject from the curriculum?")) return;
+  const handleRemoveItem = (itemId: string, subjectName: string) => {
+    setRemoveTarget({ itemId, subjectName });
+  };
+
+  const handleConfirmRemove = async () => {
+    if (!removeTarget) return;
     try {
-      await curriculumApi.removeItem(curriculumId, itemId);
-      setItems((prev) => prev.filter((item) => item.id !== itemId));
-      onUpdate?.(items.filter((item) => item.id !== itemId));
+      await curriculumApi.removeItem(curriculumId, removeTarget.itemId);
+      setItems((prev) => prev.filter((item) => item.id !== removeTarget.itemId));
+      onUpdate?.(items.filter((item) => item.id !== removeTarget.itemId));
       showToast.success("Subject removed");
+      setRemoveTarget(null);
     } catch (err) {
       showToast.error("Failed to remove subject");
     }
@@ -961,7 +938,7 @@ export function CurriculumSubjectManager({
                         <Button variant="ghost" size="sm" onClick={() => router.push(`/admin/subjects/${item.subject.id}`)} title="View">
                           <ExternalLink className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="hover:bg-red-50" title="Remove">
+                        <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id, item.subject.name)} className="hover:bg-red-50" title="Remove">
                           <Trash2 className="h-4 w-4 text-red-400" />
                         </Button>
                       </div>
@@ -1371,7 +1348,7 @@ export function CurriculumSubjectManager({
                       });
                       await refreshItems();
                       if (data.topicId) {
-                        setExpandedTopics((prev) => new Set([...prev, data.topicId]));
+                        setExpandedTopics((prev) => new Set([...prev, data.topicId as string]));
                       }
                       showToast.success("Lesson created");
                       setQuickAddTopic(null);
@@ -1432,6 +1409,23 @@ export function CurriculumSubjectManager({
           </div>
         </div>
       )}
+
+      {/* Remove Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!removeTarget}
+        onClose={() => setRemoveTarget(null)}
+        onConfirm={handleConfirmRemove}
+        title="Remove Subject"
+        description={
+          <>
+            Remove <strong>{removeTarget?.subjectName}</strong> from this curriculum? The subject
+            itself will not be deleted — it will just be unlinked from this curriculum.
+          </>
+        }
+        confirmLabel="Remove"
+        busyLabel="Removing..."
+        variant="danger"
+      />
     </div>
   );
 

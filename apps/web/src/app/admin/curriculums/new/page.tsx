@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { WorkspaceHeader } from "@/components/admin";
 import { curriculumApi, programsApi } from "@/lib/api/client";
+import { toast } from "@/lib/toast";
+import { generateSlug } from "@/lib/utils/slug";
 import { Button, Input, Card, CardContent } from "@/components/ui";
 import {
   ArrowLeft,
@@ -47,15 +49,6 @@ const gradeLevels = [
   { value: "FOURTH_YEAR", label: "Fourth Year College" },
 ];
 
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .trim();
-}
-
 export default function NewCurriculumPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -92,8 +85,7 @@ export default function NewCurriculumPage() {
           setFormData((prev) => ({ ...prev, programId: found.id }));
         }
       }
-    } catch (err) {
-      console.error("Failed to fetch programs:", err);
+    } catch {
     } finally {
       setIsLoadingPrograms(false);
     }
@@ -110,7 +102,6 @@ export default function NewCurriculumPage() {
     setError(null);
 
     try {
-      // Token is automatically retrieved from localStorage by apiFetch
       const payload = {
         programId: formData.programId,
         name: formData.name,
@@ -120,6 +111,7 @@ export default function NewCurriculumPage() {
         gradeLevel: formData.gradeLevel || undefined,
       };
       await curriculumApi.create(payload);
+      toast.success("Curriculum created successfully");
       // Redirect to the program page with curriculum tab selected
       if (formData.programId) {
         router.push(`/admin/programs/${formData.programId}?tab=curriculum`);
@@ -127,7 +119,6 @@ export default function NewCurriculumPage() {
         router.push("/admin/curriculums");
       }
     } catch (err: any) {
-      console.error("Failed to create curriculum:", err);
       setError(err.message || "Failed to create curriculum. Please try again.");
     } finally {
       setIsSubmitting(false);

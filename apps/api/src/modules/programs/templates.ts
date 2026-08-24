@@ -136,7 +136,7 @@ export const AratcShsCurriculumTemplate: CurriculumTemplate = {
                     ),
                     mcq(
                       "What is the multiplicative inverse of 5?",
-                      [{ text: "1/5" }, { text: "5", correct: true }, { text: "0" }, { text: "-5"}],
+                      [{ text: "1/5", correct: true }, { text: "5" }, { text: "0" }, { text: "-5"}],
                       undefined,
                       "EASY",
                       ["math", "algebra"]
@@ -168,8 +168,8 @@ export const AratcShsCurriculumTemplate: CurriculumTemplate = {
                   questions: [
                     mcq(
                       "Solve for x: 3x - 7 = 2x + 5",
-                      [{ text: "x = 12" }, { text: "x = 2", correct: true }, { text: "x = -12" }, { text: "x = 5"}],
-                      "Subtract 2x from both sides: x - 7 = 5, then add 7: x = 12. Correction: x = 12.",
+                      [{ text: "x = 12", correct: true }, { text: "x = 2" }, { text: "x = -12" }, { text: "x = 5"}],
+                      "Subtract 2x from both sides: x - 7 = 5, then add 7: x = 12.",
                       "MEDIUM",
                       ["math", "algebra"]
                     ),
@@ -1164,7 +1164,7 @@ export const AratcShsCurriculumTemplate: CurriculumTemplate = {
       questionCount: 50,
       passingScore: 60,
       timeLimitMinutes: 90,
-      topicSlugs: ["math9-algebra-linear-equations", "math10-geometry-triangle-similarity", "chem10-matter-balancing-equations", "chem10-matter-periodic-trends", "math11-statistics-central-tendency", "read9-literary-inferring-meaning", "lang9-grammar-parts-of-speech"],
+      topicSlugs: ["math9-algebra-linear-equations", "math10-geometry-triangle-similarity", "chem10-reactions-balancing-equations", "chem10-periodic-table-periodic-trends", "math11-statistics-central-tendency", "read9-literary-inferring-meaning", "lang9-grammar-parts-of-speech"],
     },
     {
       name: "SSU-CET Mock Exam",
@@ -1174,7 +1174,7 @@ export const AratcShsCurriculumTemplate: CurriculumTemplate = {
       questionCount: 45,
       passingScore: 60,
       timeLimitMinutes: 75,
-      topicSlugs: ["math10-trigonometry-trig-ratios", "chem10-matter-reaction-types", "read11-critical-authors-tone", "math11-precalc-polynomial-functions", "ar9-patterns-number-series"],
+      topicSlugs: ["math10-trigonometry-trig-ratios", "chem10-reactions-reaction-types", "read11-critical-authors-tone", "math11-algebra-polynomial-functions", "ar9-patterns-number-series"],
     },
     {
       name: "CSPC-CET Mock Exam",
@@ -1184,7 +1184,7 @@ export const AratcShsCurriculumTemplate: CurriculumTemplate = {
       questionCount: 40,
       passingScore: 55,
       timeLimitMinutes: 60,
-      topicSlugs: ["chem10-matter-balancing-equations", "chem10-matter-periodic-trends", "lang10-composition-synonyms-antonyms", "lang11-technical-essay-structure", "earth11-earth-earth-layers"],
+      topicSlugs: ["chem10-reactions-balancing-equations", "chem10-periodic-table-periodic-trends", "lang10-vocabulary-synonyms-antonyms", "lang11-writing-essay-structure", "earth-layers-earth-layers"],
     },
     {
       name: "VSU-CET Mock Exam",
@@ -1194,7 +1194,7 @@ export const AratcShsCurriculumTemplate: CurriculumTemplate = {
       questionCount: 45,
       passingScore: 60,
       timeLimitMinutes: 75,
-      topicSlugs: ["ar9-patterns-number-series", "math11-precalc-polynomial-functions", "math11-statistics-central-tendency", "read11-critical-authors-tone", "math10-trigonometry-trig-ratios"],
+      topicSlugs: ["ar9-patterns-number-series", "math11-algebra-polynomial-functions", "math11-statistics-central-tendency", "read11-critical-authors-tone", "math10-trigonometry-trig-ratios"],
     },
     {
       name: "BiISCAST-CET Mock Exam",
@@ -1204,7 +1204,7 @@ export const AratcShsCurriculumTemplate: CurriculumTemplate = {
       questionCount: 35,
       passingScore: 55,
       timeLimitMinutes: 60,
-      topicSlugs: ["math9-algebra-linear-equations", "chem10-matter-reaction-types", "lang10-composition-synonyms-antonyms", "earth11-earth-earth-layers", "ar11-deduction-symbol-series"],
+      topicSlugs: ["math9-algebra-linear-equations", "chem10-reactions-reaction-types", "lang10-vocabulary-synonyms-antonyms", "earth-layers-earth-layers", "ar10-logical-sequences-symbol-series"],
     },
     {
       name: "CNU-CET Mock Exam",
@@ -1214,7 +1214,7 @@ export const AratcShsCurriculumTemplate: CurriculumTemplate = {
       questionCount: 40,
       passingScore: 60,
       timeLimitMinutes: 70,
-      topicSlugs: ["math11-precalc-polynomial-functions", "chem10-matter-periodic-trends", "read9-literary-inferring-meaning", "phys11-mechanics-laws-of-motion", "ar9-patterns-number-series"],
+      topicSlugs: ["math11-algebra-polynomial-functions", "chem10-periodic-table-periodic-trends", "read9-literary-inferring-meaning", "phys11-kinematics-laws-of-motion", "ar9-patterns-number-series"],
     },
     {
       name: "UPCAT Full Mock Exam",
@@ -1224,7 +1224,7 @@ export const AratcShsCurriculumTemplate: CurriculumTemplate = {
       questionCount: 70,
       passingScore: 65,
       timeLimitMinutes: 180,
-      topicSlugs: ["math9-algebra-linear-equations", "math10-geometry-triangle-similarity", "math10-trigonometry-trig-ratios", "chem10-matter-balancing-equations", "chem10-matter-periodic-trends", "math11-precalc-polynomial-functions", "math11-statistics-central-tendency", "read9-literary-inferring-meaning", "lang9-grammar-parts-of-speech", "lang10-composition-synonyms-antonyms", "read11-critical-authors-tone", "ar9-patterns-number-series", "ar11-deduction-symbol-series", "phys11-mechanics-laws-of-motion", "earth11-earth-earth-layers", "bio9-life-processes-cell-structure", "bio10-genetics-enzymes"],
+      topicSlugs: ["math9-algebra-linear-equations", "math10-geometry-triangle-similarity", "math10-trigonometry-trig-ratios", "chem10-reactions-balancing-equations", "chem10-periodic-table-periodic-trends", "math11-algebra-polynomial-functions", "math11-statistics-central-tendency", "read9-literary-inferring-meaning", "lang9-grammar-parts-of-speech", "lang10-vocabulary-synonyms-antonyms", "read11-critical-authors-tone", "ar9-patterns-number-series", "ar10-logical-sequences-symbol-series", "phys11-kinematics-laws-of-motion", "earth-layers-earth-layers", "bio9-life-processes-cell-structure", "bio9-life-processes-enzymes"],
     },
     {
       name: "PUPCET Mock Exam",
@@ -1234,7 +1234,7 @@ export const AratcShsCurriculumTemplate: CurriculumTemplate = {
       questionCount: 60,
       passingScore: 60,
       timeLimitMinutes: 120,
-      topicSlugs: ["chem10-matter-balancing-equations", "chem10-matter-periodic-trends", "math11-precalc-polynomial-functions", "math11-statistics-central-tendency", "lang10-composition-synonyms-antonyms", "earth11-earth-earth-layers", "bio9-life-processes-cell-structure", "phys11-mechanics-laws-of-motion"],
+      topicSlugs: ["chem10-reactions-balancing-equations", "chem10-periodic-table-periodic-trends", "math11-algebra-polynomial-functions", "math11-statistics-central-tendency", "lang10-vocabulary-synonyms-antonyms", "earth-layers-earth-layers", "bio9-life-processes-cell-structure", "phys11-kinematics-laws-of-motion"],
     },
     {
       name: "USTET Mock Exam",
@@ -1244,7 +1244,7 @@ export const AratcShsCurriculumTemplate: CurriculumTemplate = {
       questionCount: 60,
       passingScore: 60,
       timeLimitMinutes: 120,
-      topicSlugs: ["math10-trigonometry-trig-ratios", "chem10-matter-reaction-types", "read11-critical-authors-tone", "ar9-patterns-number-series", "bio10-genetics-enzymes", "phys11-mechanics-laws-of-motion"],
+      topicSlugs: ["math10-trigonometry-trig-ratios", "chem10-reactions-reaction-types", "read11-critical-authors-tone", "ar9-patterns-number-series", "bio9-life-processes-enzymes", "phys11-kinematics-laws-of-motion"],
     },
     {
       name: "ACET Mock Exam",
@@ -1254,7 +1254,7 @@ export const AratcShsCurriculumTemplate: CurriculumTemplate = {
       questionCount: 50,
       passingScore: 65,
       timeLimitMinutes: 120,
-      topicSlugs: ["ar9-patterns-number-series", "ar11-deduction-symbol-series", "ar11-deduction-syllogisms", "lang10-composition-synonyms-antonyms", "chem10-matter-balancing-equations", "math11-statistics-central-tendency"],
+      topicSlugs: ["ar9-patterns-number-series", "ar10-logical-sequences-symbol-series", "ar11-deduction-syllogisms", "lang10-vocabulary-synonyms-antonyms", "chem10-reactions-balancing-equations", "math11-statistics-central-tendency"],
     },
     {
       name: "DECAT Mock Exam",
@@ -1264,7 +1264,7 @@ export const AratcShsCurriculumTemplate: CurriculumTemplate = {
       questionCount: 50,
       passingScore: 60,
       timeLimitMinutes: 120,
-      topicSlugs: ["math11-precalc-polygon-functions", "math10-trigonometry-trig-ratios", "chem10-matter-reaction-types", "earth11-earth-earth-layers", "read9-literary-inferring-meaning", "bio9-life-processes-cell-structure"],
+      topicSlugs: ["math11-algebra-polynomial-functions", "math10-trigonometry-trig-ratios", "chem10-reactions-reaction-types", "earth-layers-earth-layers", "read9-literary-inferring-meaning", "bio9-life-processes-cell-structure"],
     },
   ],
 };

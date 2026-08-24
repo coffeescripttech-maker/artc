@@ -1,3 +1,5 @@
+import type { BrandSettings, GeneralSettings } from "@aratc/shared";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 
 interface FetchOptions extends RequestInit {
@@ -378,6 +380,7 @@ export const cetApi = {
 // ============================================================
 export const programsApi = {
   list: () => apiFetch("/programs"),
+  getById: (id: string, token?: string) => apiFetch(`/programs/by-id/${id}`, { token }),
   getBySlug: (slug: string) => apiFetch(`/programs/${slug}`),
   create: (data: any, token?: string) =>
     apiFetch("/programs", { method: "POST", body: JSON.stringify(data), token }),
@@ -413,6 +416,18 @@ export const passagesApi = {
     apiFetch(`/passages/${id}`, { method: "DELETE", token }),
 };
 
+// ============================================================
+// Site Settings API (brand theme + organization info)
+// ============================================================
+export const settingsApi = {
+  getBrand: () => apiFetch<BrandSettings>("/settings/brand", { _skipAuth: true }),
+  updateBrand: (data: BrandSettings, token?: string) =>
+    apiFetch("/settings/brand", { method: "PUT", body: JSON.stringify(data), token }),
+  getGeneral: () => apiFetch<GeneralSettings>("/settings/general"),
+  updateGeneral: (data: GeneralSettings, token?: string) =>
+    apiFetch("/settings/general", { method: "PUT", body: JSON.stringify(data), token }),
+};
+
 export default {
   subjects: subjectsApi,
   curriculum: curriculumApi,
@@ -427,4 +442,5 @@ export default {
   programs: programsApi,
   passages: passagesApi,
   progression: progressionApi,
+  settings: settingsApi,
 };

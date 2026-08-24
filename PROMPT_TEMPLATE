@@ -1,0 +1,297 @@
+# Admin Programs Workflow — Production UX Audit & Enhancement
+
+## Context
+
+The `/admin/programs` workflow is the content backbone of ARATC LMS — admins create programs, build curriculums, manage subjects/modules/topics/lessons, and generate CET mock exams. A thorough audit of all 8 pages (~3,700 lines) + backend API (~1,900 lines) + shared components (~2,000 lines) revealed **critical bugs, broken pages, and inconsistent UX patterns** that would fail an investor review. The workflow works for basic data flow, but multiple pages are broken stubs, data integrity bugs exist, and the visual/interaction patterns are inconsistent across pages.
+
+**Goal:** Fix all broken pages, resolve data integrity bugs, unify UX patterns to production grade — without breaking existing working data flows.
+
+---
+
+## Critical Bugs (Must Fix)
+
+### C1. Double WorkspaceTabs on program detail page
+**Files:** `apps/web/src/app/admin/programs/[programId]/layout.tsx`, `apps/web/src/app/admin/programs/[programId]/page.tsx`
+
+The nested `layout.tsx` renders a `WorkspaceTabs` with 4 href-based tabs (Overview, Curriculum, Exams, Settings). The `[programId]/page.tsx` ALSO renders its own `WorkspaceTabs` with 8 state-based tabs (Overview, Curriculum, Subjects, Modules, Topics, Lessons, Questions, Assessments). Users see **two tab bars stacked vertically** — a critical UI bug.
+
+**Fix:** Remove the `WorkspaceTabs` from the layout entirely. The layout should only provide the content wrapper (`min-h-screen bg-arc-slate-50` + `p-6`). Each child page renders its own header/tabs as needed. The layout's "Exams" and "Settings" tabs were broken anyway (Exams page is mock data, Settings page doesn't exist).
+
+### C2. Broken "Settings" tab (404)
+**File:** `apps/web/src/app/admin/programs/[programId]/layout.tsx`
+
+The layout's "Settings" tab links to `/admin/programs/[programId]/settings` — a page that does not exist. This produces a 404.
+
+**Fix:** Resolved by C1 — removing the layout's tab bar eliminates the broken link. The existing `/edit` page serves as the settings/edit page.
+
+### C3. Exams page is entirely mock data
+**File:** `apps/web/src/app/admin/programs/[programId]/exams/page.tsx`
+
+The entire page uses hardcoded `mockExams` array. No API calls. "Create Assessment", "Edit", and "Delete" buttons have no `onClick` handlers. Breadcrumb hardcodes "ARC 4-Year" as the program name. `assessmentsApi.list({ programId })` exists but is never called.
+
+**Fix:** Rewrite to fetch real assessments via `assessmentsApi.list({ programId })`. Fetch program name for breadcrumbs. Wire "Create Assessment" to link to `/admin/assessments/new?programId={programId}`. Wire Edit to link to `/admin/assessments/{assessmentId}`. Add Delete with `ConfirmModal` + `assessmentsApi.delete()`. Add loading state, empty state, and error handling. Add stats from real data.
+
+### C4. Program lookup falls back to wrong program
+**File:** `apps/web/src/app/admin/programs/[programId]/page.tsx` (line ~324)
+
+When fetching program data, `programsApi.list()` is called (fetches ALL programs), then `.find(p => p.id === programId)` filters client-side. If the specific program isn't found, it falls back to `programs[0]` — showing the **wrong program's data** under the correct URL. Same pattern in edit and curriculum list pages.
+
+**Fix:** Add `getById(id)` to `programsApi` in `apps/web/src/lib/api/client.ts`. Add a `getProgramById(id)` service method + `getById` controller route on the backend. Replace the `.list().find()` pattern in all 3 pages with a direct `programsApi.getById(programId)` call. If not found, show a proper "Program not found" state (not fallback to [0]).
+
+### C5. Slug changes not persisted in edit page
+**File:** `apps/web/src/app/admin/programs/[programId]/edit/page.tsx` (lines 96-101)
+
+The edit form has a `slug` field that the user can edit, but `handleSubmit` omits `slug` from the `programsApi.update()` call. The slug is silently discarded. Additionally, the backend `updateProgram` service ignores `slug` even if sent.
+
+**Fix:** Add `slug` to the update payload. Update the backend `updateProgram` service to include `slug` in the Prisma update. Add slug uniqueness validation on the backend (return 409 if slug already exists on another program).
+
+### C6. Template upserts steal records across programs
+**File:** `apps/api/src/modules/programs/service.ts` (`createProgramFromTemplate`)
+
+Curriculums, Modules, and Topics are upserted by slug. Since slugs are globally unique (not scoped to a program), running the template a second time UPDATES the existing records, reassigning them to the new program and corrupting the first program's content tree.
+
+**Fix:** Scope the upsert `where` clause to include `programId` for Curriculums. For Modules and Topics (which belong to Subjects, not Programs directly), generate unique slugs that include a program-specific prefix or use `create` instead of `upsert` for template creation.
+
+### C7. Delete fails when program has curriculums or assessments
+**File:** `apps/api/src/modules/programs/service.ts` (`deleteProgram`)
+
+The `Curriculum.programId` and `Assessment.programId` relations are optional with no `onDelete: Cascade`. Prisma's default for optional relations is `Restrict`. A hard `prisma.program.delete` throws a P2003 FK error if any curriculums or assessments reference the program.
+
+**Fix:** In `deleteProgram`, delete associated curriculums and assessments first within a transaction before deleting the program. Or add a pre-flight check that returns a 409 with a helpful message ("Cannot delete program with existing curriculums. Archive instead.") and provide an archive option.
+
+### C8. Wrong correct answers in template questions
+**File:** `apps/api/src/modules/programs/templates.ts`
+
+Two MCQs have marked-correct answers that contradict their explanations:
+- "What is the multiplicative inverse of 5?" marks "5" as correct; should be "1/5"
+- "Solve for x: 3x - 7 = 2x + 5" marks "x = 2" as correct; explanation says "x = 12"
+
+**Fix:** Correct the `correct` flag in both questions to match the right answer.
+
+---
+
+## High-Priority UX Enhancements
+
+### H1. Unify loading states with shared branding components
+**Files affected:** All 8 programs pages (11 inline spinners found)
+
+Replace every inline `Loader2`/`RefreshCw` with `animate-spin` + "Loading..." text with the shared `PageLoader` from `@/components/branding/loading`. Replace inline `animate-pulse` card skeletons with `CardSkeleton` / `TableSkeleton` / `StatCardSkeleton`. Replace inline stat-card pulse with `DashboardStatsLoader`.
+
+**Pattern:** `import { PageLoader, CardSkeleton, StatCardSkeleton } from "@/components/branding";`
+
+### H2. Unify empty states with shared EmptyState component
+**Files affected:** All 8 programs pages (28 inline empty states found in the broader audit)
+
+Replace every hand-rolled empty state (icon + heading + description + button) with `EmptyState` or its pre-built variants (`NoDataEmpty`, `NoResultsEmpty`) from `@/components/branding/empty-state`.
+
+### H3. Unify error banners to a consistent red style
+**Files affected:** Detail page and curriculum detail page (use yellow), others use red
+
+All error banners should use red: `bg-red-50 border-red-200 text-red-600` with an `AlertCircle` icon and Retry button. The yellow banners on the detail page and curriculum detail page should be changed to red for consistency.
+
+### H4. Add toast feedback to all mutations
+**Files affected:** New page (no toast), edit page (no toast), curriculum list page (no toast), detail page (only error toast, no success toast)
+
+Add `toast.success()` on successful create/update/publish/delete and `toast.error()` on failure. Import `toast` from `@/lib/toast`.
+
+### H5. Replace `confirm()` with `ConfirmModal` on edit page
+**File:** `apps/web/src/app/admin/programs/[programId]/edit/page.tsx`
+
+Replace the native `confirm()` dialog (line 112) with the `ConfirmModal` component from `@/components/admin`, matching the pattern used on the programs list page. The modal should show the program name and consequence text, with a loading state on the delete button.
+
+### H6. Fix the new program page
+**File:** `apps/web/src/app/admin/programs/new/page.tsx`
+
+- Replace `apiRequest("/api/programs", ...)` with `programsApi.create()` for consistency
+- Add `toast.success("Program created")` on success
+- Add auto-slug generation from name (matching the edit page's `generateSlug` pattern)
+- Remove the `status` dropdown — backend forces `DRAFT` on create, so showing a Published option is misleading
+- Add a "Creating..." spinner on the submit button using `ButtonLoader`
+- Use human-friendly labels for EDUCATIONAL_STAGES (Title Case, not all-caps with underscores)
+
+### H7. Fix the edit page header inconsistency
+**File:** `apps/web/src/app/admin/programs/[programId]/edit/page.tsx`
+
+Change `DashboardHeader` import to `WorkspaceHeader` from `@/components/admin`, with breadcrumbs `[{ label: "Programs", href: "/admin/programs" }, { label: program.name, href: ... }, { label: "Edit" }]` and a status badge. This matches every other page in the programs directory.
+
+### H8. Add publish confirmation + loading state on detail page
+**File:** `apps/web/src/app/admin/programs/[programId]/page.tsx`
+
+The "Publish" button immediately calls the API with no confirmation and no loading state. Add a `ConfirmModal` for publish (explaining that publishing makes the program visible to learners) and disable the button with a spinner while the API call is in progress.
+
+### H9. Wire up the exams page "Create Assessment" button
+**File:** `apps/web/src/app/admin/programs/[programId]/exams/page.tsx`
+
+(Resolved as part of C3 rewrite.) The button should link to `/admin/assessments/new?programId={programId}`.
+
+### H10. Remove dead code and fix console.log statements
+**Files affected:** Multiple programs pages
+
+- Remove `cetTargetProgram` state (set but never read) in `page.tsx`
+- Remove `isSaving` dead state in curriculum list page and curriculum detail page
+- Remove `console.log` statements in `[programId]/page.tsx` (lines ~315-317, ~433-436)
+- Remove unused `result` variables from `createFromTemplate` and `generateCetExams` calls
+- Remove non-functional "Settings" buttons (TODO comments) in curriculum list/detail pages OR wire them to actual functionality
+
+### H11. Fix the false "drag to reorder" claim
+**File:** `apps/web/src/app/admin/programs/[programId]/curriculum/page.tsx`
+
+The info card says "You can also drag to reorder curriculums" but there is no drag-and-drop. Either implement drag-and-drop using the existing `DraggableList` component, or remove the misleading text. **Recommendation:** Remove the text for now (drag-and-drop reordering requires a backend reordering endpoint that doesn't exist yet).
+
+---
+
+## Medium-Priority UX Enhancements
+
+### M1. Add `programsApi.getById(id)` to API client
+**File:** `apps/web/src/lib/api/client.ts`
+
+Add `getById: (id: string, token?: string) => apiFetch(\`/programs/${id}\`, { token })`. Add the corresponding backend route `GET /programs/:id` in the controller and `getProgramById(id)` in the service. This fixes the `.list().find()` inefficiency in C4.
+
+### M2. Fix CET exam topic slug mismatches
+**File:** `apps/api/src/modules/programs/templates.ts`
+
+Many `topicSlugs` in CET exam templates don't match actual topic slugs defined in the grade subjects. Unmatched slugs are silently dropped, producing exams with zero or partial topics. Fix all mismatched slugs to match the actual topic slugs defined in the template's grade subjects.
+
+### M3. Add unsaved-changes warning on edit form
+**File:** `apps/web/src/app/admin/programs/[programId]/edit/page.tsx`
+
+Track dirty state by comparing `formData` against the original `program` data. Show a browser `beforeunload` warning if there are unsaved changes, and/or disable the Cancel button conditionally with a confirmation.
+
+### M4. Add program type dropdown on edit page (instead of free text)
+**File:** `apps/web/src/app/admin/programs/[programId]/edit/page.tsx`
+
+Replace the free-text `programType` input with a `<select>` populated from `EDUCATIONAL_STAGES` (matching the new page's pattern). Display with human-friendly labels.
+
+### M5. Fix slug auto-generation overwriting manual edits
+**File:** `apps/web/src/app/admin/programs/[programId]/edit/page.tsx`
+
+Add a `slugEdited` boolean state. When the user manually types in the slug field, set `slugEdited = true`. Only auto-generate slug from name if `slugEdited` is false. This preserves manually-edited slugs when the user later fixes a typo in the name.
+
+### M6. Improve "Generate CET Exams" UX
+**File:** `apps/web/src/app/admin/programs/page.tsx`
+
+Currently, "Generate CET Mock Exams" silently targets `programs[0]` (the first program in the unfiltered list) with no user confirmation. Add a program picker modal or a dropdown to select which program to generate exams for, with a confirmation step explaining what will be created.
+
+### M7. Remove fake progress simulation
+**File:** `apps/web/src/app/admin/programs/page.tsx`
+
+The `runProgressSimulation` function uses `setTimeout` to fake progress (45s for populate, 15s for CET). The actual API may complete faster or slower. Replace with a simple indeterminate loading state (spinner + "Populating curriculum...") and show the real result when the API resolves.
+
+---
+
+## Additional Component-Level Fixes (from shared-components audit)
+
+### A1. CurriculumSubjectManager uses native `confirm()` and hand-rolled DOM toast
+**File:** `apps/web/src/components/admin/curriculum-subject-manager.tsx`
+
+This component (used by the curriculum detail page) uses native `confirm()` for delete confirmation and a hand-rolled `showToast` helper that directly manipulates `document.body` (creating/removing DOM elements). Both are inconsistent with the app's `ConfirmModal` and `sonner` toast systems.
+
+**Fix:** Replace `confirm()` with `ConfirmModal` (imported from `@/components/admin`). Replace `showToast` DOM manipulation with `toast` from `@/lib/toast`. Remove the `showToast` helper function entirely.
+
+### A2. CurriculumSubjectManager drag-and-drop & move-item are false-success stubs
+**File:** `apps/web/src/components/admin/curriculum-subject-manager.tsx`
+
+`handleDrop` (line ~409) shows a success toast and calls `refreshItems()` but never sends a reorder API call — nothing actually reorders. `moveItem` (line ~374) is similarly a stub with a comment "Note: This would require API support." Users get false "success" feedback.
+
+**Fix:** Remove the false success toasts. Either (a) disable drag-and-drop and move-item UI until backend reordering endpoints exist, or (b) show an informational toast "Reordering is not yet available" when the user attempts it. **Recommendation:** Remove drag-and-drop reordering UI for now; keep the visual tree but make rows non-draggable. Remove the move-item modal button.
+
+### A3. EntitySearchPicker "Load more" appends duplicate results
+**File:** `apps/web/src/components/admin/entity-search-picker.tsx`
+
+`hasMore = filtered.length >= 10` but the API returns all results and filtering is client-side. "Load more" re-fetches the full list and appends it, causing visible duplicates.
+
+**Fix:** Remove the fake pagination. Since all results are fetched and filtered client-side, show all results at once (or increase the initial visible count). Remove the "Load more" button and `hasMore` logic.
+
+### A4. `generateSlug` duplicated across 4 form files
+**Files:** `apps/web/src/components/admin/forms/subject-form.tsx`, `module-form.tsx`, `topic-form.tsx`, `lesson-form.tsx`, and `apps/web/src/app/admin/programs/[programId]/edit/page.tsx`, `apps/web/src/app/admin/programs/new/page.tsx`
+
+The same `generateSlug` function is copy-pasted 6+ times. Should be a shared utility.
+
+**Fix:** Create `apps/web/src/lib/utils/slug.ts` exporting `generateSlug(name: string): string`. Import it in all form files and both program pages. Delete the inline copies.
+
+### A5. CurriculumJourney dead import and type cast
+**File:** `apps/web/src/components/admin/curriculum-journey.tsx`
+
+`ChevronRight` is imported but never used (dead import). Subject count uses `(curriculum as any).items?.length || 0` — a type cast that returns 0 if `items` isn't passed, even when `_count.items` is available.
+
+**Fix:** Remove `ChevronRight` import. Fix subject count to use `_count?.items || _count?.subjects || 0` instead of the `any` cast on `items`.
+
+---
+
+## Implementation Order
+
+**Phase 1 — Critical bug fixes (do first, these break the app):**
+1. C1: Remove `WorkspaceTabs` from layout.tsx
+2. C4: Add `getById` to API client + backend, replace `.list().find()` in 3 pages
+3. C5: Fix slug persistence (frontend + backend)
+4. C3: Rewrite exams page with real API data
+5. C8: Fix template question answers
+6. C6: Fix template upsert scope
+7. C7: Fix delete FK constraint (transaction cleanup)
+
+**Phase 2 — UX unification (consistent patterns):**
+8. H1: Replace all inline loading with shared branding loaders
+9. H2: Replace all inline empty states with shared `EmptyState`
+10. H3: Unify error banners to red
+11. H4: Add toast to all mutations
+12. H5: Replace `confirm()` with `ConfirmModal`
+13. H7: Fix edit page header to `WorkspaceHeader`
+14. H6: Fix new program page (api client, toast, auto-slug, remove status)
+15. H10: Remove dead code and console.logs
+16. H11: Remove false drag-to-reorder text
+17. H8: Add publish confirmation
+
+**Phase 3 — Medium enhancements & component fixes (polish):**
+18. A4: Extract `generateSlug` to shared utility
+19. A1: Fix CurriculumSubjectManager `confirm()` + DOM toast
+20. A2: Remove false drag-and-drop / move-item stubs
+21. A3: Fix EntitySearchPicker duplicate "Load more"
+22. A5: Fix CurriculumJourney dead import + type cast
+23. M2: Fix CET topic slug mismatches
+24. M5: Fix slug auto-generation overwrite
+25. M4: Program type dropdown on edit
+26. M6: CET exam generation program picker
+27. M7: Remove fake progress simulation
+28. M3: Unsaved-changes warning
+
+---
+
+## Files to Create/Modify
+
+| File | Action | Summary |
+|------|--------|---------|
+| `apps/web/src/app/admin/programs/[programId]/layout.tsx` | MODIFY | Remove `WorkspaceTabs`, keep only content wrapper |
+| `apps/web/src/app/admin/programs/[programId]/exams/page.tsx` | REWRITE | Real API data, functional buttons, loading/empty/error states |
+| `apps/web/src/app/admin/programs/[programId]/page.tsx` | MODIFY | Fix program lookup, remove console.logs/dead code, add publish confirm, unify loading/empty/error |
+| `apps/web/src/app/admin/programs/[programId]/edit/page.tsx` | MODIFY | Fix slug persistence, header to WorkspaceHeader, ConfirmModal, toast, program type dropdown, slug auto-gen fix |
+| `apps/web/src/app/admin/programs/new/page.tsx` | MODIFY | Use programsApi.create, toast, auto-slug, remove status dropdown, ButtonLoader |
+| `apps/web/src/app/admin/programs/[programId]/curriculum/page.tsx` | MODIFY | Fix program lookup, unify loading/empty/error, remove dead code, remove false drag text |
+| `apps/web/src/app/admin/programs/[programId]/curriculum/[curriculumId]/page.tsx` | MODIFY | Unify loading/empty/error, remove dead code, fix yellow→red error banner |
+| `apps/web/src/app/admin/programs/page.tsx` | MODIFY | Fix CET target selection, remove dead code, remove fake progress, unify loading/empty |
+| `apps/web/src/lib/api/client.ts` | MODIFY | Add `getById` to `programsApi` |
+| `apps/api/src/modules/programs/controller.ts` | MODIFY | Add `getById` handler |
+| `apps/api/src/modules/programs/service.ts` | MODIFY | Add `getProgramById`, fix `updateProgram` to include slug, fix `deleteProgram` with FK cleanup, fix template upsert scope |
+| `apps/api/src/modules/programs/routes.ts` | MODIFY | Add `GET /:id` route |
+| `apps/api/src/modules/programs/templates.ts` | MODIFY | Fix wrong correct answers, fix CET topic slug mismatches |
+| `apps/web/src/lib/utils/slug.ts` | CREATE | Shared `generateSlug` utility |
+| `apps/web/src/components/admin/curriculum-subject-manager.tsx` | MODIFY | Replace `confirm()` + DOM toast with `ConfirmModal` + sonner toast; remove false drag/move stubs |
+| `apps/web/src/components/admin/entity-search-picker.tsx` | MODIFY | Remove broken "Load more" fake pagination |
+| `apps/web/src/components/admin/curriculum-journey.tsx` | MODIFY | Remove dead import, fix `any` type cast for subject count |
+| `apps/web/src/components/admin/forms/*.tsx` | MODIFY | Import shared `generateSlug` (4 files) |
+
+---
+
+## Verification
+
+1. **Build:** `npx turbo run build --filter=@aratc/web --force` — should compile with no new errors
+2. **Programs list:** Navigate to `/admin/programs` — verify stats, search, filters, sort, grid/list views all work; template populate shows real loading state
+3. **New program:** Navigate to `/admin/programs/new` — verify auto-slug works, toast on success, no status dropdown
+4. **Program detail:** Navigate to `/admin/programs/[id]` — verify NO double tab bar, correct program loads (not fallback to [0]), publish shows confirmation
+5. **Edit program:** Navigate to `/admin/programs/[id]/edit` — verify WorkspaceHeader (not DashboardHeader), slug changes persist, ConfirmModal for delete, toast on save
+6. **Curriculum list:** Navigate to `/admin/programs/[id]/curriculum` — verify real program name in header, loading/empty states use shared components, no false drag text
+7. **Curriculum detail:** Navigate to `/admin/programs/[id]/curriculum/[cid]` — verify loading/empty/error use shared components, red error banner
+8. **Exams:** Navigate to `/admin/programs/[id]/exams` — verify REAL assessment data loads (not mock), Create/Edit/Delete buttons work, breadcrumb shows real program name, loading/empty states present
+9. **Template populate:** Click "Auto-Populate Curriculum" — verify no fake progress bar, real loading state, correct result
+10. **CET generation:** Click "Generate CET Exams" — verify program picker/confirmation, real loading, exams have correct topics
+11. **Delete with curriculums:** Delete a program that has curriculums — should succeed (not FK error) or show helpful message
+12. **Settings tab:** No longer exists (removed with layout tabs) — no 404
