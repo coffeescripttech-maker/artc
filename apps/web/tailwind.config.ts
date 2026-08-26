@@ -205,12 +205,27 @@ const config: Config = {
           "0%": { transform: "scale(0.95)", opacity: "0" },
           "100%": { transform: "scale(1)", opacity: "1" },
         },
+        /** Gentle floating animation for hero elements around ARCI mascot */
+        "float-y": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-3px)" },
+        },
+        "float-x": {
+          "0%, 100%": { transform: "translateX(0)" },
+          "50%": { transform: "translateX(2px)" },
+        },
       },
       animation: {
         "fade-in": "fade-in 0.3s ease-out",
         "slide-up": "slide-up 0.3s ease-out",
         "slide-down": "slide-down 0.3s ease-out",
         "scale-in": "scale-in 0.2s ease-out",
+        /** Floating animations with varied durations for organic motion */
+        "float-y": "float-y 5s ease-in-out infinite both",
+        "float-y-6": "float-y 6s ease-in-out infinite both",
+        "float-y-7": "float-y 7s ease-in-out infinite both",
+        "float-x": "float-x 6s ease-in-out infinite both",
+        "float-x-7": "float-x 7s ease-in-out infinite both",
       },
     },
   },

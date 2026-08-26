@@ -1,0 +1,9 @@
+
+> @aratc/web@0.0.1 typecheck C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\web
+> tsc --noEmit
+
+src/app/dashboard/classes/[batchId]/page.tsx(11,10): error TS2614: Module '"@/lib/api/client"' has no exported member 'batchesApi'. Did you mean to use 'import batchesApi from "@/lib/api/client"' instead?
+src/app/dashboard/classes/[batchId]/page.tsx(11,27): error TS2614: Module '"@/lib/api/client"' has no exported member 'BatchDetail'. Did you mean to use 'import BatchDetail from "@/lib/api/client"' instead?
+src/app/dashboard/classes/[batchId]/page.tsx(11,45): error TS2614: Module '"@/lib/api/client"' has no exported member 'BatchMemberRow'. Did you mean to use 'import BatchMemberRow from "@/lib/api/client"' instead?
+src/app/dashboard/classes/[batchId]/page.tsx(267,45): error TS7006: Parameter 'member' implicitly has an 'any' type.
+ ELIFECYCLE  Command failed with exit code 2.

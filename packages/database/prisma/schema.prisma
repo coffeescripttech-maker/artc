@@ -22,6 +22,8 @@ model User {
   teacherBatches    BatchTeacher[]
   ownedBatches      Batch[]         @relation("BatchOwner")
   learnerProfile    LearnerProfile?
+  parentLinks       ParentStudent[] @relation("ParentStudentParent")
+  studentLinks      ParentStudent[] @relation("ParentStudentStudent")
   authoredQuestions Question[]      @relation("QuestionAuthor")
   reviewedQuestions Question[]      @relation("QuestionReviewer")
   sessions          Session[]
@@ -722,6 +724,26 @@ model Payment {
   @@map("payments")
 }
 
+model ParentStudent {
+  id            String              @id @default(cuid())
+  parentUserId  String              @map("parent_user_id")
+  studentUserId String              @map("student_user_id")
+  status        ParentStudentStatus @default(PENDING)
+  requestedBy   LinkInitiator       @default(PARENT) @map("requested_by")
+  message       String?
+  respondedAt   DateTime?           @map("responded_at")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+  parent        User                @relation("ParentStudentParent", fields: [parentUserId], references: [id], onDelete: Cascade)
+  student       User                @relation("ParentStudentStudent", fields: [studentUserId], references: [id], onDelete: Cascade)
+
+  @@unique([parentUserId, studentUserId])
+  @@index([parentUserId])
+  @@index([studentUserId])
+  @@index([status])
+  @@map("parent_students")
+}
+
 enum UserStatus {
   ACTIVE
   INACTIVE
@@ -849,4 +871,16 @@ enum SubscriptionStatus {
   CANCELLED
   EXPIRED
   PENDING
+}
+
+enum ParentStudentStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  REVOKED
+}
+
+enum LinkInitiator {
+  PARENT
+  ADMIN
 }

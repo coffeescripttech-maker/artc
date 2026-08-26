@@ -1,9 +1,37 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui";
 import { GraduationCap, ArrowRight, Check, Users, BookOpen, Trophy } from "lucide-react";
 import Link from "next/link";
+
+// Mascot lives in /public, so next/image loads it as an optimized URL at /assets/images/arci_mascot.png
+
+/**
+ * A floating element around ARCI. Wraps children with a gentle, non-uniform
+ * floating motion so each element moves at a slightly different cadence.
+ * Pass tailwind animation classes via `animate` (e.g. "animate-float-y-6").
+ */
+function FloatingElement({
+  children,
+  className,
+  style,
+}: {
+  children: React.ReactNode;
+  className: string;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div
+      className={className}
+      style={style}
+      suppressHydrationWarning
+    >
+      {children}
+    </div>
+  );
+}
 
 export function HeroSection() {
   const [mounted, setMounted] = useState(false);
@@ -13,19 +41,14 @@ export function HeroSection() {
   }, []);
 
   return (
-    <section className="relative min-h-[90vh] flex items-center bg-arc-bg overflow-hidden">
-      {/* Background decorative shapes */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Large curved navy shape - bottom right */}
-        <div className="absolute -bottom-32 -right-32 w-[600px] h-[600px] bg-arc-navy-900/5 rounded-full blur-3xl" />
-        {/* Orange accent circle - top right */}
-        <div className="absolute top-20 right-[15%] w-32 h-32 bg-arc-orange-500/10 rounded-full blur-2xl" />
-        {/* Small purple dot */}
-        <div className="absolute bottom-40 right-[25%] w-16 h-16 bg-arc-purple-500/10 rounded-full blur-xl" />
+    <section className="relative min-h-[680px] flex items-center bg-arc-bg overflow-hidden">
+      {/* Subtle glow behind ARCI — extremely soft radial gradient */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[radial-gradient(ellipse_at_center,_#216FD105_0%,_transparent_70%)] rounded-full blur-3xl" />
       </div>
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-16 lg:py-0 w-full">
-        <div className="grid lg:grid-cols-12 gap-8 lg:gap-4 items-center">
+        <div className="grid lg:grid-cols-12 gap-4 items-center">
           {/* Left Content - 6 columns */}
           <div
             className={`lg:col-span-6 transition-all duration-700 ${
@@ -92,96 +115,95 @@ export function HeroSection() {
             </div>
           </div>
 
-          {/* Right Content - 6 columns with asymmetric composition */}
+          {/* Right Content - ARCI as central hero with floating learning elements */}
           <div
-            className={`lg:col-span-6 relative transition-all duration-700 delay-200 ${
+            className={`lg:col-span-6 relative flex items-center justify-center transition-all duration-700 delay-200 ${
               mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
             }`}
           >
-            {/* Main visual container - asymmetric shape */}
-            <div className="relative">
-              {/* Decorative shape behind main card */}
-              <div className="absolute -top-6 -right-6 w-full h-full bg-gradient-to-br from-arc-orange-500/20 to-arc-purple-500/20 rounded-[2.5rem] transform rotate-3" />
-
-              {/* Main card with organic shape */}
-              <div className="relative bg-white rounded-[2rem] rounded-tr-[4rem] p-8 shadow-arc-xl border border-arc-slate-100 overflow-hidden">
-                {/* Inner decorative accent */}
-                <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-bl from-arc-orange-100/50 to-transparent rounded-bl-[4rem]" />
-
-                {/* Header */}
-                <div className="relative flex items-center gap-4 mb-8">
-                  <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-arc-navy-900 to-arc-navy-700 flex items-center justify-center shadow-lg shadow-arc-navy-900/20">
-                    <GraduationCap className="h-7 w-7 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-arc-navy-900">Quick Stats</h3>
-                    <p className="text-sm text-arc-slate-500">Real-time learning metrics</p>
-                  </div>
+            {/* Orbital composition container */}
+            <div className="relative w-[540px] h-[530px] flex items-center justify-center">
+              {/* ELEMENT 1 — TOP: Speech bubble "Let's learn! 👋" */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 z-15">
+                <div className="relative flex items-center gap-1.5 px-4 py-2.5 bg-white rounded-[18px] shadow-arc-lg border border-arc-slate-100">
+                  <span className="text-[14px] font-semibold text-arc-navy-900">
+                    Let's learn! 👋
+                  </span>
+                  <span className="text-xs">✨</span>
+                  {/* Speech bubble tail */}
+                  <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white border-r border-b border-arc-slate-100 rotate-45 shadow-arc-sm" />
                 </div>
-
-                {/* Stats grid - asymmetric */}
-                <div className="grid grid-cols-2 gap-4 mb-8">
-                  <div className="p-5 rounded-2xl bg-gradient-to-br from-arc-navy-50 to-arc-navy-100/50">
-                    <div className="text-3xl font-bold text-arc-navy-900 mb-1">15,000+</div>
-                    <div className="text-sm text-arc-slate-500 flex items-center gap-1.5">
-                      <Users className="h-3.5 w-3.5" />
-                      Active Learners
-                    </div>
-                  </div>
-                  <div className="p-5 rounded-2xl bg-gradient-to-br from-arc-orange-50 to-arc-orange-100/50">
-                    <div className="text-3xl font-bold text-arc-orange-600 mb-1">94%</div>
-                    <div className="text-sm text-arc-slate-500 flex items-center gap-1.5">
-                      <Trophy className="h-3.5 w-3.5" />
-                      Pass Rate
-                    </div>
-                  </div>
-                  <div className="p-5 rounded-2xl bg-gradient-to-br from-arc-green-50 to-arc-green-100/50">
-                    <div className="text-3xl font-bold text-arc-green-600 mb-1">50+</div>
-                    <div className="text-sm text-arc-slate-500 flex items-center gap-1.5">
-                      <BookOpen className="h-3.5 w-3.5" />
-                      Subjects
-                    </div>
-                  </div>
-                  <div className="p-5 rounded-2xl bg-gradient-to-br from-arc-purple-50 to-arc-purple-100/50">
-                    <div className="text-3xl font-bold text-arc-purple-600 mb-1">12</div>
-                    <div className="text-sm text-arc-slate-500 flex items-center gap-1.5">
-                      <GraduationCap className="h-3.5 w-3.5" />
-                      Programs
-                    </div>
-                  </div>
-                </div>
-
-                {/* Feature pills */}
-                <div className="flex flex-wrap gap-2 mb-6">
-                  {["Video Lessons", "Practice Tests", "Progress Tracking", "Expert Tutors"].map(
-                    (feature) => (
-                      <span
-                        key={feature}
-                        className="px-3 py-1.5 rounded-full bg-arc-slate-100 text-arc-slate-600 text-xs font-medium"
-                      >
-                        {feature}
-                      </span>
-                    )
-                  )}
-                </div>
-
-                {/* CTA */}
-                <Link href="/register" className="block">
-                  <Button variant="accent" className="w-full">
-                    Get Started Free
-                  </Button>
-                </Link>
               </div>
 
-              {/* Floating accent card - overlaps bottom */}
-              <div className="absolute -bottom-4 -left-4 md:-left-8 bg-white rounded-2xl rounded-bl-lg p-4 shadow-arc-lg border border-arc-slate-100 flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-arc-green-100 flex items-center justify-center">
-                  <Check className="h-5 w-5 text-arc-green-600" />
-                </div>
-                <div>
-                  <div className="text-sm font-semibold text-arc-navy-900">DepEd Aligned</div>
-                  <div className="text-xs text-arc-slate-500">Curriculum Approved</div>
-                </div>
+              {/* ELEMENT 2 — UPPER LEFT: "🎓 15K+ Learners" */}
+              <div className="absolute top-[30%] left-0 z-5 hidden sm:block">
+                <FloatingElement className="animate-float-y motion-reduce:animate-none" style={{ animationDuration: "6s" }}>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-arc-slate-200 shadow-arc-sm text-xs">
+                    <GraduationCap className="h-3 w-3 text-arc-navy-600" />
+                    <span className="font-semibold text-arc-navy-700">15K+ Learners</span>
+                  </div>
+                </FloatingElement>
+              </div>
+
+              {/* ELEMENT 3 — UPPER RIGHT: "🏆 94% Pass Rate" */}
+              <div className="absolute top-[35%] right-0 z-5 hidden sm:block">
+                <FloatingElement className="animate-float-y motion-reduce:animate-none" style={{ animationDuration: "7s" }}>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-arc-slate-200 shadow-arc-sm text-xs">
+                    <Trophy className="h-3 w-3 text-arc-orange-500" />
+                    <span className="font-semibold text-arc-navy-700">
+                      <span className="text-arc-orange-500">94%</span> Pass Rate
+                    </span>
+                  </div>
+                </FloatingElement>
+              </div>
+
+              {/* ARCI Mascot — center, largest element */}
+              <div className="absolute top-[60%] left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
+                <FloatingElement
+                  className="animate-float-y motion-reduce:animate-none"
+                  style={{ animationDuration: "5.5s" }}
+                >
+                  <Image
+                    src="/assets/images/arci_mascot.png"
+                    alt="ARCI the learning companion owl"
+                    width={320}
+                    height={320}
+                    sizes="320px"
+                    className="drop-shadow-2xl"
+                  />
+                </FloatingElement>
+              </div>
+
+              {/* ELEMENT 4 — LOWER LEFT: "📚 50+ Subjects" */}
+              <div className="absolute bottom-[30%] left-0 z-5 hidden sm:block">
+                <FloatingElement className="animate-float-y motion-reduce:animate-none" style={{ animationDuration: "6.8s" }}>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-arc-slate-200 shadow-arc-sm text-xs">
+                    <BookOpen className="h-3 w-3 text-arc-navy-600" />
+                    <span className="font-semibold text-arc-navy-700">50+ Subjects</span>
+                  </div>
+                </FloatingElement>
+              </div>
+
+              {/* ELEMENT 5 — LOWER RIGHT: "⭐ +250 XP" */}
+              <div className="absolute bottom-[35%] right-0 z-5">
+                <FloatingElement className="animate-float-y motion-reduce:animate-none" style={{ animationDuration: "5.8s" }}>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-arc-slate-200 shadow-arc-sm text-xs">
+                    <span className="text-sm">⭐</span>
+                    <span className="font-semibold text-arc-navy-700">
+                      <span className="text-arc-orange-500">+250 XP</span>
+                    </span>
+                  </div>
+                </FloatingElement>
+              </div>
+
+              {/* ELEMENT 6 — BOTTOM: "📈 Your Progress" */}
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 z-5 hidden sm:block">
+                <FloatingElement className="animate-float-y motion-reduce:animate-none" style={{ animationDuration: "7.2s" }}>
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-arc-slate-200 shadow-arc-sm text-xs">
+                    <Check className="h-3 w-3 text-arc-green-600" />
+                    <span className="font-semibold text-arc-navy-700">Your Progress</span>
+                  </div>
+                </FloatingElement>
               </div>
             </div>
           </div>
