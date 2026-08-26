@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { validateRequest } from "../../lib/validate";
 import {
   listQuestions,
+  listMyQuestions,
   getQuestionById,
   createQuestion,
   updateQuestion,
@@ -18,6 +19,19 @@ import {
   getQuestionsByAssessment,
   getQuestionStats,
 } from "./service";
+
+export async function mine(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const questions = await listMyQuestions(req.userId!);
+    res.json(questions);
+  } catch (error) {
+    next(error);
+  }
+}
 
 export async function list(
   req: Request,

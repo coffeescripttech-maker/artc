@@ -10,7 +10,7 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   return (
-    <ProtectedRoute allowedRoles={["admin", "content_admin"]}>
+    <ProtectedRoute allowedRoles={["super_admin", "content_admin", "school_admin"]}>
       <WizardProvider>
         <Sidebar role="admin">
           <TopNav />

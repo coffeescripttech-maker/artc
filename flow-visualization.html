@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ARATC LMS — Role & Data Flow Map</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --card2: #273449;
+      --border: #33415b;
+      --text: #e2e8f0;
+      --text2: #94a3b8;
+      --orange: #ea580c;
+      --orange2: #f97316;
+      --navy: #1e3a8a;
+      --navy2: #3b82f6;
+      --green: #22c55e;
+      --red: #ef4444;
+      --purple: #a855f7;
+      --yellow: #eab308;
+    }
+    [data-theme="dark"] { --bg: #020617; --card: #0f172a; --card2: #132745; --border: #1e293b; --text: #f8fafc; --text2: #64748b; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow-x: hidden; }
+    .wrapper { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 2rem; font-weight: 700; margin-bottom: 4px; }
+    .subtitle { color: var(--text2); margin-bottom: 24px; font-size: 1rem; }
+    .legend { display: flex; gap: 24px; margin-bottom: 28px; flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text2); }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; }
+
+    .flow-container { display: flex; flex-direction: column; gap: 20px; }
+    .flow-step {
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 20px 24px;
+      transition: all 0.25s ease;
+    }
+    .flow-step:hover { border-color: var(--orange); box-shadow: 0 0 20px rgba(234, 88, 12, 0.15); }
+    .step-header { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+    .step-number {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: var(--orange); color: #fff; font-weight: 700; font-size: 0.9rem;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .step-title { font-size: 1.15rem; font-weight: 600; color: var(--text); }
+    .step-desc { color: var(--text2); font-size: 0.85rem; margin-top: 2px; }
+    .step-body { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+    .step-body-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 768px) { .step-body-2col { grid-template-columns: 1fr; } }
+
+    .data-card {
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      transition: transform 0.15s;
+    }
+    .data-card:hover { transform: translateY(-2px); }
+    .data-card .label {
+      font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px;
+      color: var(--text2); margin-bottom: 10px;
+    }
+    .data-card .value { font-size: 1.05rem; font-weight: 600; color: var(--text); }
+    .data-card .detail { font-size: 0.85rem; color: var(--text2); margin-top: 6px; }
+
+    .flow-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .arrow { color: var(--orange2); font-size: 1.3rem; flex-shrink: 0; }
+    .node {
+      background: var(--card2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px 16px; text-align: center;
+      min-width: 100px; transition: all 0.2s;
+    }
+    .node:hover { transform: scale(1.03); border-color: var(--orange); }
+    .node .name { font-size: 0.8rem; font-weight: 600; color: var(--text); }
+    .node .sub { font-size: 0.72rem; color: var(--text2); }
+
+    .role-section {
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .role-header {
+      display: flex; align-items: center; gap: 14px; margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .role-badge {
+      padding: 6px 16px; border-radius: 20px; font-size: 0.85rem;
+      font-weight: 700; flex-shrink: 0;
+    }
+    .role-badge.super { background: linear-gradient(135deg, var(--navy), var(--navy2)); color: #dbeafe; }
+    .role-badge.admin { background: linear-gradient(135deg, var(--navy), var(--navy2)); color: #dbeafe; }
+    .role-badge.teacher { background: linear-gradient(135deg, var(--purple), #7c3aed); color: #f3e8ff; }
+    .role-badge.parent { background: linear-gradient(135deg, var(--green), #16a34a); color: #dcfce7; }
+    .role-badge.student { background: linear-gradient(135deg, var(--orange), var(--orange2)); color: #fff; }
+
+    .tabs { display: flex; gap: 4px; margin-bottom: 4px; border-radius: 10px; overflow: hidden; background: var(--card2); }
+    .tab {
+      padding: 12px 20px; cursor: pointer; border: none; background: transparent;
+      color: var(--text2); font-size: 0.88rem; font-weight: 500;
+      transition: all 0.2s; white-space: nowrap;
+    }
+    .tab:hover { background: rgba(255,255,255,0.04); }
+    .tab.active { background: var(--orange); color: #fff; font-weight: 600; }
+    .tab-content { padding: 20px; }
+    .tab-pane { display: none; animation: fadein 0.3s ease; }
+    .tab-pane.active { display: block; }
+    @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+
+    .nav-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+    .nav-item {
+      background: var(--card2); border: 1px solid var(--border); border-radius: 8px;
+      padding: 14px; text-align: center; transition: all 0.2s;
+    }
+    .nav-item:hover { background: var(--orange); color: #020617; transform: translateY(-2px); }
+
+    .timeline { position: relative; padding-left: 30px; margin: 12px 0; }
+    .timeline::before { content: ''; position: absolute; left: 14px; top: 0; bottom: 0; width: 2px; background: var(--border); }
+    .timeline-item { position: relative; margin-bottom: 18px; }
+    .timeline-item::before { content: ''; position: absolute; left: -30px; width: 24px; height: 24px; border-radius: 50%; background: var(--orange); }
+    .timeline-item .tl-title { font-weight: 600; color: var(--text); margin-bottom: 2px; }
+    .timeline-item .tl-desc { font-size: 0.82rem; color: var(--text2); }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }
+    .stat-card {
+      background: var(--card2); border: 1px solid var(--border); border-radius: 10px;
+      padding: 18px; text-align: center; transition: all 0.2s;
+    }
+    .stat-card:hover { background: var(--orange); color: var(--navy); transform: translateY(-2px); }
+    .stat-card .stat-num { font-size: 1.8rem; font-weight: 700; }
+    .stat-card .stat-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.8; }
+
+    .credentials-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .credentials-table th, .credentials-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+    .credentials-table th { color: var(--text2); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.5px; }
+    .cred-super { color: var(--navy2); }
+    .cred-teacher { color: var(--purple); }
+    .cred-student { color: var(--orange); }
+    .cred-parent { color: var(--green); }
+    .code-pill { display: inline-block; padding: 2px 8px; border-radius: 4px; font-family: 'Fira Code', monospace; font-size: 0.78rem; background: rgba(234, 88, 12, 0.15); color: var(--orange); }
+
+    @media (max-width: 600px) {
+      h1 { font-size: 1.5rem; }
+      .step-body, .step-body-2col { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+  <h1>ARATC LMS — Role & Data Flow</h1>
+  <p class="subtitle">Investor Demo Flow Map — from seed data to UI experience across every role</p>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><span class="legend-dot" style="background:var(--orange)"></span> Seed Data</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--navy2)"></span> API Endpoints</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--green)"></span> Web Pages</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--purple)"></span> Security Boundary</div>
+  </div>
+
+  <!-- Section 1: Seed → Credentials -->
+  <div class="flow-container">
+    <div class="flow-step">
+      <div class="step-header">
+        <div class="step-number">1</div>
+        <div>
+          <div class="step-title">Seed: Database Population</div>
+          <div class="step-desc">3 programs → 36 topics → 72 lessons → 540 questions → 20 students → 60+ attempts → 700+ progress rows → 5 batches → parent-student links</div>
+        </div>
+      </div>
+      <div class="step-body">
+        <div class="data-card">
+          <div class="label">Users</div>
+          <div class="value">38+ total</div>
+          <div class="detail">7 original + 3 teachers + 20 students + 6 parents + 6 parents (admin-linked)</div>
+        </div>
+        <div class="data-card">
+          <div class="label">Questions</div>
+          <div class="value">626+</div>
+          <div class="detail">6 types × 3 difficulties, across 3 programs (Math/Science/English)</div>
+        </div>
+        <div class="data-card">
+          <div class="label">Assessments</div>
+          <div class="value">9</div>
+          <div class="detail">3 per program: Quiz, Practice, Mock Exam</div>
+        </div>
+        <div class="data-card">
+          <div class="label">Batches</div>
+          <div class="value">5</div>
+          <div class="detail">5–10 students each, owned by teachers</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flow-step">
+      <div class="step-header">
+        <div class="step-number">2</div>
+        <div>
+          <div class="step-title">Sample Login Credentials (password: Test@1234)</div>
+          <div class="step-desc">All accounts share the same password — demo only</div>
+        </div>
+      </div>
+      <table class="credentials-table">
+        <thead>
+          <tr><th>Email</th><th>Role</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="cred-super">admin@aratc.edu.ph</td><td>Super Admin</td><td>Full platform access</td></tr>
+          <tr><td class="cred-admin">school@aratc.edu.ph</td><td>School Admin</td><td>Same as super admin</td></tr>
+          <tr><td class="cred-admin">content@aratc.edu.ph</td><td>Content Admin</td><td>Same as super admin</td></tr>
+          <tr><td class="cred-teacher">teacher@aratc.edu.ph</td><td>Teacher</td><td>Owns batches, sees real data</td></tr>
+          <tr><td class="cred-teacher">teacher1@aratc.edu.ph</td><td>Teacher</td><td>Owns batches, sees real data</td></tr>
+          <tr><td class="cred-student">student@aratc.edu.ph</td><td>Student</td><td>Ana Reyes — 3 programs enrolled</td></tr>
+          <tr><td class="cred-student">student2@aratc.edu.ph</td><td>Student</td><td>Liza Santos — pending parent invite</td></tr>
+          <tr><td class="cred-parent">parent@aratc.edu.ph</td><td>Parent</td><td>Roberto — has ACTIVE links</td></tr>
+          <tr><td class="cred-parent">parent2@aratc.edu.ph .. parent7@aratc.edu.ph</td><td>Parent</td><td>6 demo parents seeded</td></tr>
+          <tr><td class="cred-teacher">pending-teacher@aratc.edu.ph</td><td>Teacher (pending)</td><td>Awaiting admin approval</td></tr>
+          <tr><td class="cred-student">demo-student-{1..20}@aratc.edu.ph</td><td>Student</td><td>20 generated students</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Section 2: Login Flow -->
+  <div class="role-section">
+    <div class="role-header">
+      <span class="role-badge student">LOGIN</span>
+      <h2 style="margin:0;font-size:1.3rem;">Authentication & Session</h2>
+    </div>
+
+    <div class="flow-row" style="margin-bottom: 16px;">
+      <div class="node"><div class="name">Login Page</div><div class="sub">app/login</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="name">API</div><div class="sub">/api/auth/login</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="name">Session</div><div class="sub">JWT + Session</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="name">Dashboard</div><div class="sub">role-based</div></div>
+    </div>
+
+    <div style="display:flex; gap: 20px; flex-wrap: wrap;">
+      <div class="data-card" style="flex:1; min-width: 200px;">
+        <div class="label">API Endpoints</div>
+        <div class="detail" style="margin-top:8px;"><span class="code-pill">POST /api/auth/login</span> — validates password, returns JWT + user + roles</div>
+        <div class="detail" style="margin-top:4px;"><span class="code-pill">GET /api/auth/me</span> — token verification, returns user object</div>
+        <div class="detail" style="margin-top:4px;"><span class="code-pill">POST /api/auth/refresh</span> — rotates tokens (401 handling)</div>
+        <div class="detail" style="margin-top:4px;"><span class="code-pill">POST /api/auth/logout</span> — invalidates session</div>
+      </div>
+      <div class="data-card" style="flex:1; min-width: 200px;">
+        <div class="label">Web Client</div>
+        <div class="detail" style="margin-top:8px;">Token stored in <span class="code-pill">localStorage</span></div>
+        <div class="detail" style="margin-top:4px;">Auto-attached to all API calls via <span class="code-pill">apiFetch()</span></div>
+        <div class="detail" style="margin-top:4px;">401 interceptor → silent refresh → retry once</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 3: Role-based dashboards -->
+  <div class="role-section">
+    <div class="role-header">
+      <span class="role-badge student">STUDENT</span>
+      <h2 style="margin:0;font-size:1.3rem;">Student Flow (student@)</h2>
+    </div>
+
+    <div class="flow-row" style="margin-bottom:16px;">
+      <div class="node"><div class="name">Login</div><div class="sub">student@</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="name">Dashboard</div><div class="sub">/dashboard</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="name">Program</div><div class="sub">/programs</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="name">Lesson</div><div class="sub">/lessons/:id</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="name">Practice</div><div class="sub">/assessments</div></div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="showTab(event, 'student-nav')">Sidebar Navigation</div>
+      <div class="tab" onclick="showTab(event, 'student-stats')">Stats</div>
+      <div class="tab" onclick="showTab(event, 'student-progress')">Progression</div>
+    </div>
+    <div class="tab-content">
+      <div id="student-nav" class="tab-pane active">
+        <div class="nav-grid">
+          <div class="nav-item">📊 Dashboard</div>
+          <div class="nav-item">📚 My Programs</div>
+          <div class="nav-item">⚡ Assessments</div>
+          <div class="nav-item">🎯 Practice (Weak Topics)</div>
+          <div class="nav-item">🏆 Mock Exams</div>
+          <div class="nav-item">📈 My Progress</div>
+          <div class="nav-item">📊 Analytics</div>
+          <div class="nav-item">⚙️ Settings</div>
+        </div>
+      </div>
+      <div id="student-stats" class="tab-pane">
+        <div class="stats-grid">
+          <div class="stat-card"><div class="stat-num">3</div><div class="stat-label">Active Programs</div></div>
+          <div class="stat-card"><div class="stat-num">20+</div><div class="stat-label">Lessons</div></div>
+          <div class="stat-card"><div class="stat-num">60+</div><div class="stat-label">Attempts</div></div>
+          <div class="stat-card"><div class="stat-num">700+</div><div class="stat-label">Progress Rows</div></div>
+        </div>
+      </div>
+      <div id="student-progress" class="tab-pane">
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="tl-title">Dashboard Overview</div>
+            <div class="tl-desc">Mastery Ladder (progression ladder for Grade 7→9), Continue Learning cards, Focus Areas (weak topics)</div>
+          </div>
+          <div class="timeline-item">
+            <div class="tl-title">Assessments → Take Quiz</div>
+            <div class="tl-desc">Start attempt → answer questions → submit → score displayed → recommendations shown</div>
+          </div>
+          <div class="timeline-item">
+            <div class="tl-title">Progress → Progression</div>
+            <div class="tl-desc">Per-program mastery ladder showing all topics/lessons with mastery bands (NOT_STARTED → MASTERED)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="role-section">
+    <div class="role-header">
+      <span class="role-badge teacher">TEACHER</span>
+      <h2 style="margin:0;font-size:1.3rem;">Teacher Flow (teacher@)</h2>
+    </div>
+
+    <div class="flow-row" style="margin-bottom:16px;">
+      <div class="node"><div class="name">Login</div><div class="sub">teacher@</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="name">Dashboard</div><div class="sub">/dashboard</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="name">My Classes</div><div class="sub">/classes</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="name">Reports</div><div class="sub">/reports</div></div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="showTab(event, 'teacher-nav')">Sidebar Navigation</div>
+      <div class="tab" onclick="showTab(event, 'teacher-data')">Real Data APIs</div>
+    </div>
+    <div class="tab-content">
+      <div id="teacher-nav" class="tab-pane active">
+        <div class="nav-grid">
+          <div class="nav-item">📊 Dashboard</div>
+          <div class="nav-item">👥 My Classes</div>
+          <div class="nav-item">📚 Programs</div>
+          <div class="nav-item">📝 My Questions</div>
+          <div class="nav-item">📈 Class Reports</div>
+        </div>
+      </div>
+      <div id="teacher-data" class="tab-pane">
+        <div class="step-body">
+          <div class="data-card">
+            <div class="label">GET /batches/my</div>
+            <div class="value">2 batches</div>
+            <div class="detail">Each with 5-10 members, real memberCount</div>
+          </div>
+          <div class="data-card">
+            <div class="label">/batches/my/report</div>
+            <div class="value">avgScore ~50%</div>
+            <div class="detail">Per-batch aggregates, real attempt data</div>
+          </div>
+          <div class="data-card">
+            <div class="label">GET /questions/mine</div>
+            <div class="value">3+ authored</div>
+            <div class="detail">Questions where teacher is authorId</div>
+          </div>
+          <div class="data-card">
+            <div class="label">Security</div>
+            <div class="value">Student 403</div>
+            <div class="detail">requireRole("teacher") enforces access</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="role-section">
+    <div class="role-header">
+      <span class="role-badge parent">PARENT</span>
+      <h2 style="margin:0;font-size:1.3rem;">Parent Flow (parent@)</h2>
+    </div>
+
+    <div class="flow-row" style="margin-bottom:16px;">
+      <div class="node"><div class="name">Login</div><div class="sub">parent@</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="name">Children</div><div class="sub">/dashboard/children</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="name">Child Detail</div><div class="sub">:[studentId]</div></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="name">Tabs</div><div class="sub">Progress/Assessments/Study Plan/Activity</div></div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="showTab(event, 'parent-nav')">Navigation</div>
+      <div class="tab" onclick="showTab(event, 'parent-apis')">Parent APIs</div>
+      <div class="tab" onclick="showTab(event, 'parent-security')">Security</div>
+    </div>
+    <div class="tab-content">
+      <div id="parent-nav" class="tab-pane active">
+        <div class="nav-grid">
+          <div class="nav-item">👨‍👩‍👧 My Children</div>
+          <div class="nav-item">📊 Child Progress</div>
+          <div class="nav-item">⚡ Child Assessments</div>
+          <div class="nav-item">🎯 Child Study Plan</div>
+          <div class="nav-item">📈 Child Activity Feed</div>
+          <div class="nav-item">📧 Parent Invite</div>
+          <div class="nav-item">⚙️ Settings</div>
+        </div>
+      </div>
+      <div id="parent-apis" class="tab-pane">
+        <div class="data-card">
+          <div class="label">GET /parent/children</div>
+          <div class="detail">All children with ACTIVE + PENDING links visible</div>
+        </div>
+        <div class="data-card">
+          <div class="label">POST /parent/children</div>
+          <div class="detail">Send invite → PENDING link (requestedBy: PARENT)</div>
+        </div>
+        <div class="data-card">
+          <div class="label">DELETE /parent/children/:id</div>
+          <div class="detail">→ REVOKED status</div>
+        </div>
+        <div class="data-card">
+          <div class="label">GET /parent/children/:id/progression</div>
+          <div class="detail">Calls child's userId → reuses teacher service</div>
+        </div>
+        <div class="data-card">
+          <div class="label">GET /parent/children/:id/weak-topics</div>
+          <div class="detail">Resolves child's LearnerProfile → getWeakTopics()</div>
+        </div>
+        <div class="data-card">
+          <div class="label">GET /parent/children/:id/attempts</div>
+          <div class="detail">Reuses assessmentsApi.myAttempts(child userId)</div>
+        </div>
+      </div>
+      <div id="parent-security" class="tab-pane">
+        <div class="flow-row">
+          <div class="node" style="border-color:var(--red);"><div class="name" style="color:var(--red);">Student on</div><div class="sub">another child's progression</div></div>
+          <div class="arrow" style="color:var(--red);">⛔ 403</div>
+        </div>
+        <div class="data-card" style="margin-top:12px;">
+          <div class="label">Security Core</div>
+          <div class="detail">assertActiveLink(parentUserId, studentUserId) runs FIRST on every child-scoped endpoint — reuses parent module service, no duplicated logic</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="role-section">
+    <div class="role-header">
+      <span class="role-badge admin">ADMIN</span>
+      <h2 style="margin:0;font-size:1.3rem;">Admin Flow (admin@)</h2>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="showTab(event, 'admin-nav')">Sidebar Navigation</div>
+      <div class="tab" onclick="showTab(event, 'admin-apis')">Admin APIs</div>
+      <div class="tab" onclick="showTab(event, 'admin-approve')">Teacher Approval</div>
+    </div>
+    <div class="tab-content">
+      <div id="admin-nav" class="tab-pane active">
+        <div class="nav-grid">
+          <div class="nav-item">📊 Admin Dashboard</div>
+          <div class="nav-item">🎓 All Programs</div>
+          <div class="nav-item">📚 Subjects/Modules/Lessons</div>
+          <div class="nav-item">📝 Question Bank</div>
+          <div class="nav-item">⚡ Assessments</div>
+          <div class="nav-item">🧪 CET Management</div>
+          <div class="nav-item">👥 Students/Parents</div>
+          <div class="nav-item">📈 Analytics</div>
+        </div>
+      </div>
+      <div id="admin-apis" class="tab-pane">
+        <div class="step-body">
+          <div class="data-card">
+            <div class="label">GET /admin-stats/overview</div>
+            <div class="value">Real counts</div>
+            <div class="detail">9 users, 86 questions, 3 programs, 68 assessments, 1 batch</div>
+          </div>
+          <div class="data-card">
+            <div class="label">GET /admin/users?status=PENDING_VERIFICATION</div>
+            <div class="value">pending-teacher@</div>
+            <div class="detail">Role/status filters + debounced search</div>
+          </div>
+          <div class="data-card">
+            <div class="label">PATCH /users/:id/status</div>
+            <div class="detail">Approve pending teacher → active</div>
+          </div>
+          <div class="data-card">
+            <div class="label">Security</div>
+            <div class="value">Student 403</div>
+            <div class="detail">requireRole("super_admin","school_admin","content_admin")</div>
+          </div>
+        </div>
+      </div>
+      <div id="admin-approve" class="tab-pane">
+        <div class="timeline">
+          <div class="timeline-item">
+            <div class="tl-title">Admin sees pending-teacher@ on /admin/users</div>
+            <div class="tl-desc">Status filter defaults to PENDING_VERIFICATION; alert badge shows count</div>
+          </div>
+          <div class="timeline-item">
+            <div class="tl-title">Approve button → PATCH /users/:id/status</div>
+            <div class="tl-desc">Status changes to ACTIVE → session.deleteMany(userId) (suspension takes immediate effect)</div>
+          </div>
+          <div class="timeline-item">
+            <div class="tl-title">Teacher can now log in</div>
+            <div class="tl-desc">Previously blocked: "Your account is awaiting administrator approval."</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 4: Data Flow -->
+  <div class="role-section">
+    <div class="role-header">
+      <span class="role-badge super">DATA FLOW</span>
+      <h2 style="margin:0;font-size:1.3rem;">How Data Flows: Seed → DB → API → Frontend</h2>
+    </div>
+
+    <div style="overflow-x:auto; margin-top:16px;">
+      <table style="width:100%; border-collapse:collapse; font-size:0.88rem;">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border);">
+            <th style="padding:10px; text-align:left; color:var(--text2);">Component</th>
+            <th style="padding:10px; text-align:left; color:var(--text2);">Location</th>
+            <th style="padding:10px; text-align:left; color:var(--text2);">Key Detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:10px;"><span class="code-pill">seed.ts</span></td>
+            <td style="padding:10px; color:var(--text2);">packages/database/src/</td>
+            <td style="padding:10px;">Deterministic LCG (seed=42); upsert with skipDuplicates; runs in ~2min</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:10px;"><span class="code-pill">Prisma ORM</span></td>
+            <td style="padding:10px; color:var(--text2);">packages/database/prisma/</td>
+            <td style="padding:10px;">schema.prisma with enums (6 QuestionType, 3 Difficulty, 5 Mastery, 4 AttemptStatus)</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:10px;"><span class="code-pill">Neon PostgreSQL</span></td>
+            <td style="padding:10px; color:var(--text2);">Cloud DB</td>
+            <td style="padding:10px;">Real-time schema sync; db:push for dev</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:10px;"><span class="code-pill">Express API</span></td>
+            <td style="padding:10px; color:var(--text2);">apps/api/src/modules/</td>
+            <td style="padding:10px;">20+ route modules; authenticate + requireRole middleware</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:10px;"><span class="code-pill">apiFetch()</span></td>
+            <td style="padding:10px; color:var(--text2);">apps/web/src/lib/api/client.ts</td>
+            <td style="padding:10px;">Auto-attaches JWT; 401 interceptor → silent refresh → retry</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:10px;"><span class="code-pill">React Pages</span></td>
+            <td style="padding:10px; color:var(--text2);">apps/web/src/app/</td>
+            <td style="padding:10px;">Role-based sidebar; canonical admin pattern (skeletons, empty states, toast)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Section 5: Security Boundaries -->
+  <div class="role-section">
+    <div class="role-header">
+      <span class="role-badge super">SECURITY</span>
+      <h2 style="margin:0;font-size:1.3rem;">Access Control Matrix</h2>
+    </div>
+
+    <div style="overflow-x:auto; margin-top:16px;">
+      <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border);">
+            <th style="padding:10px; text-align:left; color:var(--text2);">Endpoint</th>
+            <th style="padding:10px; text-align:left; color:var(--text2);">Role Required</th>
+            <th style="padding:10px; text-align:left; color:var(--text2);">Guard</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px;"><span class="code-pill">GET /admin-stats/overview</span></td>
+            <td style="padding:8px; color:var(--navy2);">super_admin/school_admin/content_admin</td>
+            <td style="padding:8px; color:var(--text2);">requireRole middleware</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px;"><span class="code-pill">GET /batches/my</span></td>
+            <td style="padding:8px; color:var(--purple);">teacher + admins</td>
+            <td style="padding:8px; color:var(--text2);">requireRole + ownership check</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px;"><span class="code-pill">GET /parent/children</span></td>
+            <td style="padding:8px; color:var(--green);">parent</td>
+            <td style="padding:8px; color:var(--text2);">requireRole + link verification</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px;"><span class="code-pill">GET /parent/children/:id/progression</span></td>
+            <td style="padding:8px; color:var(--green);">parent</td>
+            <td style="padding:8px; color:var(--text2);">assertActiveLink FIRST, then service call</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px;"><span class="code-pill">POST /users/:id/status</span></td>
+            <td style="padding:8px; color:var(--navy2);">super_admin/school_admin</td>
+            <td style="padding:8px; color:var(--text2);">Cannot change own status → session invalidation on suspend</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px;"><span class="code-pill">POST /auth/refresh</span></td>
+            <td style="padding:8px; color:var(--text2);">any authenticated</td>
+            <td style="padding:8px; color:var(--text2);">Re-reads roles from DB (live role changes apply)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Section 6: Demo Walkthrough -->
+  <div class="role-section">
+    <div class="role-header">
+      <span class="role-badge super">DEMO</span>
+      <h2 style="margin:0;font-size:1.3rem;">Investor Demo Script (6 min)</h2>
+    </div>
+
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="tl-title">⏱️ 0:00-0:30 — Login as admin@</div>
+        <div class="tl-desc">Admin dashboard shows REAL stats: 38 users, 626 questions, 9 assessments, 68 attempts. No fake "15,234 users" numbers. Pending teacher alert visible.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-title">⏱️ 0:30-1:30 — Approve pending-teacher@</div>
+        <div class="tl-desc">Go to /admin/users → see teacher awaiting approval → click Approve → PATCH status to ACTIVE → teacher can now log in (was blocked with "awaiting approval" message).</div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-title">⏱️ 1:30-2:30 — Teacher: Real Class Data</div>
+        <div class="tl-desc">Login as teacher@ → /dashboard/classes shows 2 batches with real memberCount (5-10 students) → /dashboard/reports shows real avgScore ~50% → /dashboard/questions shows 3 authored questions with topic links.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-title">⏱️ 2:30-3:30 — Student: Progression + Attempt</div>
+        <div class="tl-desc">Login as student@ → Dashboard shows Mastery Ladder across Grade 7-9 → Click Assessments → Start a Quiz → Answer questions → Submit → See score + weak topics identified → Progress saved to DB.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-title">⏱️ 3:30-4:30 — Parent: Child Monitoring</div>
+        <div class="tl-desc">Login as parent@ → /dashboard/children shows 3 children with link badges (ACTIVE/PENDING) → Child detail page → Tabs: Progress (MasteryLadder), Assessments (attempts table with scores), Study Plan (weak topics), Activity Feed → Real data from child's userId.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-title">⏱️ 4:30-5:30 — Parent Invite + Student Approval</div>
+        <div class="tl-desc">Parent invites student2@ → PENDING link created → Student2@ logs in → /dashboard/invites → sees invite → Approve → Link becomes ACTIVE → Parent can now see student2's data.</div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-title">⏱️ 5:30-6:00 — Security Boundaries</div>
+        <div class="tl-desc">Developer tab → Student token hits /batches/my → 403 Forbidden → Parent token hits another child's progression → 403 → These are enforced by requireRole + assertActiveLink, never client-side only.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showTab(event, tabId) {
+  const tabs = event.currentTarget.parentElement.querySelectorAll('.tab');
+  const panes = event.currentTarget.parentElement.parentElement.querySelectorAll('.tab-pane');
+  tabs.forEach(t => t.classList.remove('active'));
+  panes.forEach(p => p.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+}
+</script>
+</body>
+</html>

@@ -11,7 +11,8 @@ import Link from "next/link";
 /**
  * A floating element around ARCI. Wraps children with a gentle, non-uniform
  * floating motion so each element moves at a slightly different cadence.
- * Pass tailwind animation classes via `animate` (e.g. "animate-float-y-6").
+ * Pass tailwind animation classes via `className` (e.g. "animate-float-y")
+ * and override the duration via the `style` prop (e.g. { animationDuration: "6s" }).
  */
 function FloatingElement({
   children,

@@ -48,6 +48,7 @@ app.use("/api/lessons", lessonRoutes);
 app.use("/lessons", lessonRoutes); // Also accessible without /api prefix
 app.use("/api/questions", questionBankRoutes);
 app.use("/questions", questionBankRoutes); // Also accessible without /api prefix
+
 app.use("/api/assessments", assessmentRoutes);
 app.use("/assessments", assessmentRoutes); // Also accessible without /api prefix
 app.use("/api/passages", passageRoutes);

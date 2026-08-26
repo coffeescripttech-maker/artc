@@ -45,6 +45,23 @@ export async function listQuestions(filters?: {
   });
 }
 
+export async function listMyQuestions(userId: string) {
+  return prisma.question.findMany({
+    where: { authorId: userId },
+    orderBy: { createdAt: "desc" },
+    include: {
+      author: { select: { id: true, firstName: true, lastName: true } },
+      bankLinks: {
+        include: {
+          topic: { select: { id: true, name: true } },
+          subject: { select: { id: true, name: true } },
+        },
+      },
+      _count: { select: { bankLinks: true, assessmentQuestions: true } },
+    },
+  });
+}
+
 export async function getQuestionById(id: string) {
   const question = await prisma.question.findUnique({
     where: { id },

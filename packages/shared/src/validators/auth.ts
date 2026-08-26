@@ -14,6 +14,7 @@ export const registerSchema = z
     confirmPassword: z.string(),
     firstName: z.string().min(1, "First name is required"),
     lastName: z.string().min(1, "Last name is required"),
+    accountType: z.enum(["student", "parent", "teacher"]).default("student"),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",

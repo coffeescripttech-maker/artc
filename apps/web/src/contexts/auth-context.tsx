@@ -33,14 +33,17 @@ interface AuthState {
 }
 
 interface AuthContextType extends AuthState {
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<string>;
   register: (
     firstName: string,
     lastName: string,
     email: string,
-    password: string
-  ) => Promise<void>;
+    password: string,
+    confirmPassword: string,
+    accountType: string,
+  ) => Promise<string>;
   logout: () => void;
+  getDashboardRoute: () => string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -92,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<string> => {
     const data = await apiRequest("/api/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
@@ -109,17 +112,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading: false,
       isAuthenticated: true,
     });
+
+    // Return redirect route based on user roles
+    const roles = data.user.roles;
+    if (roles.includes("super_admin") || roles.includes("content_admin") || roles.includes("school_admin")) {
+      return "/admin";
+    }
+    return "/dashboard";
+  };
+
+  const getDashboardRoute = () => {
+    if (!state.user?.roles?.length) return "/dashboard";
+    if (state.user.roles.includes("super_admin") ||
+        state.user.roles.includes("content_admin") ||
+        state.user.roles.includes("school_admin")) {
+      return "/admin";
+    }
+    return "/dashboard";
   };
 
   const register = async (
     firstName: string,
     lastName: string,
     email: string,
-    password: string
-  ) => {
+    password: string,
+    confirmPassword: string,
+    accountType: string,
+  ): Promise<string> => {
     const data = await apiRequest("/api/auth/register", {
       method: "POST",
-      body: JSON.stringify({ firstName, lastName, email, password }),
+      body: JSON.stringify({ firstName, lastName, email, password, confirmPassword, accountType }),
     }) as {
       user: User;
       learnerProfile?: LearnerProfile;
@@ -133,6 +155,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading: false,
       isAuthenticated: true,
     });
+
+    // Return redirect route based on user roles
+    const roles = data.user.roles;
+    if (roles.includes("super_admin") || roles.includes("content_admin") || roles.includes("school_admin")) {
+      return "/admin";
+    }
+    return "/dashboard";
   };
 
   const logout = () => {
@@ -147,7 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ ...state, login, register, logout }}>
+    <AuthContext.Provider value={{ ...state, login, register, logout, getDashboardRoute }}>
       {children}
     </AuthContext.Provider>
   );

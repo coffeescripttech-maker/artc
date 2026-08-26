@@ -6,4 +6,5 @@ src/app/dashboard/classes/[batchId]/page.tsx(11,10): error TS2614: Module '"@/li
 src/app/dashboard/classes/[batchId]/page.tsx(11,27): error TS2614: Module '"@/lib/api/client"' has no exported member 'BatchDetail'. Did you mean to use 'import BatchDetail from "@/lib/api/client"' instead?
 src/app/dashboard/classes/[batchId]/page.tsx(11,45): error TS2614: Module '"@/lib/api/client"' has no exported member 'BatchMemberRow'. Did you mean to use 'import BatchMemberRow from "@/lib/api/client"' instead?
 src/app/dashboard/classes/[batchId]/page.tsx(267,45): error TS7006: Parameter 'member' implicitly has an 'any' type.
+src/app/dashboard/questions/import-preview/page.tsx(45,7): error TS2741: Property 'matching_type' is missing in type '{ multiple_choice: string; multiple_select: string; true_false: string; identification: string; fill_in_the_blank: string; essay: string; }' but required in type 'Record<"multiple_choice" | "multiple_select" | "true_false" | "identification" | "fill_in_the_blank" | "matching_type" | "essay", string>'.
  ELIFECYCLE  Command failed with exit code 2.

@@ -60,6 +60,12 @@ export const studentNav: NavGroup[] = [
     ],
   },
   {
+    label: "My Content",
+    items: [
+      { label: "My Questions", href: "/dashboard/questions", icon: FileText },
+    ],
+  },
+  {
     label: "Progress",
     items: [
       { label: "My Progress", href: "/dashboard/progression", icon: GraduationCap },
@@ -150,7 +156,8 @@ export const teacherNav: NavGroup[] = [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { label: "My Classes", href: "/dashboard/classes", icon: Users },
       { label: "Programs", href: "/dashboard/programs", icon: BookOpen },
-      { label: "Questions", href: "/dashboard/questions", icon: FileText },
+      { label: "My Questions", href: "/dashboard/questions", icon: FileText },
+      { label: "Import from PDF", href: "/dashboard/questions/import", icon: Upload },
     ],
   },
   {

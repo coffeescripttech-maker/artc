@@ -61,15 +61,15 @@ export default function RegisterPage() {
     confirmPassword: "",
   });
 
-  const { register, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { register, getDashboardRoute, isAuthenticated, isLoading: authLoading } = useAuth();
   const router = useRouter();
 
   // Redirect if already authenticated
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      router.push("/dashboard");
+      router.push(getDashboardRoute());
     }
-  }, [isAuthenticated, authLoading, router]);
+  }, [isAuthenticated, authLoading, router, getDashboardRoute]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,8 +84,15 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      await register(formData.firstName, formData.lastName, formData.email, formData.password);
-      router.push("/dashboard");
+      const redirectPath = await register(
+        formData.firstName,
+        formData.lastName,
+        formData.email,
+        formData.password,
+        formData.confirmPassword,
+        accountType
+      );
+      router.push(redirectPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create account");
     } finally {

@@ -15,7 +15,7 @@ function getToken(): string {
   return localStorage.getItem("token") || "";
 }
 
-async function apiFetch<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
+export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
   const { token, _skipAuth, ...fetchOptions } = options;
 
   const headers: HeadersInit = {
@@ -221,6 +221,56 @@ export const progressionApi = {
 };
 
 // ============================================================
+// Batches API (teacher classes)
+// ============================================================
+
+export interface BatchMemberRow {
+  id: string;
+  currentGradeLevel: string | null;
+  joinedAt: string;
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    status: string;
+  };
+}
+
+export interface BatchDetail {
+  id: string;
+  name: string;
+  description?: string | null;
+  startDate: string;
+  endDate: string;
+  isOwner: boolean;
+  owner: { id: string; firstName: string; lastName: string };
+  teachers: { id: string; firstName: string; lastName: string }[];
+  program: { id: string; name: string };
+  members: BatchMemberRow[];
+}
+
+export const batchesApi = {
+  my: () => apiFetch("/batches/my"),
+  create: (data: { name: string; programId: string; description?: string }, token?: string) =>
+    apiFetch("/batches", { method: "POST", body: JSON.stringify(data), token }),
+  myReport: () => apiFetch("/batches/my/report"),
+  getById: (id: string): Promise<BatchDetail> => apiFetch(`/batches/${id}`),
+  addMember: (
+    id: string,
+    email: string,
+    token?: string
+  ): Promise<BatchMemberRow> =>
+    apiFetch(`/batches/${id}/members`, {
+      method: "POST",
+      body: JSON.stringify({ email }),
+      token,
+    }),
+  removeMember: (id: string, memberId: string, token?: string) =>
+    apiFetch(`/batches/${id}/members/${memberId}`, { method: "DELETE", token }),
+};
+
+// ============================================================
 // Media API (uploads)
 // ============================================================
 export const mediaApi = {
@@ -269,7 +319,88 @@ export const questionsApi = {
     apiFetch(`/questions/links/${linkId}`, { method: "PATCH", body: JSON.stringify(data), token }),
   removeLink: (linkId: string, token?: string) =>
     apiFetch(`/questions/links/${linkId}`, { method: "DELETE", token }),
+  // PDF Import workflow
+  mine: () => apiFetch("/questions/mine"),
+
+  /** Step 1 — upload a PDF and get its raw text back (no AI involved) */
+  extractPdfText: async (
+    file: File,
+    programName?: string,
+    subjectName?: string
+  ): Promise<{ pdfText: string; programName: string | null; subjectName: string | null }> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    if (programName) formData.append("programName", programName);
+    if (subjectName) formData.append("subjectName", subjectName);
+
+    const response = await fetch(`${API_BASE_URL}/questions/import/extract-text`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${getToken()}` },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error: any = await response.json().catch(() => ({}));
+      throw new Error(error?.error?.message || error?.message || `HTTP error ${response.status}`);
+    }
+    return response.json();
+  },
+
+  /** Step 2 — send reviewed PDF text to Gemini for structured extraction */
+  previewExtraction: (payload: {
+    pdfText: string;
+    programName?: string | null;
+    subjectName?: string | null;
+  }): Promise<ImportPreviewResult> =>
+    apiFetch("/questions/import/preview", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  /** Step 3 — import reviewed questions into the question bank */
+  importBulk: (payload: {
+    questions: any[];
+    programId: string;
+    subjectId?: string | null;
+    topicId?: string | null;
+  }): Promise<{ message: string; created: number; skipped: number; errors: string[] }> =>
+    apiFetch("/questions/import/bulk", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 };
+
+export interface ExtractedQuestionPreview {
+  questionNumber: number;
+  pageNumber?: number | null;
+  type:
+    | "multiple_choice"
+    | "multiple_select"
+    | "true_false"
+    | "identification"
+    | "fill_in_the_blank"
+    | "matching_type"
+    | "essay";
+  question: string;
+  choices?: { label: string; text: string }[] | null;
+  correctAnswer?: string | null;
+  correctAnswerText?: string | null;
+  explanation?: string | null;
+  hasImage?: boolean;
+  confidence?: number;
+  extractionNote?: string | null;
+}
+
+export interface ImportPreviewResult {
+  documentSummary: {
+    totalQuestions: number;
+    detectedQuestionTypes: string[];
+    hasAnswerKey: boolean;
+    answerKeyLocation: string | null;
+    processingWarnings: string[];
+  };
+  questions: ExtractedQuestionPreview[];
+}
 
 // ============================================================
 // Assessments API

@@ -5,23 +5,3 @@
   ▲ Next.js 14.2.7
 
    Creating an optimized production build ...
- ⚠ Compiled with warnings
-
-./src/app/dashboard/classes/[batchId]/page.tsx
-Attempted import error: 'batchesApi' is not exported from '@/lib/api/client' (imported as 'batchesApi').
-
-Import trace for requested module:
-./src/app/dashboard/classes/[batchId]/page.tsx
-
-./src/app/dashboard/classes/[batchId]/page.tsx
-Attempted import error: 'batchesApi' is not exported from '@/lib/api/client' (imported as 'batchesApi').
-
-Import trace for requested module:
-./src/app/dashboard/classes/[batchId]/page.tsx
-
-./src/app/dashboard/classes/[batchId]/page.tsx
-Attempted import error: 'batchesApi' is not exported from '@/lib/api/client' (imported as 'batchesApi').
-
-Import trace for requested module:
-./src/app/dashboard/classes/[batchId]/page.tsx
-

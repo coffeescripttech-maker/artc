@@ -6,6 +6,7 @@ import { ApiError, UnauthorizedError, ValidationError } from "../../lib/errors";
 import type { LoginInput, RegisterInput } from "@aratc/shared";
 
 export async function registerUser(input: RegisterInput) {
+  // Check if email already exists (production-ready: returns clear error)
   const existingUser = await prisma.user.findUnique({
     where: { email: input.email },
   });
@@ -15,6 +16,9 @@ export async function registerUser(input: RegisterInput) {
   }
 
   const passwordHash = await hash(input.password, 10);
+
+  // Assign role based on account type, defaulting to student
+  const roleName = (input.accountType as string) || "student";
 
   const user = await prisma.user.create({
     data: {
@@ -26,7 +30,7 @@ export async function registerUser(input: RegisterInput) {
       roles: {
         create: {
           role: {
-            connect: { name: "student" },
+            connect: { name: roleName },
           },
         },
       },
