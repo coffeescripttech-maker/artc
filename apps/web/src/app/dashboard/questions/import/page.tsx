@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardHeader } from "@/components/dashboard";
 import { Card, CardContent, Button, Input, Label, Badge } from "@/components/ui";
+import { cn } from "@aratc/ui";
 import {
   Upload,
   FileText,
@@ -25,6 +26,9 @@ import {
   FileUp,
   Copy,
   Columns2,
+  Image as ImageIcon,
+  Download,
+  BarChart3,
 } from "lucide-react";
 import { toast } from "@/lib/toast";
 import {
@@ -62,11 +66,13 @@ interface EditableQuestion {
   type: ExtractedQuestionPreview["type"];
   choices: { label: string; text: string }[];
   correctAnswer: string | null;
+  correctAnswerText?: string | null;
   explanation: string;
   questionNumber: number;
   pageNumber?: number | null;
   confidence?: number;
   extractionNote?: string | null;
+  hasImage?: boolean;
 }
 
 const QUESTION_TYPE_LABELS: Record<string, string> = {
@@ -108,6 +114,9 @@ export default function ImportQuestionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [textMode, setTextMode] = useState<"formatted" | "raw">("formatted");
+  const [questionFilter, setQuestionFilter] = useState<
+    "all" | "missing" | "low" | "image"
+  >("all");
   const [showPdf, setShowPdf] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
@@ -160,6 +169,23 @@ export default function ImportQuestionsPage() {
 
   const accepted = questions.filter((q) => q.status !== "rejected");
   const rejectedCount = questions.length - accepted.length;
+  const missingCount = questions.filter((q) => !q.correctAnswer).length;
+  const lowCount = questions.filter(
+    (q) => typeof q.confidence === "number" && q.confidence < 0.5
+  ).length;
+  const imageCount = questions.filter((q) => q.hasImage).length;
+
+  const visibleQuestions = useMemo(() => {
+    if (questionFilter === "missing")
+      return questions.filter((q) => !q.correctAnswer);
+    if (questionFilter === "low")
+      return questions.filter(
+        (q) => typeof q.confidence === "number" && q.confidence < 0.5
+      );
+    if (questionFilter === "image")
+      return questions.filter((q) => q.hasImage);
+    return questions;
+  }, [questions, questionFilter]);
 
   // ============================================================
   // Step 1 — extract text from the uploaded PDF
@@ -239,11 +265,13 @@ export default function ImportQuestionsPage() {
           type: q.type,
           choices: q.choices || [],
           correctAnswer: q.correctAnswer ?? null,
+          correctAnswerText: q.correctAnswerText ?? null,
           explanation: q.explanation || "",
           questionNumber: q.questionNumber || idx + 1,
           pageNumber: q.pageNumber,
           confidence: q.confidence,
           extractionNote: q.extractionNote || null,
+          hasImage: q.hasImage ?? false,
         }))
       );
       setActiveEditId(null);
@@ -289,7 +317,7 @@ export default function ImportQuestionsPage() {
       correctAnswer: q.correctAnswer ?? null,
       correctAnswerText: null,
       explanation: q.explanation || null,
-      hasImage: false,
+      hasImage: q.hasImage ?? false,
       confidence: q.confidence ?? 1,
       extractionNote: q.extractionNote ?? null,
     }));
@@ -393,6 +421,45 @@ export default function ImportQuestionsPage() {
   const removeQuestion = (id: string) => {
     setQuestions((prev) => prev.filter((q) => q.id !== id));
     if (activeEditId === id) setActiveEditId(null);
+  };
+
+  const acceptAll = () => {
+    setQuestions((prev) =>
+      prev.map((q) => ({ ...q, status: "accepted" as const }))
+    );
+    toast.success("All questions accepted");
+  };
+
+  const exportJson = () => {
+    const exportData = {
+      documentSummary: {
+        ...summary,
+        totalQuestions: accepted.length,
+      },
+      questions: accepted.map((q) => ({
+        questionNumber: q.questionNumber,
+        pageNumber: q.pageNumber,
+        type: q.type,
+        question: q.stem,
+        choices: q.choices.length > 0 ? q.choices : undefined,
+        correctAnswer: q.correctAnswer,
+        correctAnswerText: q.correctAnswerText,
+        explanation: q.explanation || null,
+        hasImage: q.hasImage ?? false,
+        confidence: q.confidence ?? 1,
+        extractionNote: q.extractionNote,
+      })),
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `questions-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("Questions exported as JSON");
   };
 
   const resetAll = () => {
@@ -608,34 +675,53 @@ export default function ImportQuestionsPage() {
             {stage === "preview" && (
               <div className="space-y-4">
                 {summary && (
-                  <div className="flex flex-wrap gap-1.5">
-                    <Badge variant="secondary">
-                      {summary.totalQuestions} found
-                    </Badge>
-                    <Badge variant={accepted.length > 0 ? "success" : "alert"}>
-                      {accepted.length} accepted
-                    </Badge>
-                    {rejectedCount > 0 && (
-                      <Badge variant="alert">{rejectedCount} rejected</Badge>
-                    )}
-                    {summary.hasAnswerKey ? (
-                      <Badge variant="success">
-                        <KeyRound className="h-3 w-3 mr-1" />
-                        Answer key
-                      </Badge>
-                    ) : (
-                      <Badge variant="warning">No answer key</Badge>
-                    )}
-                  </div>
-                )}
+                  <Card className="mb-4">
+                    <CardContent className="p-4 space-y-3">
+                      {summary.title ? (
+                        <p className="font-semibold text-arc-navy-900">
+                          {summary.title}
+                        </p>
+                      ) : null}
+                      <div className="flex flex-wrap gap-1.5">
+                        <Badge variant="secondary">
+                          {summary.totalQuestions} extracted
+                        </Badge>
+                        <Badge variant={accepted.length > 0 ? "success" : "alert"}>
+                          {accepted.length} accepted
+                        </Badge>
+                        {rejectedCount > 0 && (
+                          <Badge variant="alert">{rejectedCount} rejected</Badge>
+                        )}
+                        {summary.hasAnswerKey ? (
+                          <Badge variant="success">
+                            <KeyRound className="h-3 w-3 mr-1" />
+                            Answer key found
+                          </Badge>
+                        ) : (
+                          <Badge variant="warning">No answer key</Badge>
+                        )}
+                      </div>
 
-                {summary?.processingWarnings && summary.processingWarnings.length > 0 && (
-                  <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                    <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                    <p className="text-xs text-amber-800">
-                      {summary.processingWarnings.join(" · ")}
-                    </p>
-                  </div>
+                      {summary.questionTypes.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {summary.questionTypes.map((t) => (
+                            <Badge key={t} variant="outline">
+                              {QUESTION_TYPE_LABELS[t] || t}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+
+                      {summary.processingWarnings.length > 0 && (
+                        <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                          <Info className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                          <p className="text-xs text-amber-800">
+                            {summary.processingWarnings.join(" · ")}
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
                 )}
 
                 <div className="space-y-2">
@@ -880,6 +966,72 @@ export default function ImportQuestionsPage() {
 
           {stage === "preview" && (
             <div className="p-6 space-y-4">
+              {/* Filter toolbar */}
+              {questions.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="inline-flex items-center rounded-lg border border-arc-slate-200 bg-white p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setQuestionFilter("all")}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                        questionFilter === "all"
+                          ? "bg-arc-navy-900 text-white"
+                          : "text-arc-slate-600 hover:text-arc-navy-900"
+                      )}
+                    >
+                      All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuestionFilter("missing")}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                        questionFilter === "missing"
+                          ? "bg-amber-500 text-white"
+                          : "text-arc-slate-600 hover:text-arc-navy-900"
+                      )}
+                    >
+                      No answer ({missingCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuestionFilter("low")}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                        questionFilter === "low"
+                          ? "bg-amber-500 text-white"
+                          : "text-arc-slate-600 hover:text-arc-navy-900"
+                      )}
+                    >
+                      Low confidence ({lowCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuestionFilter("image")}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                        questionFilter === "image"
+                          ? "bg-arc-navy-900 text-white"
+                          : "text-arc-slate-600 hover:text-arc-navy-900"
+                      )}
+                    >
+                      <ImageIcon className="h-3 w-3 mr-1" />
+                      Images ({imageCount})
+                    </button>
+                  </div>
+                  <div className="flex-1" />
+                  <Button size="sm" variant="outline" onClick={acceptAll}>
+                    <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+                    Accept all
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={exportJson}>
+                    <Download className="h-3.5 w-3.5 mr-1.5" />
+                    Export JSON
+                  </Button>
+                </div>
+              )}
+
               {questions.length === 0 ? (
                 <Card>
                   <CardContent className="p-8 text-center">
@@ -894,7 +1046,7 @@ export default function ImportQuestionsPage() {
                   </CardContent>
                 </Card>
               ) : (
-                questions.map((q) => (
+                visibleQuestions.map((q) => (
                   <Card key={q.id} className={q.status === "rejected" ? "opacity-60" : undefined}>
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-4">
@@ -909,9 +1061,26 @@ export default function ImportQuestionsPage() {
                             <span className="text-xs text-arc-slate-400">
                               #{q.questionNumber}
                             </span>
-                            {typeof q.confidence === "number" && q.confidence < 0.5 && (
-                              <Badge variant="warning">Low confidence</Badge>
+                            {q.hasImage && (
+                              <Badge variant="warning">
+                                <ImageIcon className="h-3 w-3 mr-1" />
+                                Image / diagram
+                              </Badge>
                             )}
+                            {typeof q.confidence === "number" ? (
+                              <Badge
+                                variant={
+                                  q.confidence >= 0.7
+                                    ? "success"
+                                    : q.confidence >= 0.4
+                                      ? "warning"
+                                      : "alert"
+                                }
+                              >
+                                <BarChart3 className="h-3 w-3 mr-1" />
+                                {Math.round(q.confidence * 100)}%
+                              </Badge>
+                            ) : null}
                             {q.extractionNote && (
                               <Badge variant="warning">{q.extractionNote}</Badge>
                             )}

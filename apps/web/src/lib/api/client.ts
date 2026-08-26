@@ -393,10 +393,11 @@ export interface ExtractedQuestionPreview {
 
 export interface ImportPreviewResult {
   documentSummary: {
+    title?: string | null;
     totalQuestions: number;
-    detectedQuestionTypes: string[];
+    questionTypes: string[];
+    answerKeyLocation?: string | null;
     hasAnswerKey: boolean;
-    answerKeyLocation: string | null;
     processingWarnings: string[];
   };
   questions: ExtractedQuestionPreview[];

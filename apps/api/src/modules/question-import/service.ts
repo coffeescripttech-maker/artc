@@ -1,11 +1,82 @@
 import { prisma, Prisma, type QuestionType } from "@aratc/database";
 import { extractTextFromPdf } from "../utils/pdf";
-import { callGemini } from "../utils/gemini";
+import { callGeminiJson } from "../utils/gemini";
 import { ApiError } from "../../lib/errors";
 import { z } from "zod";
 
 // ============================================================
-// Schemas matching the extraction preview JSON
+// Gemini Structured Output schema (sent alongside responseMimeType)
+// ============================================================
+
+export const QUESTION_TYPE_ENUM = [
+  "multiple_choice",
+  "multiple_select",
+  "true_false",
+  "identification",
+  "fill_in_the_blank",
+  "matching_type",
+  "essay",
+] as const;
+
+const EXTRACTION_RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    documentSummary: {
+      type: "OBJECT",
+      properties: {
+        title: { type: "STRING" },
+        totalQuestions: { type: "INTEGER" },
+        questionTypes: { type: "ARRAY", items: { type: "STRING" } },
+        hasAnswerKey: { type: "BOOLEAN" },
+        processingWarnings: {
+          type: "ARRAY",
+          items: { type: "STRING" },
+        },
+      },
+      required: [
+        "totalQuestions",
+        "hasAnswerKey",
+        "questionTypes",
+        "processingWarnings",
+      ],
+    },
+    questions: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          questionNumber: { type: "INTEGER" },
+          pageNumber: { type: "INTEGER" },
+          type: { type: "STRING", enum: QUESTION_TYPE_ENUM },
+          question: { type: "STRING" },
+          choices: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                label: { type: "STRING" },
+                text: { type: "STRING" },
+              },
+              required: ["label", "text"],
+            },
+          },
+          correctAnswer: { type: "STRING" },
+          correctAnswerText: { type: "STRING" },
+          explanation: { type: "STRING" },
+          hasImage: { type: "BOOLEAN" },
+          confidence: { type: "NUMBER" },
+          extractionNote: { type: "STRING" },
+        },
+        required: ["questionNumber", "type", "question", "confidence", "hasImage"],
+      },
+    },
+  },
+  required: ["documentSummary", "questions"],
+};
+
+// ============================================================
+// Zod schemas for post-parse validation (lenient on the fields the AI
+// omits, strict on what the import pipeline needs)
 // ============================================================
 
 const ChoiceSchema = z.object({
@@ -16,15 +87,7 @@ const ChoiceSchema = z.object({
 const ExtractedQuestionSchema = z.object({
   questionNumber: z.coerce.number(),
   pageNumber: z.coerce.number().optional().nullable(),
-  type: z.enum([
-    "multiple_choice",
-    "multiple_select",
-    "true_false",
-    "identification",
-    "fill_in_the_blank",
-    "matching_type",
-    "essay",
-  ]),
+  type: z.enum(QUESTION_TYPE_ENUM),
   question: z.string().min(1),
   choices: z.array(ChoiceSchema).optional().nullable(),
   correctAnswer: z.string().nullable().optional(),
@@ -35,19 +98,34 @@ const ExtractedQuestionSchema = z.object({
   extractionNote: z.string().nullable().optional(),
 });
 
+const DocumentSummarySchema = z.object({
+  title: z.string().nullable().optional(),
+  totalQuestions: z.coerce.number(),
+  questionTypes: z.array(z.string()).optional().default([]),
+  /** older prompt shape — tolerated, prefer questionTypes */
+  detectedQuestionTypes: z.array(z.string()).optional(),
+  hasAnswerKey: z.boolean().optional().default(false),
+  answerKeyLocation: z.string().nullable().optional(),
+  processingWarnings: z.array(z.string()).optional().default([]),
+});
+
 const ExtractionResultSchema = z.object({
-  documentSummary: z.object({
-    totalQuestions: z.coerce.number(),
-    detectedQuestionTypes: z.array(z.string()).optional().default([]),
-    hasAnswerKey: z.boolean().optional().default(false),
-    answerKeyLocation: z.string().nullable().optional(),
-    processingWarnings: z.array(z.string()).optional().default([]),
-  }),
+  documentSummary: DocumentSummarySchema,
   questions: z.array(ExtractedQuestionSchema),
 });
 
 type ExtractedQuestion = z.infer<typeof ExtractedQuestionSchema>;
-type ExtractionResult = z.infer<typeof ExtractionResultSchema>;
+export type ExtractionResult = {
+  documentSummary: {
+    title: string | null;
+    totalQuestions: number;
+    questionTypes: string[];
+    hasAnswerKey: boolean;
+    answerKeyLocation: string | null;
+    processingWarnings: string[];
+  };
+  questions: ExtractedQuestion[];
+};
 
 // ============================================================
 // Text extraction from PDF
@@ -55,7 +133,7 @@ type ExtractionResult = z.infer<typeof ExtractionResultSchema>;
 
 /**
  * Extracts text content from a PDF file buffer.
- * Uses unpdf for fast, serverless-friendly extraction.
+ * Uses unpdf for fast, serverless-friendly extraction (in-memory only).
  */
 export async function extractPdfText(fileBuffer: Buffer): Promise<string> {
   return extractTextFromPdf(fileBuffer);
@@ -66,8 +144,10 @@ export async function extractPdfText(fileBuffer: Buffer): Promise<string> {
 // ============================================================
 
 /**
- * Sends extracted PDF text to Gemini with the preview extraction prompt.
- * Returns the structured JSON result without writing anything to the DB.
+ * Sends extracted PDF text to Gemini for structured question extraction.
+ * Uses Gemini Structured Output (responseMimeType: "application/json" +
+ * responseSchema) so the response is guaranteed to be valid JSON.
+ * Returns the structured result without writing anything to the DB.
  */
 export async function previewExtraction(
   pdfText: string,
@@ -82,7 +162,11 @@ export async function previewExtraction(
 
   let raw: string;
   try {
-    raw = await callGemini(pdfText, prompt);
+    raw = await callGeminiJson(
+      pdfText,
+      prompt,
+      EXTRACTION_RESPONSE_SCHEMA
+    );
   } catch (err) {
     throw new ApiError(
       err instanceof Error ? err.message : "AI extraction failed. Please try again.",
@@ -90,7 +174,8 @@ export async function previewExtraction(
     );
   }
 
-  // Gemini may wrap JSON in backticks or add leading text — strip that
+  // With responseMimeType=application/json Gemini returns pure JSON, but some
+  // proxies / preview builds wrap it in code fences — strip them anyway.
   const cleaned = raw
     .replace(/```json\n?/g, "")
     .replace(/```\n?/g, "")
@@ -114,84 +199,191 @@ export async function previewExtraction(
     );
   }
 
-  return result.data;
+  // Post-process: normalize answer fields, dedupe, gather warnings.
+  const { questions, droppedDuplicates } = normalizeQuestions(result.data.questions);
+  const summaryIn = result.data.documentSummary;
+
+  const processingWarnings = [...summaryIn.processingWarnings];
+  if (droppedDuplicates > 0) {
+    processingWarnings.push(
+      `${droppedDuplicates} duplicate question${droppedDuplicates === 1 ? "" : "s"} removed`
+    );
+  }
+  if (summaryIn.totalQuestions > questions.length) {
+    processingWarnings.push(
+      `Expected ${summaryIn.totalQuestions} questions, extracted ${questions.length} after deduplication`
+    );
+  }
+
+  const questionTypes =
+    summaryIn.questionTypes.length > 0
+      ? summaryIn.questionTypes
+      : summaryIn.detectedQuestionTypes ?? [];
+
+  return {
+    documentSummary: {
+      title: summaryIn.title ?? null,
+      totalQuestions: questions.length,
+      questionTypes,
+      hasAnswerKey: summaryIn.hasAnswerKey,
+      answerKeyLocation: summaryIn.answerKeyLocation ?? null,
+      processingWarnings,
+    },
+    questions,
+  };
 }
 
-function buildExtractionPrompt(programName?: string, subjectName?: string): string {
+/**
+ * Light server-side cleanup so Gemini hiccups don't reach the DB:
+ *  - drop exact-duplicate question text
+ *  - fall back to correctAnswerText for non-choice types
+ *  - convert a full-answer-text correctAnswer into its choice label
+ *  - normalize True/False answer spelling
+ */
+function normalizeQuestions(
+  raw: ExtractedQuestion[]
+): { questions: ExtractedQuestion[]; droppedDuplicates: number } {
+  const seen = new Set<string>();
+  const questions: ExtractedQuestion[] = [];
+  let droppedDuplicates = 0;
+
+  for (const q of raw) {
+    const key = q.question.toLowerCase().replace(/\s+/g, " ").trim();
+    if (seen.has(key)) {
+      droppedDuplicates++;
+      continue;
+    }
+    seen.add(key);
+
+    const next: ExtractedQuestion = { ...q };
+
+    // Non-choice questions: Gemini sometimes only fills correctAnswerText.
+    if (!next.correctAnswer && next.correctAnswerText) {
+      const isChoice =
+        next.type === "multiple_choice" || next.type === "multiple_select";
+      if (!isChoice) next.correctAnswer = next.correctAnswerText;
+    }
+
+    // Multiple-choice: an answer given as the full choice text → map to label.
+    if (next.choices?.length && next.correctAnswer) {
+      const answer = next.correctAnswer.trim();
+      const byLabel = next.choices.find(
+        (c) => c.label?.trim().toUpperCase() === answer.toUpperCase()
+      );
+      if (!byLabel) {
+        const byText = next.choices.find(
+          (c) =>
+            c.text?.trim().toLowerCase() === answer.toLowerCase()
+        );
+        if (byText) next.correctAnswer = byText.label;
+      }
+      // Multiple-select: expand full-text answers to their labels.
+      if (next.type === "multiple_select") {
+        const parts = answer
+          .split(/[,;]/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        const labels = parts.map((p) => {
+          const exact = next.choices.find((c) => c.label?.trim() === p);
+          if (exact) return p;
+          const byT = next.choices.find(
+            (c) => c.text?.trim().toLowerCase() === p.toLowerCase()
+          );
+          return byT?.label ?? p;
+        });
+        next.correctAnswer = labels.join(",");
+      }
+    }
+
+    // True/False: collapse A/B/T/F into canonical true/false.
+    if (next.type === "true_false" && next.correctAnswer) {
+      const a = next.correctAnswer.trim().toLowerCase();
+      if (["true", "t", "a"].includes(a)) next.correctAnswer = "true";
+      else if (["false", "f", "b"].includes(a)) next.correctAnswer = "false";
+    }
+
+    questions.push(next);
+  }
+
+  return { questions, droppedDuplicates };
+}
+
+function buildExtractionPrompt(
+  programName?: string,
+  subjectName?: string
+): string {
   return `You are an AI-powered LMS Question Extraction Engine.
 
-Your ONLY responsibility is to extract assessment questions from the provided document and return clean, structured JSON for preview before database import.
+Your ONLY responsibility is to extract assessment questions from the provided document and return clean, structured JSON.
 
-Analyze the entire document and extract every assessment question.
+Analyze the ENTIRE document before extracting questions. Answer keys are often on the LAST page — read every page first, then assign answers.
 
-Support the following question types:
-- multiple_choice
-- true_false
-- identification
-- fill_in_the_blank
-- matching_type
-- essay
+Instructions:
 
-Extraction rules:
-1. Read the entire document before extracting.
-2. Preserve the original wording exactly.
-3. Extract every question.
-4. Ignore: page numbers, headers, footers, logos, copyright text, decorative elements, table of contents, document titles, instructions not belonging to a question.
-5. Preserve the original question numbering.
-6. Extract choices exactly as written.
-7. Determine the correct answer using this priority:
-   - Priority 1: Answer Key section
-   - Priority 2: "Answer: X"
-   - Priority 3: Highlighted/Bold/Colored/Underlined answer
-   - Priority 4: Teacher annotations
-   - Priority 5: Other explicit indicators
-   Never guess. If no evidence exists: correctAnswer = null, correctAnswerText = null, confidence = 0, extractionNote = "Correct answer not found."
-8. Detect duplicate questions. If duplicates exist, keep only one.
-9. If the question depends on an image, diagram, graph, table or formula: hasImage = true.
-10. Preserve mathematical expressions exactly.
-11. Preserve special symbols.
-12. Preserve line breaks only when necessary.
+- Extract every question.
+- Preserve the original wording exactly.
+- Preserve the original question numbering.
+- Detect the question type automatically:
+  - multiple_choice — one correct answer from labeled options
+  - multiple_select — "select all that apply", multiple correct answers
+  - true_false
+  - identification — short free-text answer
+  - fill_in_the_blank
+  - matching_type — column A / column B pairs
+  - essay — long free-text answer
 
-Context: Subject = "${subjectName ?? "unspecified"}", Program = "${programName ?? "unspecified"}"
+- Extract every answer choice exactly as written.
+- Detect the correct answer using, in priority order:
+  1. Answer key section (often on the last page of the document)
+  2. Answer beside the question ("Answer: B")
+  3. Highlighted / Bold / Coloured / Underlined answer
+  4. Teacher annotations
+  5. Any other explicit answer indicator
+- If multiple sources conflict, prefer the answer key section.
+- For multiple_select, list ALL correct letters in correctAnswer as a comma-separated string (e.g. "A,C").
+- Never guess the correct answer.
+- If no answer exists:
+  - correctAnswer = null
+  - correctAnswerText = null
+  - confidence = 0
+  - extractionNote = "Correct answer not found."
+- Ignore: page numbers, headers, footers, logos, decorative text, copyright text, instructions to the examinee that are not questions.
+- If the question references an image, graph, table, diagram, or formula: hasImage = true.
+- Remove duplicate questions (same question text — keep the first occurrence).
+- Preserve mathematical expressions and special symbols exactly.
+- For matching_type, put each pair in choices as { "label": "1", "text": "Item — Match" }.
+- Set confidence between 0 and 1: how certain you are the question AND its answer were extracted correctly.
 
-Return ONLY valid JSON. Do NOT use Markdown. Do NOT explain anything.
+Context: Program = "${programName ?? "unspecified"}", Subject = "${subjectName ?? "unspecified"}"
 
-The root must be:
+Return ONLY valid JSON matching the schema below (no markdown, no prose):
 
 {
   "documentSummary": {
+    "title": "",
     "totalQuestions": 0,
-    "detectedQuestionTypes": [],
+    "questionTypes": [],
     "hasAnswerKey": false,
-    "answerKeyLocation": null,
     "processingWarnings": []
   },
-  "questions": []
-}
-
-Question Schema:
-{
-  "questionNumber": 1,
-  "pageNumber": 1,
-  "type": "multiple_choice",
-  "question": "",
-  "choices": [
-    { "label": "A", "text": "" },
-    { "label": "B", "text": "" },
-    { "label": "C", "text": "" },
-    { "label": "D", "text": "" }
-  ],
-  "correctAnswer": "A",
-  "correctAnswerText": "",
-  "explanation": null,
-  "hasImage": false,
-  "confidence": 1.0,
-  "extractionNote": null
-}
-
-For matching_type, choices should contain pairs like:
-  { "label": "1", "text": "Term — Definition" }
-`;
+  "questions": [
+    {
+      "questionNumber": 1,
+      "pageNumber": 1,
+      "type": "multiple_choice",
+      "question": "",
+      "choices": [
+        { "label": "A", "text": "" }
+      ],
+      "correctAnswer": "A",
+      "correctAnswerText": "",
+      "explanation": null,
+      "hasImage": false,
+      "confidence": 1.0,
+      "extractionNote": null
+    }
+  ]
+}`;
 }
 
 // ============================================================
@@ -333,7 +525,7 @@ function mapToPrisma(q: ExtractedQuestion): {
 
     case "true_false": {
       const answer = (q.correctAnswer || "").trim().toLowerCase();
-      const tfAnswer = answer === "true" || answer === "a" || answer === "t";
+      const tfAnswer = answer === "true" || answer === "t" || answer === "a";
       return {
         prismaType: "TRUE_FALSE" as QuestionType,
         optionsJson: undefined,
@@ -359,7 +551,6 @@ function mapToPrisma(q: ExtractedQuestion): {
     }
 
     case "matching_type": {
-      // Matching pairs stored as options with correct answer being the match key
       const optionsJson = (q.choices || []).map((c) => ({
         id: c.label,
         text: c.text,
