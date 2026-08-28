@@ -29,6 +29,7 @@ import {
   Image as ImageIcon,
   Download,
   BarChart3,
+  Layers,
 } from "lucide-react";
 import { toast } from "@/lib/toast";
 import {
@@ -47,6 +48,16 @@ import { FormattedQuestionnaire } from "./formatted-text";
 
 type Stage = "upload" | "review" | "preview";
 type QuestionStatus = "accepted" | "edited" | "rejected";
+/** Extraction workflow: "smart" = vision (best quality, costs more),
+ *  "budget" = structured text-only AI call (much cheaper),
+ *  "mineru" = MinerU local high-fidelity parse (OCR/tables/formulas) +
+ *  text-only AI call. */
+type ImportMode = "smart" | "budget" | "mineru";
+
+const IMPORT_MODE_STORAGE_KEY = "questionImportMode";
+const LAST_PROGRAM_STORAGE_KEY = "lastImportProgram";
+
+type ConfidenceBucket = "0-25" | "25-50" | "50-75" | "75-100";
 
 interface Program {
   id: string;
@@ -73,6 +84,13 @@ interface EditableQuestion {
   confidence?: number;
   extractionNote?: string | null;
   hasImage?: boolean;
+  /** Budget mode: AI's confidence (0-1) that the image belongs to this
+   *  question. Admin-review/debug signal only. */
+  imageMappingConfidence?: number | null;
+  /** Budget mode: why the AI associated the image with this question.
+   *  Admin-review/debug signal only. */
+  imageMappingReason?: string | null;
+  mediaUrl?: string | null;
 }
 
 const QUESTION_TYPE_LABELS: Record<string, string> = {
@@ -107,6 +125,34 @@ export default function ImportQuestionsPage() {
   const [subjectName, setSubjectName] = useState("");
   const [subjectId, setSubjectId] = useState("");
 
+  // Persisted import settings — survive page reloads so the admin doesn't
+  // re-pick the same workflow / program every time.
+  const [importMode, setImportMode] = useState<ImportMode>("smart");
+  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceBucket | null>(null);
+  // lastProgram is the program selected on the upload stage; we persist it so a
+  // returning admin lands on their last-used program when they reload.
+  const [lastProgram, setLastProgram] = useState<string | null>(null);
+
+  useEffect(() => {
+    const savedMode = window.localStorage.getItem(IMPORT_MODE_STORAGE_KEY);
+    if (savedMode === "budget" || savedMode === "smart" || savedMode === "mineru")
+      setImportMode(savedMode);
+    const savedProgram = window.localStorage.getItem(LAST_PROGRAM_STORAGE_KEY);
+    if (savedProgram) setLastProgram(savedProgram);
+    const savedConf = window.localStorage.getItem("questionImportConfidenceBucket");
+    if (
+      savedConf === "0-25" ||
+      savedConf === "25-50" ||
+      savedConf === "50-75" ||
+      savedConf === "75-100"
+    )
+      setConfidenceFilter(savedConf);
+  }, []);
+  const changeImportMode = (mode: ImportMode) => {
+    setImportMode(mode);
+    window.localStorage.setItem(IMPORT_MODE_STORAGE_KEY, mode);
+  };
+
   // UI state
   const [isExtracting, setIsExtracting] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -114,9 +160,7 @@ export default function ImportQuestionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [textMode, setTextMode] = useState<"formatted" | "raw">("formatted");
-  const [questionFilter, setQuestionFilter] = useState<
-    "all" | "missing" | "low" | "image"
-  >("all");
+  const [questionFilter, setQuestionFilter] = useState<"all" | "missing" | "low" | "image">("all");
   const [showPdf, setShowPdf] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
@@ -135,11 +179,24 @@ export default function ImportQuestionsPage() {
   // Preselect a subject matching the typed subject name
   useEffect(() => {
     if (!subjectName || subjects.length === 0) return;
-    const match = subjects.find((s) =>
-      s.name.toLowerCase().includes(subjectName.toLowerCase())
-    );
+    const match = subjects.find((s) => s.name.toLowerCase().includes(subjectName.toLowerCase()));
     if (match) setSubjectId(match.id);
   }, [subjectName, subjects]);
+
+  // Restore the last-used program once the program list has loaded (only if the
+  // admin hasn't already picked one in this session).
+  useEffect(() => {
+    if (!selectedProgram && lastProgram) {
+      const valid = programs.some((p) => p.id === lastProgram);
+      if (valid) setSelectedProgram(lastProgram);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [programs, lastProgram]);
+
+  // Persist the program choice so a returning admin lands on the same program.
+  useEffect(() => {
+    if (selectedProgram) window.localStorage.setItem(LAST_PROGRAM_STORAGE_KEY, selectedProgram);
+  }, [selectedProgram]);
 
   const programName = useMemo(
     () => programs.find((p) => p.id === selectedProgram)?.name || "",
@@ -175,17 +232,45 @@ export default function ImportQuestionsPage() {
   ).length;
   const imageCount = questions.filter((q) => q.hasImage).length;
 
+  // Confidence buckets for the triage histogram. Each bucket counts extracted
+  // questions (regardless of accept/reject) so admins can spot weak spots fast.
+  const confidenceBuckets: { label: ConfidenceBucket; count: number }[] = [
+    { label: "0-25", count: 0 },
+    { label: "25-50", count: 0 },
+    { label: "50-75", count: 0 },
+    { label: "75-100", count: 0 },
+  ];
+  for (const q of questions) {
+    const c = typeof q.confidence === "number" ? q.confidence : 1;
+    const b = confidenceBuckets.find((b) =>
+      c <= 0.25
+        ? b.label === "0-25"
+        : c <= 0.5
+          ? b.label === "25-50"
+          : c <= 0.75
+            ? b.label === "50-75"
+            : b.label === "75-100"
+    );
+    if (b) b.count++;
+  }
+
   const visibleQuestions = useMemo(() => {
-    if (questionFilter === "missing")
-      return questions.filter((q) => !q.correctAnswer);
-    if (questionFilter === "low")
-      return questions.filter(
-        (q) => typeof q.confidence === "number" && q.confidence < 0.5
-      );
-    if (questionFilter === "image")
-      return questions.filter((q) => q.hasImage);
-    return questions;
-  }, [questions, questionFilter]);
+    let list = questions;
+    if (questionFilter === "missing") list = list.filter((q) => !q.correctAnswer);
+    else if (questionFilter === "low")
+      list = list.filter((q) => typeof q.confidence === "number" && q.confidence < 0.5);
+    else if (questionFilter === "image") list = list.filter((q) => q.hasImage);
+    if (confidenceFilter) {
+      list = list.filter((q) => {
+        const c = typeof q.confidence === "number" ? q.confidence : 1;
+        if (confidenceFilter === "0-25") return c <= 0.25;
+        if (confidenceFilter === "25-50") return c > 0.25 && c <= 0.5;
+        if (confidenceFilter === "50-75") return c > 0.5 && c <= 0.75;
+        return c > 0.75;
+      });
+    }
+    return list;
+  }, [questions, questionFilter, confidenceFilter]);
 
   // ============================================================
   // Step 1 — extract text from the uploaded PDF
@@ -227,8 +312,7 @@ export default function ImportQuestionsPage() {
       setStage("review");
       toast.success("Text extracted — review it on the right");
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Extraction failed. Please try again.";
+      const message = err instanceof Error ? err.message : "Extraction failed. Please try again.";
       setError(message);
       toast.error(message);
     } finally {
@@ -254,6 +338,8 @@ export default function ImportQuestionsPage() {
         pdfText,
         programName,
         subjectName: subjectName || null,
+        file: selectedFile,
+        mode: importMode,
       });
 
       setSummary(result.documentSummary || null);
@@ -272,10 +358,15 @@ export default function ImportQuestionsPage() {
           confidence: q.confidence,
           extractionNote: q.extractionNote || null,
           hasImage: q.hasImage ?? false,
+          imageMappingConfidence: q.imageMappingConfidence ?? null,
+          imageMappingReason: q.imageMappingReason ?? null,
+          mediaUrl: q.mediaUrl ?? null,
         }))
       );
       setActiveEditId(null);
       setStage("preview");
+      setQuestionFilter("all");
+      setConfidenceFilter(null);
 
       toast.success(
         result.questions?.length
@@ -283,8 +374,7 @@ export default function ImportQuestionsPage() {
           : "AI found no questions in this text. Try editing the text or using a different PDF."
       );
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Processing failed. Please try again.";
+      const message = err instanceof Error ? err.message : "Processing failed. Please try again.";
       setError(message);
       toast.error(message);
     } finally {
@@ -311,13 +401,12 @@ export default function ImportQuestionsPage() {
       type: q.type,
       question: q.stem,
       choices:
-        q.choices.length > 0
-          ? q.choices.map((c) => ({ label: c.label, text: c.text }))
-          : undefined,
+        q.choices.length > 0 ? q.choices.map((c) => ({ label: c.label, text: c.text })) : undefined,
       correctAnswer: q.correctAnswer ?? null,
       correctAnswerText: null,
       explanation: q.explanation || null,
       hasImage: q.hasImage ?? false,
+      mediaUrl: q.mediaUrl ?? null,
       confidence: q.confidence ?? 1,
       extractionNote: q.extractionNote ?? null,
     }));
@@ -339,8 +428,7 @@ export default function ImportQuestionsPage() {
       );
       router.push("/dashboard/questions");
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Import failed. Please try again.";
+      const message = err instanceof Error ? err.message : "Import failed. Please try again.";
       toast.error(message);
     } finally {
       setIsImporting(false);
@@ -360,9 +448,7 @@ export default function ImportQuestionsPage() {
   const toggleAccept = (id: string) => {
     setQuestions((prev) =>
       prev.map((q) =>
-        q.id === id
-          ? { ...q, status: q.status === "rejected" ? "accepted" : "rejected" }
-          : q
+        q.id === id ? { ...q, status: q.status === "rejected" ? "accepted" : "rejected" } : q
       )
     );
   };
@@ -387,9 +473,7 @@ export default function ImportQuestionsPage() {
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      const next = labels.includes(label)
-        ? labels.filter((l) => l !== label)
-        : [...labels, label];
+      const next = labels.includes(label) ? labels.filter((l) => l !== label) : [...labels, label];
       updateQuestion(q.id, "correctAnswer", next.length ? next.join(",") : null);
     } else {
       updateQuestion(q.id, "correctAnswer", label);
@@ -424,9 +508,7 @@ export default function ImportQuestionsPage() {
   };
 
   const acceptAll = () => {
-    setQuestions((prev) =>
-      prev.map((q) => ({ ...q, status: "accepted" as const }))
-    );
+    setQuestions((prev) => prev.map((q) => ({ ...q, status: "accepted" as const })));
     toast.success("All questions accepted");
   };
 
@@ -446,6 +528,7 @@ export default function ImportQuestionsPage() {
         correctAnswerText: q.correctAnswerText,
         explanation: q.explanation || null,
         hasImage: q.hasImage ?? false,
+        mediaUrl: q.mediaUrl ?? null,
         confidence: q.confidence ?? 1,
         extractionNote: q.extractionNote,
       })),
@@ -471,19 +554,31 @@ export default function ImportQuestionsPage() {
     setActiveEditId(null);
     setSearchTerm("");
     setTextMode("formatted");
+    setQuestionFilter("all");
+    setConfidenceFilter(null);
     setShowPdf(false);
     setError(null);
     setSubjectId("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  // Copies just this question's stem to the clipboard — handy for pasting a
+  // single item into another assessment or sharing with colleagues.
+  const handleCopyStem = async (q: EditableQuestion) => {
+    const text = `Q${q.questionNumber ?? ""}. ${q.stem}`.trim();
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Question copied to clipboard");
+    } catch {
+      toast.error("Couldn't copy — your browser blocked clipboard access");
+    }
+  };
+
   // Text stats for the review panel
   const lineCount = pdfText ? pdfText.split("\n").length : 0;
   const wordCount = pdfText ? pdfText.trim().split(/\s+/).filter(Boolean).length : 0;
   const filteredLines = searchTerm
-    ? pdfText
-        .split("\n")
-        .filter((line) => line.toLowerCase().includes(searchTerm.toLowerCase()))
+    ? pdfText.split("\n").filter((line) => line.toLowerCase().includes(searchTerm.toLowerCase()))
     : null;
 
   const formatFileSize = (bytes: number) => {
@@ -537,10 +632,75 @@ export default function ImportQuestionsPage() {
                   value={subjectName}
                   onChange={(e) => setSubjectName(e.target.value)}
                 />
-                <p className="text-xs text-arc-slate-400">
-                  Helps the AI classify questions.
-                </p>
+                <p className="text-xs text-arc-slate-400">Helps the AI classify questions.</p>
               </div>
+            </div>
+
+            <div className="h-px bg-arc-slate-100" />
+
+            {/* Extraction workflow setting */}
+            <div className="space-y-2">
+              <Label>Extraction Workflow</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => changeImportMode("smart")}
+                  className={`text-left p-3 rounded-lg border-2 transition-colors ${
+                    importMode === "smart"
+                      ? "border-arc-navy-500 bg-arc-navy-50/60"
+                      : "border-arc-slate-200 hover:border-arc-navy-300 bg-white"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-arc-navy-900">
+                    <Sparkles className="h-3.5 w-3.5 text-arc-orange-500" />
+                    Smart
+                  </span>
+                  <span className="mt-1 block text-xs text-arc-slate-500 leading-snug">
+                    Vision AI reads the PDF — best for diagrams & scans. Higher cost.
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changeImportMode("budget")}
+                  className={`text-left p-3 rounded-lg border-2 transition-colors ${
+                    importMode === "budget"
+                      ? "border-arc-navy-500 bg-arc-navy-50/60"
+                      : "border-arc-slate-200 hover:border-arc-navy-300 bg-white"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-arc-navy-900">
+                    <FileText className="h-3.5 w-3.5 text-arc-navy-600" />
+                    Budget
+                  </span>
+                  <span className="mt-1 block text-xs text-arc-slate-500 leading-snug">
+                    Text-only AI call — much cheaper. Scanned pages are skipped.
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changeImportMode("mineru")}
+                  className={`text-left p-3 rounded-lg border-2 transition-colors ${
+                    importMode === "mineru"
+                      ? "border-arc-navy-500 bg-arc-navy-50/60"
+                      : "border-arc-slate-200 hover:border-arc-navy-300 bg-white"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 text-sm font-semibold text-arc-navy-900">
+                    <Layers className="h-3.5 w-3.5 text-arc-navy-600" />
+                    MinerU
+                  </span>
+                  <span className="mt-1 block text-xs text-arc-slate-500 leading-snug">
+                    High-fidelity local parse — OCR, tables & formulas preserved.
+                  </span>
+                </button>
+              </div>
+              <p className="text-xs text-arc-slate-400">
+                {importMode === "budget"
+                  ? "Budget mode parses the PDF locally and sends only structured text to the AI. Images are matched by the backend — scanned pages can't be read."
+                  : importMode === "mineru"
+                    ? "MinerU mode parses the PDF with a layout-aware engine (OCR, tables, formulas, figures) and sends clean structured text to the AI. Requires MinerU to be enabled on the server."
+                    : "Smart mode attaches the original PDF to the AI so it can see diagrams, graphs, tables, and scanned pages."}
+              </p>
             </div>
 
             <div className="h-px bg-arc-slate-100" />
@@ -580,9 +740,7 @@ export default function ImportQuestionsPage() {
                     ) : (
                       <>
                         <Upload className="h-10 w-10 mx-auto text-arc-slate-400" />
-                        <p className="mt-2 text-sm text-arc-navy-600">
-                          Click to select a PDF file
-                        </p>
+                        <p className="mt-2 text-sm text-arc-navy-600">Click to select a PDF file</p>
                         <p className="text-xs text-arc-slate-400 mt-1">
                           Text-based PDFs only (max 50MB)
                         </p>
@@ -635,9 +793,8 @@ export default function ImportQuestionsPage() {
                 )}
 
                 <p className="text-xs text-arc-slate-500 leading-relaxed">
-                  Review the document on the right — it&apos;s shown as a formatted
-                  questionnaire, with a raw-text toggle if you need to fix anything the
-                  PDF reader got wrong.
+                  Review the document on the right — it&apos;s shown as a formatted questionnaire,
+                  with a raw-text toggle if you need to fix anything the PDF reader got wrong.
                 </p>
 
                 {error && (
@@ -678,14 +835,10 @@ export default function ImportQuestionsPage() {
                   <Card className="mb-4">
                     <CardContent className="p-4 space-y-3">
                       {summary.title ? (
-                        <p className="font-semibold text-arc-navy-900">
-                          {summary.title}
-                        </p>
+                        <p className="font-semibold text-arc-navy-900">{summary.title}</p>
                       ) : null}
                       <div className="flex flex-wrap gap-1.5">
-                        <Badge variant="secondary">
-                          {summary.totalQuestions} extracted
-                        </Badge>
+                        <Badge variant="secondary">{summary.totalQuestions} extracted</Badge>
                         <Badge variant={accepted.length > 0 ? "success" : "alert"}>
                           {accepted.length} accepted
                         </Badge>
@@ -771,11 +924,7 @@ export default function ImportQuestionsPage() {
                 </p>
 
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setStage("review")}
-                    className="flex-1"
-                  >
+                  <Button variant="outline" onClick={() => setStage("review")} className="flex-1">
                     <ArrowLeft className="h-4 w-4 mr-2" />
                     Back to text
                   </Button>
@@ -956,9 +1105,8 @@ export default function ImportQuestionsPage() {
               {/* Hint under the formatted view */}
               {textMode === "formatted" && !searchTerm && (
                 <p className="text-xs text-arc-slate-400 mt-3 text-center">
-                  This is a preview of how the AI will read your document. Spotted a
-                  mistake? Switch to <strong>Raw (editable)</strong> to fix the text
-                  before processing.
+                  This is a preview of how the AI will read your document. Spotted a mistake? Switch
+                  to <strong>Raw (editable)</strong> to fix the text before processing.
                 </p>
               )}
             </div>
@@ -968,68 +1116,125 @@ export default function ImportQuestionsPage() {
             <div className="p-6 space-y-4">
               {/* Filter toolbar */}
               {questions.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="inline-flex items-center rounded-lg border border-arc-slate-200 bg-white p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setQuestionFilter("all")}
-                      className={cn(
-                        "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                        questionFilter === "all"
-                          ? "bg-arc-navy-900 text-white"
-                          : "text-arc-slate-600 hover:text-arc-navy-900"
-                      )}
-                    >
-                      All
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setQuestionFilter("missing")}
-                      className={cn(
-                        "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                        questionFilter === "missing"
-                          ? "bg-amber-500 text-white"
-                          : "text-arc-slate-600 hover:text-arc-navy-900"
-                      )}
-                    >
-                      No answer ({missingCount})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setQuestionFilter("low")}
-                      className={cn(
-                        "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                        questionFilter === "low"
-                          ? "bg-amber-500 text-white"
-                          : "text-arc-slate-600 hover:text-arc-navy-900"
-                      )}
-                    >
-                      Low confidence ({lowCount})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setQuestionFilter("image")}
-                      className={cn(
-                        "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
-                        questionFilter === "image"
-                          ? "bg-arc-navy-900 text-white"
-                          : "text-arc-slate-600 hover:text-arc-navy-900"
-                      )}
-                    >
-                      <ImageIcon className="h-3 w-3 mr-1" />
-                      Images ({imageCount})
-                    </button>
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="inline-flex items-center rounded-lg border border-arc-slate-200 bg-white p-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuestionFilter("all");
+                          setConfidenceFilter(null);
+                        }}
+                        className={cn(
+                          "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                          questionFilter === "all" && !confidenceFilter
+                            ? "bg-arc-navy-900 text-white"
+                            : "text-arc-slate-600 hover:text-arc-navy-900"
+                        )}
+                      >
+                        All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuestionFilter("missing");
+                          setConfidenceFilter(null);
+                        }}
+                        className={cn(
+                          "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                          questionFilter === "missing"
+                            ? "bg-amber-500 text-white"
+                            : "text-arc-slate-600 hover:text-arc-navy-900"
+                        )}
+                      >
+                        No answer ({missingCount})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuestionFilter("low");
+                          setConfidenceFilter(null);
+                        }}
+                        className={cn(
+                          "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                          questionFilter === "low"
+                            ? "bg-amber-500 text-white"
+                            : "text-arc-slate-600 hover:text-arc-navy-900"
+                        )}
+                      >
+                        Low confidence ({lowCount})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuestionFilter("image");
+                          setConfidenceFilter(null);
+                        }}
+                        className={cn(
+                          "px-3 py-1.5 text-xs font-medium rounded-md transition-colors",
+                          questionFilter === "image"
+                            ? "bg-arc-navy-900 text-white"
+                            : "text-arc-slate-600 hover:text-arc-navy-900"
+                        )}
+                      >
+                        <ImageIcon className="h-3 w-3 mr-1" />
+                        Images ({imageCount})
+                      </button>
+                    </div>
+                    <div className="flex-1" />
+                    <Button size="sm" variant="outline" onClick={acceptAll}>
+                      <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+                      Accept all
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={exportJson}>
+                      <Download className="h-3.5 w-3.5 mr-1.5" />
+                      Export JSON
+                    </Button>
                   </div>
-                  <div className="flex-1" />
-                  <Button size="sm" variant="outline" onClick={acceptAll}>
-                    <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-                    Accept all
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={exportJson}>
-                    <Download className="h-3.5 w-3.5 mr-1.5" />
-                    Export JSON
-                  </Button>
-                </div>
+
+                  {/* Confidence triage histogram — click a bucket to filter */}
+                  {questions.length > 1 && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-medium uppercase tracking-wider text-arc-slate-400 mr-1">
+                        Confidence
+                      </span>
+                      {confidenceBuckets.map((bucket) => {
+                        const active = confidenceFilter === bucket.label;
+                        const pct =
+                          questions.length > 0
+                            ? Math.round((bucket.count / questions.length) * 100)
+                            : 0;
+                        return (
+                          <button
+                            key={bucket.label}
+                            type="button"
+                            onClick={() => {
+                              setQuestionFilter("all");
+                              setConfidenceFilter(active ? null : bucket.label);
+                            }}
+                            className={cn(
+                              "flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-colors",
+                              active
+                                ? "bg-arc-navy-900 border-arc-navy-900 text-white"
+                                : "border-arc-slate-200 bg-white text-arc-slate-600 hover:border-arc-navy-400 hover:text-arc-navy-800"
+                            )}
+                            title={`${bucket.count} question${bucket.count === 1 ? "" : "s"} in this range`}
+                          >
+                            <span className="w-9 text-left">{bucket.label}</span>
+                            <span
+                              className={cn(
+                                "h-2 rounded-sm",
+                                active ? "bg-white/80" : "bg-arc-orange-400/70"
+                              )}
+                              style={{ width: Math.max(4, pct * 0.6) }}
+                            />
+                            <span className="text-arc-slate-400">{bucket.count}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
               )}
 
               {questions.length === 0 ? (
@@ -1058,13 +1263,28 @@ export default function ImportQuestionsPage() {
                             <Badge variant="secondary">
                               {QUESTION_TYPE_LABELS[q.type] || q.type}
                             </Badge>
-                            <span className="text-xs text-arc-slate-400">
-                              #{q.questionNumber}
-                            </span>
+                            <span className="text-xs text-arc-slate-400">#{q.questionNumber}</span>
                             {q.hasImage && (
-                              <Badge variant="warning">
+                              <Badge
+                                variant={
+                                  typeof q.imageMappingConfidence === "number" &&
+                                  q.imageMappingConfidence < 0.5
+                                    ? "alert"
+                                    : typeof q.imageMappingConfidence === "number" &&
+                                        q.imageMappingConfidence < 0.7
+                                      ? "warning"
+                                      : "secondary"
+                                }
+                                title={
+                                  q.imageMappingReason ||
+                                  "Image association confidence (admin/debug signal)"
+                                }
+                              >
                                 <ImageIcon className="h-3 w-3 mr-1" />
-                                Image / diagram
+                                Image
+                                {typeof q.imageMappingConfidence === "number"
+                                  ? ` · ${Math.round(q.imageMappingConfidence * 100)}%`
+                                  : ""}
                               </Badge>
                             )}
                             {typeof q.confidence === "number" ? (
@@ -1099,6 +1319,30 @@ export default function ImportQuestionsPage() {
                                   className="w-full px-3 py-2 border border-arc-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-arc-navy-500 resize-y"
                                 />
                               </div>
+
+                              {/* Quick visual check while editing — confirm the
+                                  figure the AI attached is really the right one. */}
+                              {q.hasImage && q.mediaUrl ? (
+                                <div className="rounded-lg border border-arc-slate-200 overflow-hidden bg-arc-slate-50">
+                                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-arc-slate-100 border-b border-arc-slate-200">
+                                    <ImageIcon className="h-3.5 w-3.5 text-arc-slate-500" />
+                                    <span className="text-xs font-medium text-arc-slate-600">
+                                      Attached image — Page {q.pageNumber ?? "?"}
+                                    </span>
+                                  </div>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={q.mediaUrl}
+                                    alt={`Page ${q.pageNumber ?? ""} from original PDF`}
+                                    className="w-full h-auto max-h-52 object-contain"
+                                  />
+                                </div>
+                              ) : q.hasImage ? (
+                                <div className="flex items-center gap-2 p-2 rounded border border-amber-200 bg-amber-50 text-xs text-amber-700">
+                                  <AlertCircle className="h-4 w-4 shrink-0" />
+                                  This question references an image but no image was extracted.
+                                </div>
+                              ) : null}
 
                               {CHOICE_TYPES.includes(q.type) && (
                                 <div className="space-y-2">
@@ -1211,9 +1455,41 @@ export default function ImportQuestionsPage() {
                             </div>
                           ) : (
                             <>
-                              <p className="text-arc-navy-900 leading-relaxed whitespace-pre-wrap">
-                                {q.stem}
-                              </p>
+                              <div className="flex items-start justify-between gap-3">
+                                <p className="text-arc-navy-900 leading-relaxed whitespace-pre-wrap flex-1">
+                                  {q.stem}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyStem(q)}
+                                  title="Copy this question to clipboard"
+                                  className="shrink-0 p-1.5 rounded-md text-arc-slate-400 hover:text-arc-navy-800 hover:bg-arc-slate-100 transition-colors"
+                                >
+                                  <Copy className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+
+                              {q.mediaUrl && (
+                                <div className="mt-3 rounded-lg border border-arc-slate-200 overflow-hidden bg-arc-slate-50">
+                                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-arc-slate-100 border-b border-arc-slate-200">
+                                    <ImageIcon className="h-3.5 w-3.5 text-arc-slate-500" />
+                                    <span className="text-xs font-medium text-arc-slate-600">
+                                      Page {q.pageNumber ?? "?"} — rendered from original PDF
+                                    </span>
+                                  </div>
+                                  {q.imageMappingReason && (
+                                    <p className="px-3 py-1.5 text-xs text-arc-slate-500 border-b border-arc-slate-200 bg-white">
+                                      <strong>Why this image:</strong> {q.imageMappingReason}
+                                    </p>
+                                  )}
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={q.mediaUrl}
+                                    alt={`Page ${q.pageNumber ?? ""} from original PDF`}
+                                    className="w-full h-auto max-h-80 object-contain"
+                                  />
+                                </div>
+                              )}
 
                               {q.choices && q.choices.length > 0 && (
                                 <div className="space-y-1 mt-2">

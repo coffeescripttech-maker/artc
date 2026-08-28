@@ -12,6 +12,7 @@
   "dependencies": {
     "@aratc/database": "workspace:*",
     "@aratc/shared": "workspace:*",
+    "@napi-rs/canvas": "^1.0.8",
     "@types/multer": "^2.2.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -19,6 +20,7 @@
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.2.0",
+    "pdfjs-dist": "^6.2.108",
     "unpdf": "^1.8.1",
     "zod": "^3.23.8"
   },

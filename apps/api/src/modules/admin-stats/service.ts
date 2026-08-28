@@ -1,5 +1,17 @@
 import { prisma } from "@aratc/database";
 
+// Native date helpers — avoids pulling in date-fns as a new dependency
+function startOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+function subDays(date: Date, days: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() - days);
+  return d;
+}
+
 /**
  * Real platform-wide numbers for the admin dashboard. Everything comes from
  * the database in one transaction — no mock data.
@@ -77,6 +89,138 @@ export async function getOverview() {
     },
   });
 
+  // --- Content Health: groupBy status for each content model ---
+  const lessonsByStatusQuery = prisma.lesson.groupBy({ by: ["status"], _count: true });
+  const subjectsByStatusQuery = prisma.subject.groupBy({ by: ["status"], _count: true });
+  const modulesByStatusQuery = prisma.module.groupBy({ by: ["status"], _count: true });
+  const topicsByStatusQuery = prisma.topic.groupBy({ by: ["status"], _count: true });
+  const assessmentsByStatusQuery = prisma.assessment.groupBy({ by: ["status"], _count: true });
+  const passagesByStatusQuery = prisma.passage.groupBy({ by: ["status"], _count: true });
+
+  // --- Needs Attention: problem counts ---
+  const draftLessonsCountQuery = prisma.lesson.count({ where: { status: "DRAFT" } });
+  const questionsPendingReviewQuery = prisma.question.count({ where: { status: "UNDER_REVIEW" } });
+  const modulesWithoutTopicsQuery = prisma.module.count({ where: { topics: { none: {} } } });
+  const lessonsPendingReviewQuery = prisma.lesson.count({ where: { status: "UNDER_REVIEW" } });
+  const assessmentsDraftQuery = prisma.assessment.count({ where: { status: "DRAFT" } });
+
+  // --- Recent Lessons (8 most recently updated, with deep includes) ---
+  const recentLessonsQuery = prisma.lesson.findMany({
+    orderBy: { updatedAt: "desc" },
+    take: 8,
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      updatedAt: true,
+      type: true,
+      topic: {
+        select: {
+          name: true,
+          module: {
+            select: {
+              name: true,
+              subject: {
+                select: {
+                  name: true,
+                  curriculumItems: {
+                    where: { curriculum: { status: "PUBLISHED" } },
+                    select: {
+                      curriculum: {
+                        select: {
+                          id: true,
+                          name: true,
+                          program: { select: { id: true, name: true } },
+                        },
+                      },
+                    },
+                    take: 1,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // --- Curriculum Overview (top 3 levels: Program → Curriculum → Subject) ---
+  // Curriculum has items: CurriculumItem[] → subject, so we traverse
+  // through items to reach subjects and count their modules via _count.
+  const curriculumOverviewQuery = prisma.program.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      curriculums: {
+        where: { status: "PUBLISHED" },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          name: true,
+          gradeLevel: true,
+          stage: true,
+          status: true,
+          updatedAt: true,
+          items: {
+            where: { subject: { status: "PUBLISHED" } },
+            select: {
+              subject: {
+                select: {
+                  id: true,
+                  name: true,
+                  updatedAt: true,
+                  modules: { select: { id: true } },
+                },
+              },
+            },
+          },
+        },
+      },
+      learnerProfiles: {
+        select: { id: true },
+      },
+    },
+  });
+
+  // --- Student Overview ---
+  const startOfToday = startOfDay(new Date());
+  const sevenDaysAgo = subDays(startOfToday, 6);
+
+  const activeStudentsTodayQuery = prisma.progress.count({
+    where: { lastActivityAt: { gte: startOfToday } },
+  });
+  const learningActivityTodayQuery = prisma.progress.count({
+    where: { lastActivityAt: { gte: startOfToday } },
+  });
+  const avgScoreQuery = prisma.assessmentAttempt.aggregate({
+    _avg: { percentage: true },
+    where: {
+      status: "COMPLETED",
+      percentage: { not: null },
+    },
+  });
+  const totalLearnerProfilesQuery = prisma.learnerProfile.count();
+  const enrolledStudentsQuery = prisma.enrollment.count({
+    where: { status: "ACTIVE" },
+  });
+
+  // --- 7-Day Activity Chart ---
+  const attemptsLast7DaysQuery = prisma.assessmentAttempt.findMany({
+    where: {
+      status: "COMPLETED",
+      createdAt: { gte: sevenDaysAgo },
+    },
+    select: { createdAt: true },
+  });
+  const progressLast7DaysQuery = prisma.progress.findMany({
+    where: { lastActivityAt: { gte: sevenDaysAgo } },
+    select: { lastActivityAt: true },
+  });
+
   const [
     totalUsers,
     usersByStatusRows,
@@ -95,6 +239,26 @@ export async function getOverview() {
     recentQuestions,
     recentAttempts,
     recentPrograms,
+    lessonsByStatusRows,
+    subjectsByStatusRows,
+    modulesByStatusRows,
+    topicsByStatusRows,
+    assessmentsByStatusRows,
+    passagesByStatusRows,
+    draftLessonsCount,
+    questionsPendingReview,
+    modulesWithoutTopics,
+    lessonsPendingReview,
+    assessmentsDraft,
+    recentLessons,
+    curriculumOverview,
+    activeStudentsToday,
+    learningActivityToday,
+    avgScoreResult,
+    totalLearnerProfiles,
+    enrolledStudents,
+    attemptsLast7Days,
+    progressLast7Days,
   ] = await prisma.$transaction([
     totalUsersQuery,
     usersByStatusQuery,
@@ -113,6 +277,26 @@ export async function getOverview() {
     recentQuestionsQuery,
     recentAttemptsQuery,
     recentProgramsQuery,
+    lessonsByStatusQuery,
+    subjectsByStatusQuery,
+    modulesByStatusQuery,
+    topicsByStatusQuery,
+    assessmentsByStatusQuery,
+    passagesByStatusQuery,
+    draftLessonsCountQuery,
+    questionsPendingReviewQuery,
+    modulesWithoutTopicsQuery,
+    lessonsPendingReviewQuery,
+    assessmentsDraftQuery,
+    recentLessonsQuery,
+    curriculumOverviewQuery,
+    activeStudentsTodayQuery,
+    learningActivityTodayQuery,
+    avgScoreQuery,
+    totalLearnerProfilesQuery,
+    enrolledStudentsQuery,
+    attemptsLast7DaysQuery,
+    progressLast7DaysQuery,
   ]);
 
   // Map role ids to names
@@ -142,6 +326,157 @@ export async function getOverview() {
   for (const row of questionsByStatusRows) {
     questionsByStatus[row.status] = row._count;
   }
+
+  // Helper: convert groupBy rows → status count object
+  const rowsToStatusCounts = (rows: { status: string; _count: number }[]) => {
+    const map: Record<string, number> = {};
+    for (const row of rows) {
+      map[row.status] = row._count;
+    }
+    return {
+      total: rows.reduce((sum, r) => sum + r._count, 0),
+      published: map.PUBLISHED ?? 0,
+      draft: map.DRAFT ?? 0,
+      underReview: map.UNDER_REVIEW ?? 0,
+      archived: map.ARCHIVED ?? 0,
+    };
+  };
+
+  // Content Health
+  const contentHealth = {
+    lessons: rowsToStatusCounts(lessonsByStatusRows as any[]),
+    questions: rowsToStatusCounts(questionsByStatusRows as any[]),
+    subjects: rowsToStatusCounts(subjectsByStatusRows as any[]),
+    modules: rowsToStatusCounts(modulesByStatusRows as any[]),
+    topics: rowsToStatusCounts(topicsByStatusRows as any[]),
+    assessments: rowsToStatusCounts(assessmentsByStatusRows as any[]),
+    passages: rowsToStatusCounts(passagesByStatusRows as any[]),
+    aggregated: {
+      publishedPercent: 0,
+      draftPercent: 0,
+      reviewPercent: 0,
+      archivedPercent: 0,
+    },
+  };
+
+  // Aggregated percentages across all content models
+  const allModels = [
+    contentHealth.lessons,
+    contentHealth.questions,
+    contentHealth.subjects,
+    contentHealth.modules,
+    contentHealth.topics,
+    contentHealth.assessments,
+    contentHealth.passages,
+  ];
+  const totalContent = allModels.reduce((sum, m) => sum + m.total, 0) || 1;
+  contentHealth.aggregated = {
+    publishedPercent: Math.round((allModels.reduce((sum, m) => sum + m.published, 0) / totalContent) * 100),
+    draftPercent: Math.round((allModels.reduce((sum, m) => sum + m.draft, 0) / totalContent) * 100),
+    reviewPercent: Math.round((allModels.reduce((sum, m) => sum + m.underReview, 0) / totalContent) * 100),
+    archivedPercent: Math.round((allModels.reduce((sum, m) => sum + m.archived, 0) / totalContent) * 100),
+  };
+
+  // Needs Attention
+  const needsAttention = [
+    {
+      id: "draft-lessons",
+      label: "Lessons in draft status",
+      count: draftLessonsCount,
+      severity: draftLessonsCount > 10 ? "danger" as const : "warning" as const,
+      href: "/admin/lessons?status=DRAFT",
+    },
+    {
+      id: "questions-pending-review",
+      label: "Questions pending review",
+      count: questionsPendingReview,
+      severity: questionsPendingReview > 50 ? "danger" as const : "warning" as const,
+      href: "/admin/question-bank?status=UNDER_REVIEW",
+    },
+    {
+      id: "lessons-pending-review",
+      label: "Lessons pending review",
+      count: lessonsPendingReview,
+      severity: lessonsPendingReview > 5 ? "warning" as const : "info" as const,
+      href: "/admin/lessons?status=UNDER_REVIEW",
+    },
+    {
+      id: "modules-no-topics",
+      label: "Modules with no topics",
+      count: modulesWithoutTopics,
+      severity: modulesWithoutTopics > 0 ? "warning" as const : "info" as const,
+      href: "/admin/modules",
+    },
+    {
+      id: "assessments-draft",
+      label: "Assessments in draft",
+      count: assessmentsDraft,
+      severity: assessmentsDraft > 10 ? "warning" as const : "info" as const,
+      href: "/admin/assessments?status=DRAFT",
+    },
+  ].filter((item) => item.count > 0);
+
+  // Curriculum Overview (transform to match spec)
+  const curriculumOverviewData = curriculumOverview.map((program) => ({
+    id: program.id,
+    name: program.name,
+    status: program.status,
+    learnerCount: program.learnerProfiles.length,
+    curriculums: program.curriculums.map((curr: any) => ({
+      id: curr.id,
+      name: curr.name,
+      gradeLevel: curr.gradeLevel ?? undefined,
+      stage: curr.stage,
+      status: curr.status,
+      lastUpdated: curr.updatedAt,
+      subjects: curr.items.map((item: any) => ({
+        id: item.subject.id,
+        name: item.subject.name,
+        moduleCount: item.subject.modules.length,
+        lastUpdated: item.subject.updatedAt,
+      })),
+    })),
+  }));
+
+  // Recent Lessons
+  const recentLessonsData = recentLessons.map((lesson: any) => {
+    const subject = lesson.topic?.module?.subject;
+    const module = lesson.topic?.module;
+    const curriculum = lesson.topic?.module?.subject?.curriculumItems?.[0]?.curriculum;
+    const program = curriculum?.program;
+    const gradeLevel = curriculum?.gradeLevel;
+    return {
+      id: lesson.id,
+      title: lesson.title,
+      type: lesson.type,
+      subjectName: subject?.name ?? "Unknown Subject",
+      moduleName: module?.name ?? "Unknown Module",
+      topicName: lesson.topic?.name ?? "Unknown Topic",
+      programName: program?.name ?? "Unassigned",
+      gradeLevel: gradeLevel ?? undefined,
+      status: lesson.status,
+      updatedAt: lesson.updatedAt,
+    };
+  });
+
+  // 7-Day Activity Chart
+  const dayMap: Record<string, { date: string; attempts: number; activeLearners: number }> = {};
+  for (let i = 0; i <= 6; i++) {
+    const d = subDays(startOfToday, i);
+    const key = d.toISOString().split("T")[0];
+    dayMap[key] = { date: key, attempts: 0, activeLearners: 0 };
+  }
+
+  for (const attempt of attemptsLast7Days) {
+    const key = attempt.createdAt.toISOString().split("T")[0];
+    if (dayMap[key]) dayMap[key].attempts += 1;
+  }
+  for (const prog of progressLast7Days) {
+    const key = prog.lastActivityAt.toISOString().split("T")[0];
+    if (dayMap[key]) dayMap[key].activeLearners += 1;
+  }
+
+  const activityChart = Object.values(dayMap).sort((a, b) => (a.date > b.date ? 1 : -1));
 
   // Recent activity — merged, createdAt desc, capped at 8
   const activity = [
@@ -204,6 +539,8 @@ export async function getOverview() {
       completedAttempts,
       enrollments: totalEnrollments,
       batches: totalBatches,
+      learnerProfiles: totalLearnerProfiles,
+      activeEnrollments: enrolledStudents,
     },
     usersByStatus,
     questionsByStatus,
@@ -218,5 +555,18 @@ export async function getOverview() {
       roles: u.roles.map((r) => r.role.name),
     })),
     recentActivity: activity,
+    contentHealth,
+    needsAttention,
+    curriculumOverview: curriculumOverviewData,
+    recentLessons: recentLessonsData,
+    studentOverview: {
+      activeStudentsToday,
+      learningActivityToday,
+      completedAssessments: completedAttempts,
+      averageScore: avgScoreResult._avg.percentage ?? 0,
+      enrolledStudents,
+      totalLearnerProfiles,
+    },
+    activityChart,
   };
 }

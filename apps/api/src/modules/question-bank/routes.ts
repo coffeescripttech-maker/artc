@@ -20,7 +20,13 @@ import {
 } from "./controller";
 import { authenticate, requireRole } from "../../middleware/auth";
 import { upload } from "../../middleware/upload";
-import { previewExtraction, importQuestions } from "../question-import/service";
+import {
+  previewExtraction,
+  previewExtractionSmart,
+  previewExtractionStructured,
+  previewExtractionMinerU,
+  importQuestions,
+} from "../question-import/service";
 import { extractTextFromPdf } from "../utils/pdf";
 
 const router: IRouter = Router();
@@ -31,12 +37,7 @@ const router: IRouter = Router();
 // ============================================================
 
 /** Roles allowed to import questions from PDF */
-const importRoles = requireRole(
-  "super_admin",
-  "school_admin",
-  "content_admin",
-  "teacher"
-);
+const importRoles = requireRole("super_admin", "school_admin", "content_admin", "teacher");
 
 /**
  * POST /questions/import/extract-text
@@ -50,9 +51,7 @@ router.post(
   async (req, res, next) => {
     try {
       if (!req.file) {
-        return res
-          .status(400)
-          .json({ error: { message: "No file uploaded", code: 400 } });
+        return res.status(400).json({ error: { message: "No file uploaded", code: 400 } });
       }
 
       // Basic PDF signature check — catches renamed non-PDF files early
@@ -72,10 +71,7 @@ router.post(
       } catch (err) {
         return res.status(422).json({
           error: {
-            message:
-              err instanceof Error
-                ? err.message
-                : "Could not extract text from this PDF.",
+            message: err instanceof Error ? err.message : "Could not extract text from this PDF.",
             code: 422,
           },
         });
@@ -105,21 +101,91 @@ router.post(
 /**
  * POST /questions/import/preview
  * Send extracted text to Gemini for structured question extraction.
+ *
+ * `mode` (multipart text field, default "smart"):
+ *  - "smart":     PDF structure + original PDF attached to Gemini (vision).
+ *                 Best quality — reads diagrams, scanned pages, formulas.
+ *  - "budget":    PDF parsed locally (pdfjs ≈ PyMuPDF); only the structured
+ *                 text/blocks/image-ids are sent to Gemini (text-only call).
+ *                 Much cheaper — AI references images by id and the backend
+ *                 attaches the real bounding boxes. Scanned pages are
+ *                 detected and reported as warnings.
+ *  - "mineru":    MinerU high-fidelity local parse (layout-aware Markdown,
+ *                 OCR, HTML tables, LaTeX formulas, figure extraction with
+ *                 captions) + text-only AI call. Best accuracy for
+ *                 scanned/complex PDFs at Budget-mode cost. Requires MinerU
+ *                 to be enabled server-side (MINERU_ENABLED).
+ *  - "text":      Legacy plain-text mode (no file needed, vision only when
+ *                 a file is attached).
  */
 router.post(
   "/import/preview",
   authenticate,
   importRoles,
+  upload.single("file"),
   async (req, res, next) => {
     try {
-      const { pdfText, programName, subjectName } = req.body;
-      if (!pdfText || typeof pdfText !== "string") {
+      // Multipart: pdfText/programName/subjectName/mode arrive as text fields,
+      // file is the PDF (required for smart/budget, optional for plain).
+      const pdfText = req.body.pdfText;
+      const programName = req.body.programName || undefined;
+      const subjectName = req.body.subjectName || undefined;
+      const mode = (req.body.mode || "smart").toLowerCase();
+      const pdfBuffer = req.file?.buffer;
+      if (process.env.DEBUG_PDF === "1") {
+        console.log(
+          "[preview] mode:",
+          mode,
+          "pdfBuffer received:",
+          pdfBuffer?.length,
+          "bytes, pdfText:",
+          pdfText?.length,
+          "chars"
+        );
+      }
+
+      let result;
+      if (mode === "budget") {
+        // Budget/structured mode: local parsing + text-only AI call.
+        if (!pdfBuffer || pdfBuffer.length === 0) {
+          return res.status(400).json({
+            error: {
+              message: "Budget mode requires the original PDF file to be attached.",
+              code: 400,
+            },
+          });
+        }
+        result = await previewExtractionStructured(
+          pdfBuffer,
+          programName,
+          subjectName,
+          typeof pdfText === "string" ? pdfText : undefined
+        );
+      } else if (mode === "mineru") {
+        // MinerU mode: high-fidelity local parse (OCR/tables/formulas/figures)
+        // followed by a single text-only AI call.
+        if (!pdfBuffer || pdfBuffer.length === 0) {
+          return res.status(400).json({
+            error: {
+              message: "MinerU mode requires the original PDF file to be attached.",
+              code: 400,
+            },
+          });
+        }
+        result = await previewExtractionMinerU(pdfBuffer, programName, subjectName);
+      } else if (pdfBuffer && pdfBuffer.length > 0) {
+        // Smart extraction: parses PDF structure (text blocks + image
+        // bounding boxes), sends to Gemini with visual + structured context,
+        // then renders only the specific image regions.
+        result = await previewExtractionSmart(pdfBuffer, programName, subjectName);
+      } else if (pdfText && typeof pdfText === "string") {
+        result = await previewExtraction(pdfText, programName, subjectName);
+      } else {
         return res.status(400).json({
-          error: { message: "pdfText is required", code: 400 },
+          error: { message: "Either a PDF file or pdfText is required", code: 400 },
         });
       }
 
-      const result = await previewExtraction(pdfText, programName, subjectName);
       res.json(result);
     } catch (err) {
       next(err);
@@ -131,42 +197,37 @@ router.post(
  * POST /questions/import/bulk
  * Import reviewed questions into the question bank.
  */
-router.post(
-  "/import/bulk",
-  authenticate,
-  importRoles,
-  async (req, res, next) => {
-    try {
-      if (!req.body.questions || !Array.isArray(req.body.questions)) {
-        return res.status(400).json({
-          error: { message: "questions array is required", code: 400 },
-        });
-      }
-      if (!req.body.programId) {
-        return res.status(400).json({
-          error: { message: "programId is required", code: 400 },
-        });
-      }
-
-      const result = await importQuestions({
-        questions: req.body.questions,
-        programId: req.body.programId,
-        subjectId: req.body.subjectId ?? null,
-        topicId: req.body.topicId ?? null,
-        authorId: req.userId!,
+router.post("/import/bulk", authenticate, importRoles, async (req, res, next) => {
+  try {
+    if (!req.body.questions || !Array.isArray(req.body.questions)) {
+      return res.status(400).json({
+        error: { message: "questions array is required", code: 400 },
       });
-
-      res.status(201).json({
-        message: `Imported ${result.created} questions`,
-        created: result.created,
-        skipped: result.skipped,
-        errors: result.errors,
-      });
-    } catch (err) {
-      next(err);
     }
+    if (!req.body.programId) {
+      return res.status(400).json({
+        error: { message: "programId is required", code: 400 },
+      });
+    }
+
+    const result = await importQuestions({
+      questions: req.body.questions,
+      programId: req.body.programId,
+      subjectId: req.body.subjectId ?? null,
+      topicId: req.body.topicId ?? null,
+      authorId: req.userId!,
+    });
+
+    res.status(201).json({
+      message: `Imported ${result.created} questions`,
+      created: result.created,
+      skipped: result.skipped,
+      errors: result.errors,
+    });
+  } catch (err) {
+    next(err);
   }
-);
+});
 
 // ============================================================
 // Public routes (for published questions)
@@ -196,7 +257,17 @@ router.delete("/:id", authenticate, requireRole("super_admin"), remove);
 
 // Question links
 router.post("/:id/links", authenticate, requireRole("content_admin", "super_admin"), createLink);
-router.patch("/links/:linkId", authenticate, requireRole("content_admin", "super_admin"), updateLink);
-router.delete("/links/:linkId", authenticate, requireRole("content_admin", "super_admin"), removeLink);
+router.patch(
+  "/links/:linkId",
+  authenticate,
+  requireRole("content_admin", "super_admin"),
+  updateLink
+);
+router.delete(
+  "/links/:linkId",
+  authenticate,
+  requireRole("content_admin", "super_admin"),
+  removeLink
+);
 
 export { router as questionBankRoutes };

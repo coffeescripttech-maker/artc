@@ -291,6 +291,7 @@ model Question {
   explanation         String?
   hint                String?
   tags                String[]
+  mediaUrl            String?                  @map("media_url")
   status              ContentStatus            @default(DRAFT)
   authorId            String                   @map("author_id")
   reviewerId          String?                  @map("reviewer_id")

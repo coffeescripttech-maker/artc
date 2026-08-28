@@ -24,7 +24,7 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
   };
 
   // Use provided token, or auto-get from localStorage (unless _skipAuth is true)
-  const authToken = _skipAuth ? undefined : (token || getToken());
+  const authToken = _skipAuth ? undefined : token || getToken();
   if (authToken) {
     (headers as Record<string, string>)["Authorization"] = `Bearer ${authToken}`;
   }
@@ -62,8 +62,7 @@ export const subjectsApi = {
     apiFetch(`/subjects/${id}/publish`, { method: "PATCH", token }),
   archive: (id: string, token?: string) =>
     apiFetch(`/subjects/${id}/archive`, { method: "PATCH", token }),
-  delete: (id: string, token?: string) =>
-    apiFetch(`/subjects/${id}`, { method: "DELETE", token }),
+  delete: (id: string, token?: string) => apiFetch(`/subjects/${id}`, { method: "DELETE", token }),
 };
 
 // ============================================================
@@ -86,11 +85,23 @@ export const curriculumApi = {
   delete: (id: string, token?: string) =>
     apiFetch(`/curriculums/${id}`, { method: "DELETE", token }),
   addItem: (curriculumId: string, data: any, token?: string) =>
-    apiFetch(`/curriculums/${curriculumId}/items`, { method: "POST", body: JSON.stringify(data), token }),
+    apiFetch(`/curriculums/${curriculumId}/items`, {
+      method: "POST",
+      body: JSON.stringify(data),
+      token,
+    }),
   updateItem: (curriculumId: string, itemId: string, data: any, token?: string) =>
-    apiFetch(`/curriculums/${curriculumId}/items/${itemId}`, { method: "PATCH", body: JSON.stringify(data), token }),
+    apiFetch(`/curriculums/${curriculumId}/items/${itemId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+      token,
+    }),
   reorderItems: (curriculumId: string, itemIds: string[], token?: string) =>
-    apiFetch(`/curriculums/${curriculumId}/items`, { method: "PUT", body: JSON.stringify(itemIds), token }),
+    apiFetch(`/curriculums/${curriculumId}/items`, {
+      method: "PUT",
+      body: JSON.stringify(itemIds),
+      token,
+    }),
   removeItem: (curriculumId: string, itemId: string, token?: string) =>
     apiFetch(`/curriculums/${curriculumId}/items/${itemId}`, { method: "DELETE", token }),
 };
@@ -110,18 +121,20 @@ export const modulesApi = {
     apiFetch(`/modules/${id}/publish`, { method: "PATCH", token }),
   archive: (id: string, token?: string) =>
     apiFetch(`/modules/${id}/archive`, { method: "PATCH", token }),
-  delete: (id: string, token?: string) =>
-    apiFetch(`/modules/${id}`, { method: "DELETE", token }),
+  delete: (id: string, token?: string) => apiFetch(`/modules/${id}`, { method: "DELETE", token }),
   reorder: (subjectId: string, moduleIds: string[], token?: string) =>
-    apiFetch(`/modules/subject/${subjectId}/reorder`, { method: "PUT", body: JSON.stringify(moduleIds), token }),
+    apiFetch(`/modules/subject/${subjectId}/reorder`, {
+      method: "PUT",
+      body: JSON.stringify(moduleIds),
+      token,
+    }),
 };
 
 // ============================================================
 // Topics API
 // ============================================================
 export const topicsApi = {
-  list: (moduleId?: string) =>
-    apiFetch(moduleId ? `/topics?moduleId=${moduleId}` : "/topics"),
+  list: (moduleId?: string) => apiFetch(moduleId ? `/topics?moduleId=${moduleId}` : "/topics"),
   listAll: () => apiFetch("/topics/all"),
   getById: (id: string) => apiFetch(`/topics/${id}`),
   create: (data: any, token?: string) =>
@@ -132,18 +145,20 @@ export const topicsApi = {
     apiFetch(`/topics/${id}/publish`, { method: "PATCH", token }),
   archive: (id: string, token?: string) =>
     apiFetch(`/topics/${id}/archive`, { method: "PATCH", token }),
-  delete: (id: string, token?: string) =>
-    apiFetch(`/topics/${id}`, { method: "DELETE", token }),
+  delete: (id: string, token?: string) => apiFetch(`/topics/${id}`, { method: "DELETE", token }),
   reorder: (moduleId: string, topicIds: string[], token?: string) =>
-    apiFetch(`/topics/module/${moduleId}/reorder`, { method: "PUT", body: JSON.stringify(topicIds), token }),
+    apiFetch(`/topics/module/${moduleId}/reorder`, {
+      method: "PUT",
+      body: JSON.stringify(topicIds),
+      token,
+    }),
 };
 
 // ============================================================
 // Lessons API
 // ============================================================
 export const lessonsApi = {
-  list: (topicId?: string) =>
-    apiFetch(topicId ? `/lessons?topicId=${topicId}` : "/lessons"),
+  list: (topicId?: string) => apiFetch(topicId ? `/lessons?topicId=${topicId}` : "/lessons"),
   getById: (id: string) => apiFetch(`/lessons/${id}`),
   getBySubject: (subjectId: string) => apiFetch(`/lessons/subject/${subjectId}`),
   getStats: (topicId: string) => apiFetch(`/lessons/topic/${topicId}/stats`),
@@ -155,10 +170,13 @@ export const lessonsApi = {
     apiFetch(`/lessons/${id}/publish`, { method: "PATCH", token }),
   archive: (id: string, token?: string) =>
     apiFetch(`/lessons/${id}/archive`, { method: "PATCH", token }),
-  delete: (id: string, token?: string) =>
-    apiFetch(`/lessons/${id}`, { method: "DELETE", token }),
+  delete: (id: string, token?: string) => apiFetch(`/lessons/${id}`, { method: "DELETE", token }),
   reorder: (topicId: string, lessonIds: string[], token?: string) =>
-    apiFetch(`/lessons/topic/${topicId}/reorder`, { method: "PUT", body: JSON.stringify(lessonIds), token }),
+    apiFetch(`/lessons/topic/${topicId}/reorder`, {
+      method: "PUT",
+      body: JSON.stringify(lessonIds),
+      token,
+    }),
   // Lesson question responses (Phase 4)
   respondToQuestion: (
     lessonId: string,
@@ -173,10 +191,12 @@ export const lessonsApi = {
     }),
   getQuestionResponse: async (lessonId: string, questionId: string, token?: string) => {
     try {
-      return await apiFetch<{ answer?: unknown; isCorrect: boolean; pointsEarned: number; attemptedAt: string }>(
-        `/lessons/${lessonId}/questions/${questionId}/response`,
-        { token }
-      );
+      return await apiFetch<{
+        answer?: unknown;
+        isCorrect: boolean;
+        pointsEarned: number;
+        attemptedAt: string;
+      }>(`/lessons/${lessonId}/questions/${questionId}/response`, { token });
     } catch (e: any) {
       // 404 = no prior response recorded; treat as "no previous answer"
       if (e?.message?.includes("404") || e?.message?.includes("No response recorded")) {
@@ -192,8 +212,7 @@ export const lessonsApi = {
 // ============================================================
 export const progressApi = {
   getLesson: (lessonId: string) => apiFetch(`/lessons/${lessonId}/progress`),
-  getLessonWithQuestions: (lessonId: string) =>
-    apiFetch(`/lessons/${lessonId}/progress/questions`),
+  getLessonWithQuestions: (lessonId: string) => apiFetch(`/lessons/${lessonId}/progress/questions`),
   setLesson: (lessonId: string, completed: boolean, token?: string) =>
     apiFetch(`/lessons/${lessonId}/progress`, {
       method: "PUT",
@@ -209,13 +228,10 @@ export const progressApi = {
 // ============================================================
 export const progressionApi = {
   get: (programId?: string) =>
-    apiFetch(
-      `/progression${programId ? `?programId=${programId}` : ""}`
-    ),
+    apiFetch(`/progression${programId ? `?programId=${programId}` : ""}`),
   weakTopics: (programId?: string) =>
     apiFetch(`/progression/weak-topics${programId ? `?programId=${programId}` : ""}`),
-  activity: (limit?: number) =>
-    apiFetch(`/progression/activity${limit ? `?limit=${limit}` : ""}`),
+  activity: (limit?: number) => apiFetch(`/progression/activity${limit ? `?limit=${limit}` : ""}`),
   recommendations: (assessmentId: string) =>
     apiFetch(`/progression/assessments/${assessmentId}/recommendations`),
 };
@@ -256,11 +272,7 @@ export const batchesApi = {
     apiFetch("/batches", { method: "POST", body: JSON.stringify(data), token }),
   myReport: () => apiFetch("/batches/my/report"),
   getById: (id: string): Promise<BatchDetail> => apiFetch(`/batches/${id}`),
-  addMember: (
-    id: string,
-    email: string,
-    token?: string
-  ): Promise<BatchMemberRow> =>
+  addMember: (id: string, email: string, token?: string): Promise<BatchMemberRow> =>
     apiFetch(`/batches/${id}/members`, {
       method: "POST",
       body: JSON.stringify({ email }),
@@ -284,7 +296,13 @@ export const mediaApi = {
 // Question Bank API
 // ============================================================
 export const questionsApi = {
-  list: (filters?: { subjectId?: string; topicId?: string; type?: string; difficulty?: string; status?: string }) => {
+  list: (filters?: {
+    subjectId?: string;
+    topicId?: string;
+    type?: string;
+    difficulty?: string;
+    status?: string;
+  }) => {
     const params = new URLSearchParams();
     if (filters?.subjectId) params.append("subjectId", filters.subjectId);
     if (filters?.topicId) params.append("topicId", filters.topicId);
@@ -305,16 +323,23 @@ export const questionsApi = {
   update: (id: string, data: any, token?: string) =>
     apiFetch(`/questions/${id}`, { method: "PUT", body: JSON.stringify(data), token }),
   review: (id: string, status: "PUBLISHED" | "UNDER_REVIEW", token?: string) =>
-    apiFetch(`/questions/${id}/review`, { method: "PATCH", body: JSON.stringify({ status }), token }),
+    apiFetch(`/questions/${id}/review`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+      token,
+    }),
   publish: (id: string, token?: string) =>
     apiFetch(`/questions/${id}/publish`, { method: "PATCH", token }),
   archive: (id: string, token?: string) =>
     apiFetch(`/questions/${id}/archive`, { method: "PATCH", token }),
-  delete: (id: string, token?: string) =>
-    apiFetch(`/questions/${id}`, { method: "DELETE", token }),
+  delete: (id: string, token?: string) => apiFetch(`/questions/${id}`, { method: "DELETE", token }),
   // Links
   createLink: (questionId: string, data: any, token?: string) =>
-    apiFetch(`/questions/${questionId}/links`, { method: "POST", body: JSON.stringify(data), token }),
+    apiFetch(`/questions/${questionId}/links`, {
+      method: "POST",
+      body: JSON.stringify(data),
+      token,
+    }),
   updateLink: (linkId: string, data: any, token?: string) =>
     apiFetch(`/questions/links/${linkId}`, { method: "PATCH", body: JSON.stringify(data), token }),
   removeLink: (linkId: string, token?: string) =>
@@ -346,16 +371,38 @@ export const questionsApi = {
     return response.json();
   },
 
-  /** Step 2 — send reviewed PDF text to Gemini for structured extraction */
+  /** Step 2 — send reviewed PDF text to Gemini for structured extraction.
+   *  Sends multipart/form-data so the original PDF can be re-attached for
+   *  vision analysis (images, diagrams, formulas). The file is optional.
+   *  mode: "smart" (vision, best quality), "budget" (structured text-only,
+   *  much cheaper, backend owns coordinates) or "mineru" (MinerU local
+   *  parse — OCR/tables/formulas — plus a text-only AI call). */
   previewExtraction: (payload: {
     pdfText: string;
     programName?: string | null;
     subjectName?: string | null;
-  }): Promise<ImportPreviewResult> =>
-    apiFetch("/questions/import/preview", {
+    file?: File | null;
+    mode?: "smart" | "budget" | "mineru";
+  }): Promise<ImportPreviewResult> => {
+    const formData = new FormData();
+    formData.append("pdfText", payload.pdfText);
+    if (payload.programName) formData.append("programName", payload.programName);
+    if (payload.subjectName) formData.append("subjectName", payload.subjectName);
+    if (payload.file) formData.append("file", payload.file);
+    if (payload.mode) formData.append("mode", payload.mode);
+
+    return fetch(`${API_BASE_URL}/questions/import/preview`, {
       method: "POST",
-      body: JSON.stringify(payload),
-    }),
+      headers: { Authorization: `Bearer ${getToken()}` },
+      body: formData,
+    }).then(async (response) => {
+      if (!response.ok) {
+        const error: any = await response.json().catch(() => ({}));
+        throw new Error(error?.error?.message || error?.message || `HTTP error ${response.status}`);
+      }
+      return response.json() as Promise<ImportPreviewResult>;
+    });
+  },
 
   /** Step 3 — import reviewed questions into the question bank */
   importBulk: (payload: {
@@ -389,6 +436,16 @@ export interface ExtractedQuestionPreview {
   hasImage?: boolean;
   confidence?: number;
   extractionNote?: string | null;
+  /** Structured flags set by the backend normalizer (e.g. "stem-missing",
+   *  "duplicate"). Admin-review/debug signal only. */
+  extractionIssues?: string[];
+  /** Budget mode: AI's confidence (0-1) that the referenced image(s) belong
+   *  to this question. Admin-review/debug signal only. */
+  imageMappingConfidence?: number | null;
+  /** Budget mode: why the AI associated the image(s) with this question.
+   *  Admin-review/debug signal only; never shown to students. */
+  imageMappingReason?: string | null;
+  mediaUrl?: string | null;
 }
 
 export interface ImportPreviewResult {
@@ -430,21 +487,38 @@ export const assessmentsApi = {
     apiFetch(`/assessments/${id}`, { method: "DELETE", token }),
   // Questions
   addQuestion: (assessmentId: string, data: any, token?: string) =>
-    apiFetch(`/assessments/${assessmentId}/questions`, { method: "POST", body: JSON.stringify(data), token }),
+    apiFetch(`/assessments/${assessmentId}/questions`, {
+      method: "POST",
+      body: JSON.stringify(data),
+      token,
+    }),
   removeQuestion: (assessmentId: string, questionId: string, token?: string) =>
     apiFetch(`/assessments/${assessmentId}/questions/${questionId}`, { method: "DELETE", token }),
   reorderQuestions: (assessmentId: string, questionIds: string[], token?: string) =>
-    apiFetch(`/assessments/${assessmentId}/questions`, { method: "PUT", body: JSON.stringify(questionIds), token }),
+    apiFetch(`/assessments/${assessmentId}/questions`, {
+      method: "PUT",
+      body: JSON.stringify(questionIds),
+      token,
+    }),
   autoGenerate: (assessmentId: string, data: any, token?: string) =>
-    apiFetch(`/assessments/${assessmentId}/auto-generate`, { method: "POST", body: JSON.stringify(data), token }),
+    apiFetch(`/assessments/${assessmentId}/auto-generate`, {
+      method: "POST",
+      body: JSON.stringify(data),
+      token,
+    }),
   // Learner
   start: (assessmentId: string, token?: string) =>
     apiFetch(`/assessments/${assessmentId}/start`, { method: "POST", token }),
   submit: (attemptId: string, answers: any[], token?: string) =>
-    apiFetch(`/assessments/attempts/${attemptId}/submit`, { method: "POST", body: JSON.stringify({ answers }), token }),
+    apiFetch(`/assessments/attempts/${attemptId}/submit`, {
+      method: "POST",
+      body: JSON.stringify({ answers }),
+      token,
+    }),
   myAttempts: () => apiFetch(`/assessments/me/attempts`),
   getAttempt: (attemptId: string) => apiFetch(`/assessments/attempts/${attemptId}`),
-  recommendations: (assessmentId: string) => apiFetch(`/assessments/${assessmentId}/recommendations`),
+  recommendations: (assessmentId: string) =>
+    apiFetch(`/assessments/${assessmentId}/recommendations`),
 };
 
 // ============================================================
@@ -493,16 +567,28 @@ export const cetApi = {
     apiFetch(`/cet/profiles/${id}`, { method: "DELETE", token }),
   // Coverage
   addCoverage: (profileId: string, data: any, token?: string) =>
-    apiFetch(`/cet/profiles/${profileId}/coverage`, { method: "POST", body: JSON.stringify(data), token }),
+    apiFetch(`/cet/profiles/${profileId}/coverage`, {
+      method: "POST",
+      body: JSON.stringify(data),
+      token,
+    }),
   updateCoverage: (coverageId: string, data: any, token?: string) =>
-    apiFetch(`/cet/profiles/coverage/${coverageId}`, { method: "PATCH", body: JSON.stringify(data), token }),
+    apiFetch(`/cet/profiles/coverage/${coverageId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+      token,
+    }),
   removeCoverage: (coverageId: string, token?: string) =>
     apiFetch(`/cet/profiles/coverage/${coverageId}`, { method: "DELETE", token }),
 
   // Program links
   getProgramExams: (programId: string) => apiFetch(`/cet/programs/${programId}/exams`),
   linkProgramExam: (programId: string, data: any, token?: string) =>
-    apiFetch(`/cet/programs/${programId}/exams`, { method: "POST", body: JSON.stringify(data), token }),
+    apiFetch(`/cet/programs/${programId}/exams`, {
+      method: "POST",
+      body: JSON.stringify(data),
+      token,
+    }),
   unlinkProgramExam: (programId: string, examId: string, token?: string) =>
     apiFetch(`/cet/programs/${programId}/exams/${examId}`, { method: "DELETE", token }),
 };
@@ -520,10 +606,8 @@ export const programsApi = {
     apiFetch(`/programs/${id}`, { method: "PUT", body: JSON.stringify(data), token }),
   publish: (id: string, token?: string) =>
     apiFetch(`/programs/${id}/publish`, { method: "PATCH", token }),
-  delete: (id: string, token?: string) =>
-    apiFetch(`/programs/${id}`, { method: "DELETE", token }),
-  createFromTemplate: (token?: string) =>
-    apiFetch("/programs/template", { method: "POST", token }),
+  delete: (id: string, token?: string) => apiFetch(`/programs/${id}`, { method: "DELETE", token }),
+  createFromTemplate: (token?: string) => apiFetch("/programs/template", { method: "POST", token }),
   generateCetExams: (programId: string, token?: string) =>
     apiFetch(`/programs/${programId}/cet-exams`, { method: "POST", token }),
 };
@@ -532,10 +616,8 @@ export const programsApi = {
 // Passages API
 // ============================================================
 export const passagesApi = {
-  list: (token?: string) =>
-    apiFetch("/passages", { token }),
-  getById: (id: string, token?: string) =>
-    apiFetch(`/passages/${id}`, { token }),
+  list: (token?: string) => apiFetch("/passages", { token }),
+  getById: (id: string, token?: string) => apiFetch(`/passages/${id}`, { token }),
   create: (data: any, token?: string) =>
     apiFetch("/passages", { method: "POST", body: JSON.stringify(data), token }),
   update: (id: string, data: any, token?: string) =>
@@ -544,8 +626,14 @@ export const passagesApi = {
     apiFetch(`/passages/${id}/publish`, { method: "PATCH", token }),
   archive: (id: string, token?: string) =>
     apiFetch(`/passages/${id}/archive`, { method: "PATCH", token }),
-  delete: (id: string, token?: string) =>
-    apiFetch(`/passages/${id}`, { method: "DELETE", token }),
+  delete: (id: string, token?: string) => apiFetch(`/passages/${id}`, { method: "DELETE", token }),
+};
+
+// ============================================================
+// Admin Stats API
+// ============================================================
+export const adminStatsApi = {
+  getOverview: () => apiFetch<AdminStatsOverview>("/admin-stats/overview"),
 };
 
 // ============================================================
@@ -575,4 +663,146 @@ export default {
   passages: passagesApi,
   progression: progressionApi,
   settings: settingsApi,
+  adminStats: adminStatsApi,
 };
+
+// ============================================================
+// Types
+// ============================================================
+export interface StatusCounts {
+  total: number;
+  published: number;
+  draft: number;
+  underReview: number;
+  archived: number;
+}
+
+/** Aggregated content-health percentages across all content models */
+export interface AggregatedHealth {
+  publishedPercent: number;
+  draftPercent: number;
+  reviewPercent: number;
+  archivedPercent: number;
+}
+
+export interface ContentHealth {
+  lessons: StatusCounts;
+  questions: StatusCounts;
+  subjects: StatusCounts;
+  modules: StatusCounts;
+  topics: StatusCounts;
+  assessments: StatusCounts;
+  passages: StatusCounts;
+  aggregated: AggregatedHealth;
+}
+
+export interface NeedsAttentionItem {
+  id: string;
+  label: string;
+  count: number;
+  severity: "info" | "warning" | "danger";
+  href: string;
+}
+
+export interface CurriculumOverviewSubject {
+  id: string;
+  name: string;
+  moduleCount: number;
+  lastUpdated: Date | string;
+}
+
+export interface CurriculumOverviewCurriculum {
+  id: string;
+  name: string;
+  gradeLevel?: string;
+  stage: string;
+  status: string;
+  lastUpdated: Date | string;
+  subjects: CurriculumOverviewSubject[];
+}
+
+export interface CurriculumOverviewProgram {
+  id: string;
+  name: string;
+  status: string;
+  learnerCount: number;
+  curriculums: CurriculumOverviewCurriculum[];
+}
+
+export interface RecentLesson {
+  id: string;
+  title: string;
+  type: string;
+  subjectName: string;
+  moduleName: string;
+  topicName: string;
+  programName: string;
+  gradeLevel?: string;
+  status: string;
+  updatedAt: Date | string;
+}
+
+export interface StudentOverview {
+  activeStudentsToday: number;
+  learningActivityToday: number;
+  completedAssessments: number;
+  averageScore: number | null;
+  enrolledStudents: number;
+  totalLearnerProfiles: number;
+}
+
+export interface ActivityChartPoint {
+  date: string;
+  attempts: number;
+  activeLearners: number;
+}
+
+export interface AdminActivityItem {
+  kind: "user" | "question" | "attempt" | "program";
+  id: string;
+  title: string;
+  detail: string;
+  createdAt: Date | string;
+  extra: string[];
+}
+
+export interface AdminStatsOverview {
+  totals: {
+    users: number;
+    students: number;
+    parents: number;
+    teachers: number;
+    admins: number;
+    pendingTeachers: number;
+    programs: number;
+    publishedPrograms: number;
+    questions: number;
+    publishedQuestions: number;
+    assessments: number;
+    attempts: number;
+    completedAttempts: number;
+    enrollments: number;
+    batches: number;
+    learnerProfiles?: number;
+    activeEnrollments?: number;
+  };
+  usersByStatus: Record<string, number>;
+  questionsByStatus: Record<string, number>;
+  programsByStatus: Record<string, number>;
+  recentUsers: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    status: string;
+    createdAt: Date | string;
+    roles: string[];
+  }>;
+  recentActivity: AdminActivityItem[];
+  contentHealth: ContentHealth;
+  needsAttention: NeedsAttentionItem[];
+  curriculumOverview: CurriculumOverviewProgram[];
+  recentLessons: RecentLesson[];
+  studentOverview: StudentOverview;
+  activityChart: ActivityChartPoint[];
+}

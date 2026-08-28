@@ -10,7 +10,8 @@ const storage = multer.memoryStorage();
 export const upload = multer({
   storage,
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50 MB cap
+    fileSize: 50 * 1024 * 1024, // 50 MB cap (per file)
+    fieldSize: 10 * 1024 * 1024, // 10 MB cap (per text field — extracted pdfText)
   },
   fileFilter: (_req, file, callback) => {
     if (file.mimetype === "application/pdf") {

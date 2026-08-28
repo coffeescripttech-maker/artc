@@ -1,13 +1,19 @@
 import { config } from "../../config";
 
 /**
- * Core fetch to the Gemini generateContent endpoint. Shared by both the
- * plain-text and structured-output callers so error handling and
- * finish-reason logic stay in one place.
+ * Inline-data requests must stay under ~20MB total. We cap the PDF we attach
+ * at 15MB so there's headroom for the prompt + JSON output. Larger PDFs fall
+ * back to text-only extraction (with a warning surfaced to the caller).
+ */
+const MAX_PDF_INLINE_BYTES = 15 * 1024 * 1024;
+
+/**
+ * Core fetch to the Gemini generateContent endpoint. Takes the raw `parts`
+ * array so callers can attach either a single text part (plain prompt) or a
+ * text part plus an inlineData part (the original PDF, for vision).
  */
 async function requestGemini(
-  documentText: string,
-  prompt: string,
+  parts: unknown[],
   generationConfig: Record<string, unknown>
 ): Promise<string> {
   if (!config.geminiApiKey) {
@@ -18,13 +24,11 @@ async function requestGemini(
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.geminiModel}:generateContent?key=${config.geminiApiKey}`;
 
-  const fullPrompt = `${prompt}\n\n--- DOCUMENT TEXT BELOW ---\n${documentText}`;
-
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: fullPrompt }] }],
+      contents: [{ parts }],
       generationConfig: {
         temperature: 0.1,
         topP: 0.95,
@@ -70,38 +74,60 @@ async function requestGemini(
 }
 
 /** Disable thinking for Gemini 2.5 models — keeps structured JSON extraction
- * fast and the output budget fully dedicated to the response. */
-function thinkingConfigFor(model: string): Record<string, unknown> | undefined {
+ * fast and the output budget fully dedicated to the response. Returns {} on
+ * other models so the spread is always a clean record. */
+function thinkingConfigFor(model: string): Record<string, unknown> {
   return model.startsWith("gemini-2.5")
     ? { thinkingConfig: { thinkingBudget: 0 } }
-    : undefined;
+    : {};
 }
 
 /**
  * Calls the Gemini API with a text prompt and returns the raw text response.
- * Uses the modern generateContent API with a simple text-only request.
  */
 export async function callGemini(
   documentText: string,
   prompt: string
 ): Promise<string> {
-  return requestGemini(documentText, prompt, thinkingConfigFor(config.geminiModel));
+  return requestGemini(
+    [{ text: `${prompt}\n\n--- DOCUMENT TEXT BELOW ---\n${documentText}` }],
+    thinkingConfigFor(config.geminiModel)
+  );
 }
 
 /**
- * Calls Gemini with Structured Output enabled — responseMimeType set to
- * "application/json" plus an optional responseSchema. This guarantees a
- * JSON-shaped response at the API level instead of relying on prompt
- * instructions like "Return ONLY JSON", which the model may ignore.
+ * Structured-output call (JSON mode). Optionally attaches the original PDF as
+ * inline data so Gemini can read images, diagrams, graphs, tables, and
+ * formulas that text extraction misses. Silently skips the attachment when the
+ * PDF is too large for inline upload — callers surface a warning in that case.
  */
 export async function callGeminiJson(
   documentText: string,
   prompt: string,
-  responseSchema?: Record<string, unknown>
+  responseSchema?: Record<string, unknown>,
+  pdfBuffer?: Buffer
 ): Promise<string> {
-  return requestGemini(documentText, prompt, {
+  const parts: any[] = [];
+
+  if (pdfBuffer && pdfBuffer.length > 0 && pdfBuffer.length <= MAX_PDF_INLINE_BYTES) {
+    parts.push({
+      inlineData: {
+        mimeType: "application/pdf",
+        data: pdfBuffer.toString("base64"),
+      },
+    });
+  }
+
+  parts.push({ text: `${prompt}\n\n--- DOCUMENT TEXT BELOW ---\n${documentText}` });
+
+  return requestGemini(parts, {
     ...thinkingConfigFor(config.geminiModel),
     responseMimeType: "application/json",
     ...(responseSchema ? { responseSchema } : {}),
   });
+}
+
+/** Size ceiling (bytes) for attaching a PDF inline to a Gemini request. */
+export function pdfInlineSizeLimit(): number {
+  return MAX_PDF_INLINE_BYTES;
 }

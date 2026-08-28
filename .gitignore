@@ -43,3 +43,12 @@ coverage/
 # Uploaded media (local storage; use object storage/CDN in production)
 uploads/
 apps/api/uploads/
+
+# Turborepo build cache
+.turbo/
+
+# MinerU local parse output (test artifacts)
+output/
+
+# Local test fixtures / scratch files
+test_*.pdf

@@ -17,6 +17,7 @@ import { mediaRoutes } from "./modules/media/routes";
 import { UPLOAD_DIR } from "./modules/media/controller";
 import { progressionRoutes } from "./modules/progression/routes";
 import { settingsRoutes } from "./modules/settings/routes";
+import { adminStatsRoutes } from "./modules/admin-stats/routes";
 import { errorHandler } from "./middleware/error-handler";
 
 const app = express();
@@ -61,6 +62,9 @@ app.use("/api/progression", progressionRoutes);
 app.use("/progression", progressionRoutes); // Also accessible without /api prefix
 app.use("/api/settings", settingsRoutes);
 app.use("/settings", settingsRoutes); // Also accessible without /api prefix
+
+app.use("/api/admin-stats", adminStatsRoutes);
+app.use("/admin-stats", adminStatsRoutes); // Also accessible without /api prefix
 
 app.use(errorHandler);
 
