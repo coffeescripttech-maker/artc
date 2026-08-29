@@ -776,6 +776,7 @@ export interface StudentOverview {
 }
 
 export interface ActivityChartPoint {
+
   date: string;
   attempts: number;
   activeLearners: number;
@@ -830,3 +831,8 @@ export interface AdminStatsOverview {
   studentOverview: StudentOverview;
   activityChart: ActivityChartPoint[];
 }
+
+// Student-facing enrollment status (CS#9 dashboard track)
+export const enrollmentsApi = {
+  mine: () => apiFetch("/my/enrollments"),
+} as const;

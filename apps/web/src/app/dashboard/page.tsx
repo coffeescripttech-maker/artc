@@ -6,7 +6,7 @@ import { DashboardHeader, MasteryLadder } from "@/components/dashboard";
 import { Card, CardHeader, CardTitle, CardContent, Badge, Progress, Button } from "@/components/ui";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui";
 import { useAuth } from "@/contexts/auth-context";
-import { lessonsApi, progressionApi, assessmentsApi, progressApi } from "@/lib/api/client";
+import { lessonsApi, progressionApi, assessmentsApi, progressApi, enrollmentsApi } from "@/lib/api/client";
 import {
   BookOpen,
   Trophy,
@@ -90,6 +90,14 @@ interface AttemptInfo {
   status: string;
 }
 
+interface MyEnrollment {
+  id: string;
+  status: string;
+  active: boolean;
+  expiresAt: string | null;
+  program: { id: string; name: string; slug: string; status: string } | null;
+}
+
 export default function DashboardPage() {
   const [selectedTab, setSelectedTab] = useState("overview");
   const { user, isLoading } = useAuth();
@@ -98,6 +106,7 @@ export default function DashboardPage() {
   const [weakTopics, setWeakTopics] = useState<WeakTopic[]>([]);
   const [continueLessons, setContinueLessons] = useState<LessonInfo[]>([]);
   const [attempts, setAttempts] = useState<AttemptInfo[]>([]);
+  const [enrollments, setEnrollments] = useState<MyEnrollment[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
 
   const loadDashboardData = useCallback(async () => {
@@ -122,6 +131,14 @@ export default function DashboardPage() {
       setAttempts(attemptData?.slice(0, 5) || []);
     } catch (err) {
       console.error("Failed to load attempts:", err);
+    }
+
+    try {
+      // Fetch enrollment status (CS#9 — student-facing visibility)
+      const mine = (await enrollmentsApi.mine()) as MyEnrollment[];
+      setEnrollments(Array.isArray(mine) ? mine : []);
+    } catch (err) {
+      console.error("Failed to load enrollments:", err);
     }
 
     // Fetch continue-learning lessons from first unlocked grade's subjects
@@ -377,6 +394,60 @@ export default function DashboardPage() {
                     )}
                   </CardContent>
                 </Card>
+                {/* My Enrollments (CS#9 — student-facing status + expiry) */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Calendar className="h-5 w-5 text-arc-navy-700" />
+                      My Enrollments
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoadingData && !enrollments.length ? (
+                      <div className="flex items-center justify-center py-8">
+                        <RefreshCw className="h-5 w-5 animate-spin text-arc-orange-500" />
+                      </div>
+                    ) : enrollments.length === 0 ? (
+                      <p className="text-sm text-arc-slate-500 text-center py-4">
+                        No enrollments yet. You'll be enrolled by your school.
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {enrollments.map((e) => (
+                          <div
+                            key={e.id}
+                            className="flex items-center justify-between p-3 rounded-lg border border-arc-slate-200 bg-white"
+                          >
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-arc-navy-900 truncate">
+                                {e.program?.name ?? "Program"}
+                              </div>
+                              {e.expiresAt ? (
+                                <div className="mt-0.5 flex items-center gap-1 text-xs text-arc-slate-500">
+                                  <Clock className="h-3 w-3" />
+                                  Expires {new Date(e.expiresAt).toLocaleDateString()}
+                                </div>
+                              ) : (
+                                <div className="mt-0.5 text-xs text-arc-slate-500">No expiry</div>
+                              )}
+                            </div>
+                            <Badge
+                              className={
+                                e.active
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-arc-slate-100 text-arc-slate-500"
+                              }
+                            >
+                              {e.active ? "Active" : e.status}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+
 
                 {/* Recent Attempts */}
                 <Card>

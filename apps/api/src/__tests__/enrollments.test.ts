@@ -156,3 +156,65 @@ describe('Enrollment management API', () => {
     expect(res.body).toEqual([]);
   });
 });
+
+describe('My enrollments (student-facing dashboard endpoint)', () => {
+  const myEnrollmentRow = {
+    id: 'e9',
+    status: 'ACTIVE',
+    sourceType: 'ADMIN_GRANT',
+    expiresAt: new Date(Date.now() + 86_400_000),
+    startedAt: new Date(),
+    endedAt: null,
+    createdAt: new Date(),
+    curriculumId: null,
+    learner: { id: LP_ID, userId: USER_ID, user: { firstName: 'Ana', lastName: 'Reyes', email: 's@x.com' } },
+    enrolledBy: null,
+    program: { id: PROGRAM_ID, name: 'Reading Basics', slug: 'reading-basics', status: 'PUBLISHED' },
+  };
+
+  it('returns the learner’s enrollments with program summary and active flag', async () => {
+    mockedPrisma.learnerProfile.findUnique.mockResolvedValue({ id: LP_ID, userId: USER_ID } as never);
+    mockedPrisma.enrollment.findMany.mockResolvedValue([myEnrollmentRow] as never);
+
+    const res = await request(app)
+      .get('/api/my/enrollments')
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].program).toEqual(myEnrollmentRow.program);
+    expect(res.body[0].active).toBe(true);
+    expect(res.body[0].status).toBe('ACTIVE');
+    expect(res.body[0].expiresAt).toBeTruthy();
+  });
+
+  it('returns an empty list for a user with no learner profile', async () => {
+    mockedPrisma.learnerProfile.findUnique.mockResolvedValue(null as never);
+
+    const res = await request(app)
+      .get('/api/my/enrollments')
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  it('marks expired enrollments as inactive but still returns them', async () => {
+    mockedPrisma.learnerProfile.findUnique.mockResolvedValue({ id: LP_ID, userId: USER_ID } as never);
+    mockedPrisma.enrollment.findMany.mockResolvedValue([
+      { ...myEnrollmentRow, id: 'e10', expiresAt: new Date(Date.now() - 1000) },
+    ] as never);
+
+    const res = await request(app)
+      .get('/api/my/enrollments')
+      .set('Authorization', `Bearer ${studentToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].active).toBe(false);
+  });
+
+  it('requires authentication (401 without token)', async () => {
+    const res = await request(app).get('/api/my/enrollments');
+    expect(res.status).toBe(401);
+  });
+});

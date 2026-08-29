@@ -107,6 +107,36 @@ export async function listProgramEnrollments(
     next(e);
   }
 }
+/**
+ * Student-facing "my enrollments" (dashboard track).
+ * Returns the caller's enrollments — including expired/ended ones — with the
+ * program summary attached, so the learner dashboard can show status and
+ * expiry. No role gate beyond authentication: learners see only their own rows.
+ */
+export async function listMyEnrollments(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.userId) throw new ForbiddenError("Authentication required");
+    const learner = await prisma.learnerProfile.findUnique({ where: { userId: req.userId } });
+    if (!learner) return res.json([]);
+
+    const enrollments = await prisma.enrollment.findMany({
+      where: { learnerId: learner.id },
+      include: {
+        ...enrollmentInclude,
+        program: { select: { id: true, name: true, slug: true, status: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    return res.json(
+      enrollments.map((e) => ({
+        ...serializeEnrollment(e),
+        program: e.program,
+      })),
+    );
+  } catch (e) {
+    next(e);
+  }
+}
 
 export async function createEnrollment(req: Request, res: Response, next: NextFunction) {
   try {
