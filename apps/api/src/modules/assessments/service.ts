@@ -2,7 +2,7 @@ import { prisma, Prisma } from "@aratc/database";
 import { createAssessmentSchema } from "./schemas";
 import { NotFoundError, BadRequestError } from "../../lib/errors";
 import type { CreateAssessmentInput, UpdateAssessmentInput, AddQuestionInput, AutoGenerateInput } from "./schemas";
-import { gradeAnswer, getOptions, shuffle } from "./grading";
+import { gradeAnswer, getOptions, shuffle, seededShuffle, randomChoiceSeed } from "./grading";
 import { assertAssessmentUnlocked } from "../progression/service";
 
 export async function listAssessments(filters?: {
@@ -380,42 +380,37 @@ async function getOrCreateLearnerProfile(userId: string) {
 }
 
 /**
- * Derive the SAFE question set for an assessment.
- * - If the assessment has a question pool (questionCount + topics/tags/difficulty),
- *   draw a fresh random sample from the question bank.
- * - Otherwise use the fixed AssessmentQuestion set.
- * Returns the served raw questions and the SAFE payload for the player.
+ * CS#19 — deterministic per-attempt randomization (roadmap §26).
+ * Reconstructs full question rows in the EXACT order persisted on the attempt.
+ * Prisma `in: [...]` does not preserve array order, so reorder in app code.
  */
-export async function getServedQuestions(assessment: {
-  questions: { question: any }[];
-  questionCount?: number | null;
-  topicIds?: string[] | null;
-  questionTags?: string[] | null;
-  difficultyLevels?: string[] | null;
-  randomizeQuestions?: boolean;
-  randomizeChoices?: boolean;
-}): Promise<{ questions: any[]; passages: any[]; served: any[] }> {
-  let served = assessment.questions.map((aq) => aq.question);
-  const hasPool =
-    !!assessment.questionCount &&
-    ((assessment.topicIds?.length ?? 0) > 0 ||
-      (assessment.questionTags?.length ?? 0) > 0 ||
-      (assessment.difficultyLevels?.length ?? 0) > 0);
-  if (hasPool) {
-    const where: any = { status: "PUBLISHED" };
-    if (assessment.topicIds?.length) where.bankLinks = { some: { topicId: { in: assessment.topicIds } } };
-    if (assessment.difficultyLevels?.length) where.difficulty = { in: assessment.difficultyLevels };
-    if (assessment.questionTags?.length) where.tags = { hasSome: assessment.questionTags };
-    const pool = await prisma.question.findMany({ where });
-    if (pool.length > 0) {
-      served = shuffle(pool).slice(0, assessment.questionCount!);
-    }
-  }
-  if (assessment.randomizeQuestions) served = shuffle(served);
+async function reconstructOrderedQuestions(servedQuestionIds: string[]) {
+  if (servedQuestionIds.length === 0) return [];
+  const rows = await prisma.question.findMany({
+    where: { id: { in: servedQuestionIds } },
+  });
+  const byId = new Map(rows.map((q) => [q.id, q]));
+  return servedQuestionIds
+    .map((id) => byId.get(id))
+    .filter((q): q is (typeof rows)[number] => Boolean(q));
+}
 
+/**
+ * Builds the SAFE player payload from served question rows.
+ * When `choiceOrderSeed` is provided, choice ordering is derived from that
+ * persisted seed so resuming an attempt reproduces the identical order.
+ * A null/undefined seed keeps the legacy non-seeded shuffle (fresh draws).
+ */
+async function buildServedPayload(
+  served: any[],
+  randomizeChoices: boolean,
+  choiceOrderSeed?: number | null
+) {
   const questions = served.map((q) => {
     let opts = getOptions(q).map((o) => ({ id: o.id, text: o.text }));
-    if (assessment.randomizeChoices) opts = shuffle(opts);
+    if (randomizeChoices) {
+      opts = choiceOrderSeed == null ? shuffle(opts) : seededShuffle(opts, choiceOrderSeed);
+    }
     return {
       id: q.id,
       type: q.type,
@@ -434,6 +429,54 @@ export async function getServedQuestions(assessment: {
         select: { id: true, title: true, content: true },
       })
     : [];
+
+  return { questions, passages };
+}
+
+/**
+ * Derive the SAFE question set for an assessment.
+ * - If the assessment has a question pool (questionCount + topics/tags/difficulty),
+ *   draw a fresh random sample from the question bank.
+ * - Otherwise use the fixed AssessmentQuestion set.
+ * Returns the served raw questions and the SAFE payload for the player.
+ * When `choiceOrderSeed` is given (new/legacy-backfilled attempts), choice
+ * ordering is deterministic from that seed so it can be replayed on resume.
+ */
+export async function getServedQuestions(
+  assessment: {
+    questions: { question: any }[];
+    questionCount?: number | null;
+    topicIds?: string[] | null;
+    questionTags?: string[] | null;
+    difficultyLevels?: string[] | null;
+    randomizeQuestions?: boolean;
+    randomizeChoices?: boolean;
+  },
+  choiceOrderSeed?: number | null
+): Promise<{ questions: any[]; passages: any[]; served: any[] }> {
+  let served = assessment.questions.map((aq) => aq.question);
+  const hasPool =
+    !!assessment.questionCount &&
+    ((assessment.topicIds?.length ?? 0) > 0 ||
+      (assessment.questionTags?.length ?? 0) > 0 ||
+      (assessment.difficultyLevels?.length ?? 0) > 0);
+  if (hasPool) {
+    const where: any = { status: "PUBLISHED" };
+    if (assessment.topicIds?.length) where.bankLinks = { some: { topicId: { in: assessment.topicIds } } };
+    if (assessment.difficultyLevels?.length) where.difficulty = { in: assessment.difficultyLevels };
+    if (assessment.questionTags?.length) where.tags = { hasSome: assessment.questionTags };
+    const pool = await prisma.question.findMany({ where });
+    if (pool.length > 0) {
+      served = shuffle(pool).slice(0, assessment.questionCount!);
+    }
+  }
+  if (assessment.randomizeQuestions) served = shuffle(served);
+
+  const { questions, passages } = await buildServedPayload(
+    served,
+    assessment.randomizeChoices === true,
+    choiceOrderSeed
+  );
 
   return { questions, passages, served };
 }
@@ -464,61 +507,8 @@ export async function startAttempt(assessmentId: string, userId: string) {
     programId: assessment.programId,
   });
 
-  // Resume in-progress attempt if one exists
-  const inProgress = await prisma.assessmentAttempt.findFirst({
-    where: { assessmentId, learnerId: learner.id, status: "IN_PROGRESS" },
-    orderBy: { createdAt: "desc" },
-  });
-  if (inProgress) {
-    const { questions, passages } = await getServedQuestions(assessment);
-    return {
-      attempt: inProgress,
-      assessment: {
-        id: assessment.id,
-        name: assessment.name,
-        type: assessment.type,
-        timeLimitMinutes: assessment.timeLimitMinutes,
-        showExplanations: assessment.showExplanations,
-        passingScore: assessment.passingScore,
-        masteryThreshold: assessment.masteryThreshold,
-        allowRetake: assessment.allowRetake,
-        scoringConfig: assessment.scoringConfig,
-      },
-      questions,
-      passages,
-    };
-  }
-
-  const existingAttempts = await prisma.assessmentAttempt.count({
-    where: { assessmentId, learnerId: learner.id },
-  });
-  if (!assessment.allowRetake && assessment.maxAttempts && existingAttempts >= assessment.maxAttempts) {
-    throw new BadRequestError("Maximum attempts reached");
-  }
-
-  const { questions, passages, served } = await getServedQuestions(assessment);
-
-  // Compute maxScore from per-question weights
-  const servedIds = new Set(served.map((q) => q.id));
-  let maxScore = 0;
-  for (const aq of assessment.questions) {
-    if (servedIds.has(aq.question.id)) {
-      maxScore += aq.score ?? 1;
-    }
-  }
-  // Fallback if no AssessmentQuestion entries (question pool)
-  if (maxScore === 0) maxScore = served.length;
-
-  const attempt = await prisma.assessmentAttempt.create({
-    data: {
-      assessmentId,
-      learnerId: learner.id,
-      maxScore,
-      status: "IN_PROGRESS",
-    },
-  });
-
-  return {
+  // Shared response shape (unchanged API contract — CS#19).
+  const attemptPayload = (attempt: any, questions: any[], passages: any[]) => ({
     attempt,
     assessment: {
       id: assessment.id,
@@ -533,7 +523,91 @@ export async function startAttempt(assessmentId: string, userId: string) {
     },
     questions,
     passages,
-  };
+  });
+
+  // Resume in-progress attempt if one exists
+  const inProgress = await prisma.assessmentAttempt.findFirst({
+    where: { assessmentId, learnerId: learner.id, status: "IN_PROGRESS" },
+    orderBy: { createdAt: "desc" },
+  });
+  if (inProgress) {
+    // CS#19 — the database is the source of truth for this attempt's served
+    // set. Never re-draw or reshuffle an attempt that has a persisted set.
+    if (inProgress.servedQuestionIds.length > 0) {
+      const served = await reconstructOrderedQuestions(inProgress.servedQuestionIds);
+      const { questions, passages } = await buildServedPayload(
+        served,
+        assessment.randomizeChoices,
+        inProgress.choiceOrderSeed
+      );
+      return attemptPayload(inProgress, questions, passages);
+    }
+
+    // Legacy attempt (created before CS#19): draw once, persist immediately so
+    // every subsequent resume is deterministic (roadmap §26 backfill rule).
+    const choiceOrderSeed = randomChoiceSeed();
+    const { questions, passages, served } = await getServedQuestions(assessment, choiceOrderSeed);
+    const servedQuestionIds = served.map((q) => q.id);
+    // Guarded write: only backfill if no concurrent resume claimed it first.
+    const claimed = await prisma.assessmentAttempt.updateMany({
+      where: { id: inProgress.id, servedQuestionIds: { isEmpty: true } },
+      data: { servedQuestionIds, choiceOrderSeed },
+    });
+    if (claimed.count === 0) {
+      const winner = await prisma.assessmentAttempt.findUnique({
+        where: { id: inProgress.id },
+        select: { servedQuestionIds: true, choiceOrderSeed: true },
+      });
+      if (winner && winner.servedQuestionIds.length > 0) {
+        const reServed = await reconstructOrderedQuestions(winner.servedQuestionIds);
+        const payload = await buildServedPayload(
+          reServed,
+          assessment.randomizeChoices,
+          winner.choiceOrderSeed
+        );
+        return attemptPayload(inProgress, payload.questions, payload.passages);
+      }
+    }
+    return attemptPayload(inProgress, questions, passages);
+  }
+
+  const existingAttempts = await prisma.assessmentAttempt.count({
+    where: { assessmentId, learnerId: learner.id },
+  });
+  if (!assessment.allowRetake && assessment.maxAttempts && existingAttempts >= assessment.maxAttempts) {
+    throw new BadRequestError("Maximum attempts reached");
+  }
+
+  const choiceOrderSeed = randomChoiceSeed();
+  const { questions, passages, served } = await getServedQuestions(assessment, choiceOrderSeed);
+  const servedQuestionIds = served.map((q) => q.id);
+
+  // Compute maxScore from per-question weights
+  const servedIds = new Set(servedQuestionIds);
+  let maxScore = 0;
+  for (const aq of assessment.questions) {
+    if (servedIds.has(aq.question.id)) {
+      maxScore += aq.score ?? 1;
+    }
+  }
+  // Fallback if no AssessmentQuestion entries (question pool)
+  if (maxScore === 0) maxScore = served.length;
+
+  // Single atomic insert — the served set is persisted together with the
+  // attempt itself, so no two requests can disagree about what the attempt
+  // contains (CS#19 — roadmap §26).
+  const attempt = await prisma.assessmentAttempt.create({
+    data: {
+      assessmentId,
+      learnerId: learner.id,
+      maxScore,
+      status: "IN_PROGRESS",
+      servedQuestionIds,
+      choiceOrderSeed,
+    },
+  });
+
+  return attemptPayload(attempt, questions, passages);
 }
 
 export async function submitAttempt(
@@ -551,6 +625,13 @@ export async function submitAttempt(
   if (attempt.status !== "IN_PROGRESS") {
     throw new BadRequestError("Attempt already completed");
   }
+
+  // CS#19 — grade strictly against the persisted served set when available,
+  // so "questions shown" always equals "questions graded" (roadmap §26).
+  const servedIds =
+    attempt.servedQuestionIds.length > 0
+      ? new Set<string>(attempt.servedQuestionIds)
+      : null;
 
   // Load per-question weights from AssessmentQuestion and scoringConfig
   const assessmentQuestions = await prisma.assessmentQuestion.findMany({
@@ -573,6 +654,7 @@ export async function submitAttempt(
   const ops: any[] = [];
 
   for (const { questionId, answer, timeSpentSeconds } of answers) {
+    if (servedIds && !servedIds.has(questionId)) continue; // CS#19 — not served to this attempt
     const question = await prisma.question.findUnique({ where: { id: questionId } });
     if (!question) continue;
 
@@ -605,7 +687,11 @@ export async function submitAttempt(
     console.error("Failed to track question exposure:", err);
   });
 
-  const percentage = maxPossible > 0 ? (score / maxPossible) * 100 : 0;
+  // CS#19 — percentage is measured against the attempt's persisted maxScore
+  // (computed from the served set at start), not just the submitted answers,
+  // so unanswered served questions count toward the result basis.
+  const denominator = attempt.maxScore > 0 ? attempt.maxScore : maxPossible;
+  const percentage = denominator > 0 ? (score / denominator) * 100 : 0;
 
   // Calculate total time spent on this attempt
   const totalTimeSpent = answers.reduce((sum, a) => sum + (a.timeSpentSeconds ?? 0), 0);

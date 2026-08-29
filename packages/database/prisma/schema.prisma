@@ -526,6 +526,14 @@ model AssessmentAttempt {
   completedAt      DateTime?       @map("completed_at")
   score            Int?
   maxScore         Int             @map("max_score")
+  // CS#19 — deterministic per-attempt randomization (roadmap §26).
+  // servedQuestionIds stores the EXACT ordered question IDs served to this
+  // attempt; choiceOrderSeed is the PRNG seed for answer-choice ordering.
+  // Prisma does not support optional lists, so an EMPTY array is the
+  // "legacy / not yet persisted" marker; such attempts fall back to live
+  // randomization and are backfilled on first resume.
+  servedQuestionIds String[]       @default([]) @map("served_question_ids")
+  choiceOrderSeed   Int?           @map("choice_order_seed")
   percentage       Float?
   timeSpentSeconds Int?            @map("time_spent_seconds")
   createdAt        DateTime        @default(now()) @map("created_at")
