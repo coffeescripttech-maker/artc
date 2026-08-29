@@ -21,6 +21,10 @@ import {
   Video,
   FileCheck,
   AlertCircle,
+  Send,
+  CheckCircle2,
+  XCircle,
+  Zap,
 } from "lucide-react";
 
 interface Lesson {
@@ -30,7 +34,7 @@ interface Lesson {
   description?: string;
   type: "VIDEO" | "ARTICLE" | "MIXED" | "ACTIVITY" | "PRACTICE";
   durationMinutes?: number;
-  status: "DRAFT" | "PUBLISHED" | "UNDER_REVIEW" | "ARCHIVED";
+  status: "DRAFT" | "UNDER_REVIEW" | "APPROVED" | "PUBLISHED" | "ARCHIVED";
   orderIndex: number;
   topic?: {
     id: string;

@@ -21,6 +21,10 @@ model User {
   updatedAt         DateTime        @updatedAt @map("updated_at")
   teacherBatches    BatchTeacher[]
   ownedBatches      Batch[]         @relation("BatchOwner")
+     enrollmentsGranted Enrollment[]   @relation("EnrolledByEnrollments")
+  contentVersions    ContentVersion[] @relation("ContentVersionCreator")
+  auditEventsAsActor AuditEvent[]      @relation("ActorAuditEvents")
+  auditEventsAsTarget AuditEvent[]     @relation("TargetAuditEvents")
   learnerProfile    LearnerProfile?
   parentLinks       ParentStudent[] @relation("ParentStudentParent")
   studentLinks      ParentStudent[] @relation("ParentStudentStudent")
@@ -28,6 +32,9 @@ model User {
   reviewedQuestions Question[]      @relation("QuestionReviewer")
   sessions          Session[]
   roles             UserRole[]
+  memberships       OrganizationMembership[]
+  createdPrograms   Program[]                  @relation("ProgramsCreated")
+  createdLessons    Lesson[]                   @relation("LessonsCreated")
 
   @@map("users")
 }
@@ -120,8 +127,39 @@ model Organization {
   curriculums     Curriculum[]
   learnerProfiles LearnerProfile[]
   programs        Program[]
+  memberships     OrganizationMembership[]
+  lessons         Lesson[]
 
   @@map("organizations")
+}
+
+model OrganizationMembership {
+  id             String           @id @default(cuid())
+  organizationId String           @map("organization_id")
+  userId         String           @map("user_id")
+  role           OrganizationRole @default(LEARNER)
+  status         MembershipStatus @default(ACTIVE)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+  @@map("organization_memberships")
+}
+
+enum OrganizationRole {
+  OWNER
+  ADMIN
+  TEACHER
+  LEARNER
+}
+
+enum MembershipStatus {
+  ACTIVE
+  PENDING
+  CANCELLED
 }
 
 model Program {
@@ -143,6 +181,8 @@ model Program {
   learnerProfiles LearnerProfile[]
   targetCets      ProgramCet[]
   organization    Organization?    @relation(fields: [organizationId], references: [id])
+  createdById     String?          @map("created_by_id")
+  createdBy       User?            @relation("ProgramsCreated", fields: [createdById], references: [id])
 
   @@index([status])
   @@index([organizationId])
@@ -262,8 +302,13 @@ model Lesson {
   updatedAt       DateTime      @updatedAt @map("updated_at")
   topic           Topic         @relation(fields: [topicId], references: [id], onDelete: Cascade)
   progress        Progress[]
+  organizationId  String?       @map("organization_id")
+  createdById     String?       @map("created_by_id")
+  organization    Organization? @relation(fields: [organizationId], references: [id])
+  createdBy       User?         @relation("LessonsCreated", fields: [createdById], references: [id])
 
   @@index([topicId])
+  @@index([organizationId])
   @@map("lessons")
 }
 
@@ -632,20 +677,28 @@ model TestAttempt {
 }
 
 model Enrollment {
-  id           String           @id @default(cuid())
-  learnerId    String           @map("learner_id")
-  programId    String           @map("program_id")
-  curriculumId String?          @map("curriculum_id")
-  status       EnrollmentStatus @default(ACTIVE)
-  startedAt    DateTime         @default(now()) @map("started_at")
-  endedAt      DateTime?        @map("ended_at")
-  createdAt    DateTime         @default(now()) @map("created_at")
-  updatedAt    DateTime         @updatedAt @map("updated_at")
-  learner      LearnerProfile   @relation(fields: [learnerId], references: [id], onDelete: Cascade)
-  program      Program          @relation(fields: [programId], references: [id], onDelete: Cascade)
+  id           String                @id @default(cuid())
+  learnerId    String                @map("learner_id")
+  programId    String                @map("program_id")
+  curriculumId String?               @map("curriculum_id")
+  status       EnrollmentStatus      @default(ACTIVE)
+  // Enrollment provenance + lifecycle (CS#9 — all nullable, backward compatible)
+  sourceType   EnrollmentSourceType? @map("source_type")
+  sourceId     String?               @map("source_id")
+  enrolledById String?               @map("enrolled_by_id")
+  expiresAt    DateTime?             @map("expires_at")
+  startedAt    DateTime              @default(now()) @map("started_at")
+  endedAt      DateTime?             @map("ended_at")
+  createdAt    DateTime              @default(now()) @map("created_at")
+  updatedAt    DateTime              @updatedAt @map("updated_at")
+  learner      LearnerProfile        @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  program      Program               @relation(fields: [programId], references: [id], onDelete: Cascade)
+  enrolledBy   User?                 @relation("EnrolledByEnrollments", fields: [enrolledById], references: [id], onDelete: SetNull)
 
   @@unique([learnerId, programId])
   @@index([learnerId])
+  @@index([programId])
+  @@index([expiresAt])
   @@map("enrollments")
 }
 
@@ -721,8 +774,53 @@ model Payment {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  @@index([userId])
+    @@index([userId])
   @@map("payments")
+}
+
+// CS#14 — audit log (append-only, immutable chain of high-risk ops).
+// §43: written after the action commits; no UPDATE/DELETE in app flows.
+model AuditEvent {
+  id               String   @id @default(cuid())
+  tenantId         String   @map("tenant_id")
+  actorId          String   @map("actor_id")
+  actor            User     @relation("ActorAuditEvents", fields: [actorId], references: [id], onDelete: Cascade)
+  eventType        String   @map("event_type")
+  targetUserId     String?  @map("target_user_id")
+  targetUser       User?    @relation("TargetAuditEvents", fields: [targetUserId], references: [id], onDelete: SetNull)
+  targetResourceId String?  @map("target_resource_id")
+  actedOn          String   // denormalized display name at write-time (survives renames)
+  before           String?  @db.Text
+  after            String?  @db.Text
+  metadata         String?  @db.Text
+  correlationId    String?  @map("correlation_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, eventType])
+  @@index([tenantId, targetUserId])
+  @@index([correlationId])
+  @@map("audit_events")
+}
+
+// Immutable content snapshots (architecture §18). Created when content is
+// published and before each modification of already-published content, so
+// published content is never modified silently (principle 12) and history
+// can be restored. Snapshots are never updated or deleted by app flows.
+model ContentVersion {
+  id            String            @id @default(cuid())
+  entityType    ContentEntityType @map("entity_type")
+  entityId      String            @map("entity_id")
+  versionNumber Int               @map("version_number")
+  title         String
+  snapshot      Json
+  createdById   String?           @map("created_by_id")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  createdBy     User?             @relation("ContentVersionCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([entityType, entityId, versionNumber])
+  @@index([entityType, entityId])
+  @@map("content_versions")
 }
 
 model ParentStudent {
@@ -784,6 +882,7 @@ enum GradeLevel {
 enum ContentStatus {
   DRAFT
   UNDER_REVIEW
+  APPROVED
   PUBLISHED
   ARCHIVED
 }
@@ -847,6 +946,8 @@ enum MasteryLevel {
 
 enum ProgramStatus {
   DRAFT
+  UNDER_REVIEW
+  APPROVED
   PUBLISHED
   ARCHIVED
 }
@@ -865,6 +966,24 @@ enum EnrollmentStatus {
   COMPLETED
   CANCELLED
   SUSPENDED
+}
+
+// How the learner got into the program (traceability — architecture §15/§16).
+// Nullable on legacy rows: absence means "created before enrollment sources".
+enum EnrollmentSourceType {
+  ADMIN_GRANT
+  SELF_ENROLL
+  ENROLLMENT_CODE
+  BATCH
+  IMPORT
+  PURCHASE
+}
+
+// Content versioning (architecture §18 — immutable snapshots of published
+// content). Created at publish time and before each edit of published content.
+enum ContentEntityType {
+  LESSON
+  PROGRAM
 }
 
 enum SubscriptionStatus {

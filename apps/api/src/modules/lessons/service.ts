@@ -1,11 +1,32 @@
-import { prisma } from "@aratc/database";
-type JsonInput = import("@prisma/client").InputJsonValue | null;
+import { prisma, Prisma } from "@aratc/database";
 import { normalizeLessonContent } from "@aratc/shared";
+// Includes the nullable-input variants so JSON columns can be set or cleared.
+type JsonInput = Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput | null;
+type JsonInputValue = Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
 import { NotFoundError, BadRequestError } from "../../lib/errors";
+import {
+  orgReadScope,
+  assertCanEditContent,
+  assertTransition,
+  assertCanPublish,
+} from "../../lib/tenant-scope";
+import {
+  type ContentVisibilityOptions,
+  isVisible,
+  publishedOnly,
+} from "../../lib/visibility";
 import type { CreateLessonInput, UpdateLessonInput } from "./schemas";
 
-export async function listLessons(topicId?: string) {
-  const where = topicId ? { topicId } : {};
+export async function listLessons(
+  topicId?: string,
+  opts?: ContentVisibilityOptions,
+  organizationId?: string
+) {
+  const where = {
+    ...(topicId ? { topicId } : {}),
+    ...publishedOnly(opts),
+    ...orgReadScope(organizationId),
+  };
 
   return prisma.lesson.findMany({
     where,
@@ -28,7 +49,7 @@ export async function listLessons(topicId?: string) {
   });
 }
 
-export async function getLessonById(id: string) {
+export async function getLessonById(id: string, opts?: ContentVisibilityOptions) {
   const lesson = await prisma.lesson.findUnique({
     where: { id },
     include: {
@@ -48,14 +69,19 @@ export async function getLessonById(id: string) {
     },
   });
 
-  if (!lesson) {
+  // Unpublished lessons are indistinguishable from missing ones for
+  // non-privileged callers (404 — avoids leaking draft existence).
+  if (!lesson || !isVisible(lesson.status, opts)) {
     throw new NotFoundError("Lesson not found");
   }
 
   return lesson;
 }
 
-export async function createLesson(input: CreateLessonInput) {
+export async function createLesson(
+  input: CreateLessonInput,
+  owner?: { organizationId?: string; userId?: string }
+) {
   // Verify topic exists
   const topic = await prisma.topic.findUnique({ where: { id: input.topicId } });
   if (!topic) {
@@ -84,15 +110,27 @@ export async function createLesson(input: CreateLessonInput) {
       videoUrl: input.videoUrl,
       orderIndex,
       status: "DRAFT",
+      organizationId: owner?.organizationId ?? undefined,
+      createdById: owner?.userId ?? undefined,
     },
   });
 }
 
-export async function updateLesson(id: string, input: UpdateLessonInput) {
+export async function updateLesson(
+  id: string,
+  input: UpdateLessonInput,
+  requester?: { organizationId?: string; roles?: string[] }
+) {
   const existing = await prisma.lesson.findUnique({ where: { id } });
   if (!existing) {
     throw new NotFoundError("Lesson not found");
   }
+
+  assertCanEditContent(
+    requester?.organizationId,
+    requester?.roles,
+    existing.organizationId
+  );
 
   return prisma.lesson.update({
     where: { id },
@@ -109,11 +147,31 @@ export async function updateLesson(id: string, input: UpdateLessonInput) {
   });
 }
 
-export async function publishLesson(id: string) {
-  const existing = await prisma.lesson.findUnique({ where: { id } });
+export async function publishLesson(
+  id: string,
+  requester?: { organizationId?: string; roles?: string[] }
+) {
+  const existing = await prisma.lesson.findUnique({
+    where: { id },
+    include: { organization: { select: { metadata: true } } },
+  });
   if (!existing) {
     throw new NotFoundError("Lesson not found");
   }
+
+  assertCanEditContent(
+    requester?.organizationId,
+    requester?.roles,
+    existing.organizationId
+  );
+
+  // §17 approval workflow — orgs with review mode require APPROVED first.
+  assertCanPublish(
+    existing.status,
+    existing.organizationId,
+    existing.organization?.metadata,
+    requester?.roles
+  );
 
   return prisma.lesson.update({
     where: { id },
@@ -121,11 +179,90 @@ export async function publishLesson(id: string) {
   });
 }
 
-export async function archiveLesson(id: string) {
+// ============================================================
+// Approval workflow (CS#6 — §17): submit → review → approve/reject
+// ============================================================
+
+export async function submitLessonForReview(
+  id: string,
+  requester?: { organizationId?: string; roles?: string[] }
+) {
   const existing = await prisma.lesson.findUnique({ where: { id } });
   if (!existing) {
     throw new NotFoundError("Lesson not found");
   }
+
+  assertCanEditContent(
+    requester?.organizationId,
+    requester?.roles,
+    existing.organizationId
+  );
+  assertTransition(existing.status, "SUBMIT_REVIEW");
+
+  return prisma.lesson.update({
+    where: { id },
+    data: { status: "UNDER_REVIEW" },
+  });
+}
+
+export async function approveLesson(
+  id: string,
+  requester?: { organizationId?: string; roles?: string[] }
+) {
+  const existing = await prisma.lesson.findUnique({ where: { id } });
+  if (!existing) {
+    throw new NotFoundError("Lesson not found");
+  }
+
+  assertCanEditContent(
+    requester?.organizationId,
+    requester?.roles,
+    existing.organizationId
+  );
+  assertTransition(existing.status, "APPROVE");
+
+  return prisma.lesson.update({
+    where: { id },
+    data: { status: "APPROVED" },
+  });
+}
+
+export async function rejectLesson(
+  id: string,
+  requester?: { organizationId?: string; roles?: string[] }
+) {
+  const existing = await prisma.lesson.findUnique({ where: { id } });
+  if (!existing) {
+    throw new NotFoundError("Lesson not found");
+  }
+
+  assertCanEditContent(
+    requester?.organizationId,
+    requester?.roles,
+    existing.organizationId
+  );
+  assertTransition(existing.status, "REJECT");
+
+  return prisma.lesson.update({
+    where: { id },
+    data: { status: "DRAFT" },
+  });
+}
+
+export async function archiveLesson(
+  id: string,
+  requester?: { organizationId?: string; roles?: string[] }
+) {
+  const existing = await prisma.lesson.findUnique({ where: { id } });
+  if (!existing) {
+    throw new NotFoundError("Lesson not found");
+  }
+
+  assertCanEditContent(
+    requester?.organizationId,
+    requester?.roles,
+    existing.organizationId
+  );
 
   return prisma.lesson.update({
     where: { id },
@@ -133,11 +270,20 @@ export async function archiveLesson(id: string) {
   });
 }
 
-export async function deleteLesson(id: string) {
+export async function deleteLesson(
+  id: string,
+  requester?: { organizationId?: string; roles?: string[] }
+) {
   const existing = await prisma.lesson.findUnique({ where: { id } });
   if (!existing) {
     throw new NotFoundError("Lesson not found");
   }
+
+  assertCanEditContent(
+    requester?.organizationId,
+    requester?.roles,
+    existing.organizationId
+  );
 
   return prisma.lesson.delete({ where: { id } });
 }
@@ -167,9 +313,13 @@ export async function reorderLessons(topicId: string, lessonIds: string[]) {
 }
 
 // Get lessons for a subject (all lessons across all topics in modules)
-export async function getLessonsBySubject(subjectId: string) {
+export async function getLessonsBySubject(
+  subjectId: string,
+  opts?: ContentVisibilityOptions
+) {
   return prisma.lesson.findMany({
     where: {
+      ...publishedOnly(opts),
       topic: {
         module: {
           subjectId,
@@ -241,7 +391,7 @@ export async function saveLessonQuestionResponse(
       },
     },
     update: {
-      answer: input.answer as JsonInput | undefined,
+      answer: input.answer as JsonInputValue | undefined,
       isCorrect: input.isCorrect,
       pointsEarned: input.pointsEarned ?? 0,
       blockId: input.blockId ?? null,
@@ -252,7 +402,7 @@ export async function saveLessonQuestionResponse(
       lessonId,
       questionId: input.questionId,
       blockId: input.blockId ?? null,
-      answer: input.answer as JsonInput | undefined,
+      answer: input.answer as JsonInputValue | undefined,
       isCorrect: input.isCorrect,
       pointsEarned: input.pointsEarned ?? 0,
     },

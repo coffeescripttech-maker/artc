@@ -16,6 +16,7 @@ import {
 import { useSidebar } from "./sidebar";
 import { useAuth } from "@/contexts/auth-context";
 import { CommandPalette } from "./command-palette";
+import { OrgSwitcher } from "./org-switcher";
 
 export function TopNav() {
   const { setMobileOpen } = useSidebar();
@@ -74,8 +75,11 @@ export function TopNav() {
           <Search className="h-5 w-5 text-arc-slate-600" />
         </button>
 
-        {/* Right: notifications + user dropdown */}
+        {/* Right: org switcher (hidden when no memberships) + notifications + user dropdown */}
         <div className="flex items-center gap-2 ml-auto">
+          {/* Organization switcher — renders nothing without memberships */}
+          <OrgSwitcher />
+
           {/* Notifications */}
           <button
             className="relative p-2 rounded-lg hover:bg-arc-slate-100 transition-colors"

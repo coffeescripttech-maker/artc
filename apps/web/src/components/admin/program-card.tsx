@@ -18,6 +18,9 @@ import {
   Building,
   Target,
   Trophy,
+  Send,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -33,7 +36,7 @@ interface ProgramCardProps {
     name: string;
     slug: string;
     description?: string;
-    status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+    status: "DRAFT" | "UNDER_REVIEW" | "APPROVED" | "PUBLISHED" | "ARCHIVED";
     programType?: string;
     imageUrl?: string;
     _count?: {
@@ -48,6 +51,11 @@ interface ProgramCardProps {
   onEdit?: () => void;
   onDuplicate?: () => void;
   onDelete?: () => void;
+  // Content approval workflow (CS#6 — §17)
+  onSubmitReview?: () => void;
+  onApprove?: () => void;
+  onReject?: () => void;
+  onPublish?: () => void;
 }
 
 // Color mapping for program types (matching curriculum stage colors)
@@ -75,10 +83,29 @@ export const programTypeGradients: Record<string, string> = {
 const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
   PUBLISHED: { bg: "bg-green-100", text: "text-green-700", label: "Published" },
   DRAFT: { bg: "bg-yellow-100", text: "text-yellow-700", label: "Draft" },
+  UNDER_REVIEW: { bg: "bg-amber-100", text: "text-amber-700", label: "Under Review" },
+  APPROVED: { bg: "bg-purple-100", text: "text-purple-700", label: "Approved" },
   ARCHIVED: { bg: "bg-gray-100", text: "text-gray-600", label: "Archived" },
 };
 
-export function ProgramCard({ program, onView, onEdit, onDuplicate, onDelete }: ProgramCardProps) {
+const WORKFLOW_LABELS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
+  SUBMIT_REVIEW: { label: "Submit for Review", icon: Send, color: "text-amber-600" },
+  APPROVE: { label: "Approve", icon: CheckCircle2, color: "text-green-600" },
+  REJECT: { label: "Reject", icon: XCircle, color: "text-red-600" },
+  PUBLISH: { label: "Publish", icon: Zap, color: "text-arc-orange-600" },
+};
+
+export function ProgramCard({
+  program,
+  onView,
+  onEdit,
+  onDuplicate,
+  onDelete,
+  onSubmitReview,
+  onApprove,
+  onReject,
+  onPublish,
+}: ProgramCardProps) {
   const [imgError, setImgError] = useState(false);
   const status = statusConfig[program.status] || statusConfig.DRAFT;
   const curriculumCount = program._count?.curriculums ?? 0;
@@ -87,6 +114,15 @@ export function ProgramCard({ program, onView, onEdit, onDuplicate, onDelete }: 
   const gradient = programTypeGradients[program.programType || "BASIC_EDUCATION"] || programTypeGradients.BASIC_EDUCATION;
   const TypeIcon = typeConfig.icon;
   const hasImage = program.imageUrl && !imgError;
+
+  // Content approval workflow actions (§17) — the backend independently
+  // enforces who can run each action (§44); the UI only shows the sensible
+  // next step for the current status.
+  const workflowActions: { key: "SUBMIT_REVIEW" | "APPROVE" | "REJECT" | "PUBLISH"; onClick?: () => void }[] = [];
+  if (program.status === "DRAFT" && onSubmitReview) workflowActions.push({ key: "SUBMIT_REVIEW", onClick: onSubmitReview });
+  if (program.status === "UNDER_REVIEW" && onApprove) workflowActions.push({ key: "APPROVE", onClick: onApprove });
+  if (program.status === "UNDER_REVIEW" && onReject) workflowActions.push({ key: "REJECT", onClick: onReject });
+  if (program.status === "APPROVED" && onPublish) workflowActions.push({ key: "PUBLISH", onClick: onPublish });
 
   return (
     <Card className="hover:shadow-lg transition-all duration-200 group overflow-hidden border border-arc-slate-100 flex flex-col">
@@ -143,6 +179,24 @@ export function ProgramCard({ program, onView, onEdit, onDuplicate, onDelete }: 
                 <Copy className="h-4 w-4 mr-2 text-arc-slate-500" />
                 Duplicate
               </DropdownMenuItem>
+
+              {/* Content approval workflow actions (CS#6 — §17) */}
+              {workflowActions.length > 0 && <DropdownMenuSeparator className="bg-arc-slate-200 my-1" />}
+              {workflowActions.map((action) => {
+                const cfg = WORKFLOW_LABELS[action.key];
+                const Icon = cfg.icon;
+                return (
+                  <DropdownMenuItem
+                    key={action.key}
+                    onClick={action.onClick}
+                    className="cursor-pointer px-3 py-2 text-sm text-arc-navy-700 hover:bg-arc-navy-50 hover:text-arc-navy-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-arc-orange-500"
+                  >
+                    <Icon className={`h-4 w-4 mr-2 ${cfg.color}`} />
+                    {cfg.label}
+                  </DropdownMenuItem>
+                );
+              })}
+
               <DropdownMenuSeparator className="bg-arc-slate-200 my-1" />
               <DropdownMenuItem
                 onClick={onDelete}

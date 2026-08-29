@@ -3,7 +3,34 @@ import jwt from "jsonwebtoken";
 import { prisma } from "@aratc/database";
 import { config } from "../../config";
 import { ApiError, UnauthorizedError, ValidationError } from "../../lib/errors";
-import type { LoginInput, RegisterInput } from "@aratc/shared";
+import {
+  type LoginInput,
+  type RegisterInput,
+  SELF_SERVICE_ROLES,
+  type SelfServiceRole,
+} from "@aratc/shared";
+
+/**
+ * Resolve the role a visitor may self-assign at registration.
+ *
+ * SECURITY: this is the authoritative server-side check. Even though the
+ * shared registerSchema restricts accountType, the service never trusts
+ * upstream validation — only roles in SELF_SERVICE_ROLES are permitted.
+ * Privileged roles (content_admin, school_admin, super_admin) can only be
+ * granted by an existing admin through the admin users UI.
+ */
+export function resolveSelfServiceRole(accountType: unknown): SelfServiceRole {
+  if (accountType === undefined || accountType === null || accountType === "") {
+    return "student";
+  }
+  if (
+    typeof accountType === "string" &&
+    (SELF_SERVICE_ROLES as readonly string[]).includes(accountType)
+  ) {
+    return accountType as SelfServiceRole;
+  }
+  throw new ValidationError("Invalid account type");
+}
 
 export async function registerUser(input: RegisterInput) {
   // Check if email already exists (production-ready: returns clear error)
@@ -17,8 +44,8 @@ export async function registerUser(input: RegisterInput) {
 
   const passwordHash = await hash(input.password, 10);
 
-  // Assign role based on account type, defaulting to student
-  const roleName = (input.accountType as string) || "student";
+  // Assign role — server-side allowlist only (see resolveSelfServiceRole)
+  const roleName = resolveSelfServiceRole(input.accountType);
 
   const user = await prisma.user.create({
     data: {
@@ -64,6 +91,8 @@ export async function registerUser(input: RegisterInput) {
       roles,
     },
     learnerProfile,
+    // Additive field (organization switcher / active org context).
+    memberships: [],
     token,
   };
 }
@@ -78,6 +107,17 @@ export async function loginUser(input: LoginInput) {
         },
       },
       learnerProfile: true,
+      // Additive: return active memberships so the frontend can auto-select an
+      // organization context (and populate the org switcher) immediately on
+      // login, before /api/me is fetched.
+      memberships: {
+        where: { status: "ACTIVE" },
+        include: {
+          organization: {
+            select: { id: true, name: true, slug: true, type: true },
+          },
+        },
+      },
     },
   });
 
@@ -106,6 +146,12 @@ export async function loginUser(input: LoginInput) {
       roles,
     },
     learnerProfile: user.learnerProfile,
+    // Additive field (organization switcher / active org context).
+    memberships: user.memberships.map((m) => ({
+      id: m.id,
+      role: m.role,
+      organization: m.organization,
+    })),
     token,
   };
 }
@@ -124,6 +170,14 @@ export async function getCurrentUser(userId: string) {
           currentProgram: true,
         },
       },
+      memberships: {
+        where: { status: "ACTIVE" },
+        include: {
+          organization: {
+            select: { id: true, name: true, slug: true, type: true },
+          },
+        },
+      },
     },
   });
 
@@ -138,6 +192,12 @@ export async function getCurrentUser(userId: string) {
     lastName: user.lastName,
     roles: user.roles.map((ur) => ur.role.name),
     learnerProfile: user.learnerProfile,
+    // Additive field — organization switcher data. Empty until memberships exist.
+    memberships: user.memberships.map((m) => ({
+      id: m.id,
+      role: m.role,
+      organization: m.organization,
+    })),
   };
 }
 

@@ -12,7 +12,7 @@ export const createUniversitySchema = z.object({
   description: z.string().optional(),
   location: z.string().optional(),
   website: z.string().url().optional(),
-  status: z.nativeEnum(CONTENT_STATUS).default("ACTIVE"),
+  status: z.nativeEnum(CONTENT_STATUS).default("PUBLISHED"),
 });
 
 export const updateUniversitySchema = createUniversitySchema.partial();

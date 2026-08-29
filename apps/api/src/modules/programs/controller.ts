@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from "express";
 import { prisma } from "@aratc/database";
 import { createProgramSchema } from "@aratc/shared";
 import { validateRequest } from "../../lib/validate";
+import { NotFoundError } from "../../lib/errors";
+import { canViewUnpublishedContent } from "../../lib/visibility";
+import { canReadContent } from "../../lib/tenant-scope";
 import {
   listPrograms,
   getProgramById,
@@ -9,6 +12,9 @@ import {
   createProgram,
   updateProgram,
   publishProgram,
+  submitProgramForReview,
+  approveProgram,
+  rejectProgram,
   deleteProgram,
   createProgramFromTemplate,
   createCetMockExams,
@@ -16,12 +22,16 @@ import {
 import { AratcShsCurriculumTemplate } from "./templates";
 
 export async function list(
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
   try {
-    const programs = await listPrograms();
+    // Non-privileged callers only ever see published programs.
+    const programs = await listPrograms(
+      canViewUnpublishedContent(req) ? undefined : { status: "PUBLISHED" },
+      req.organizationId
+    );
     res.json(programs);
   } catch (error) {
     next(error);
@@ -34,7 +44,15 @@ export async function getById(
   next: NextFunction
 ): Promise<void> {
   try {
-    const program = await getProgramById(req.params.id);
+    const program = await getProgramById(req.params.id, {
+      includeUnpublished: canViewUnpublishedContent(req),
+    });
+    // §44 read scope: org-owned content is only visible to members of the
+    // owning org (platform admins read everything). 404 — never 403 — so the
+    // existence of other orgs' content is not revealed.
+    if (!canReadContent(req.organizationId, req.userRoles, program.organizationId)) {
+      throw new NotFoundError("Program not found");
+    }
     res.json(program);
   } catch (error) {
     next(error);
@@ -48,6 +66,10 @@ export async function getBySlug(
 ): Promise<void> {
   try {
     const program = await getProgramBySlug(req.params.slug);
+    // Same read scope as by-id (§44) — org-owned content stays in its org.
+    if (!canReadContent(req.organizationId, req.userRoles, program.organizationId)) {
+      throw new NotFoundError("Program not found");
+    }
     res.json(program);
   } catch (error) {
     next(error);
@@ -61,7 +83,10 @@ export async function create(
 ): Promise<void> {
   try {
     const input = validateRequest(createProgramSchema, req.body);
-    const program = await createProgram(input);
+    const program = await createProgram(input, {
+      organizationId: req.organizationId,
+      userId: req.userId,
+    });
     res.status(201).json(program);
   } catch (error) {
     next(error);
@@ -75,7 +100,10 @@ export async function update(
 ): Promise<void> {
   try {
     const input = validateRequest(createProgramSchema.partial(), req.body);
-    const program = await updateProgram(req.params.id, input);
+    const program = await updateProgram(req.params.id, input, {
+      organizationId: req.organizationId,
+      roles: req.userRoles,
+    });
     res.json(program);
   } catch (error) {
     next(error);
@@ -88,7 +116,62 @@ export async function publish(
   next: NextFunction
 ): Promise<void> {
   try {
-    const program = await publishProgram(req.params.id);
+    const program = await publishProgram(req.params.id, {
+      organizationId: req.organizationId,
+      roles: req.userRoles,
+    });
+    res.json(program);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ============================================================
+// Approval workflow (CS#6 — §17)
+// ============================================================
+
+export async function submitReview(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const program = await submitProgramForReview(req.params.id, {
+      organizationId: req.organizationId,
+      roles: req.userRoles,
+    });
+    res.json(program);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function approve(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const program = await approveProgram(req.params.id, {
+      organizationId: req.organizationId,
+      roles: req.userRoles,
+    });
+    res.json(program);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function reject(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const program = await rejectProgram(req.params.id, {
+      organizationId: req.organizationId,
+      roles: req.userRoles,
+    });
     res.json(program);
   } catch (error) {
     next(error);
@@ -101,7 +184,10 @@ export async function remove(
   next: NextFunction
 ): Promise<void> {
   try {
-    await deleteProgram(req.params.id);
+    await deleteProgram(req.params.id, {
+      organizationId: req.organizationId,
+      roles: req.userRoles,
+    });
     res.status(204).send();
   } catch (error) {
     next(error);

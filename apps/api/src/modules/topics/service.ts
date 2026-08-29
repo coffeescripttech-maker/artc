@@ -1,9 +1,20 @@
 import { prisma } from "@aratc/database";
 import { NotFoundError, BadRequestError } from "../../lib/errors";
+import {
+  type ContentVisibilityOptions,
+  isVisible,
+  publishedOnly,
+} from "../../lib/visibility";
 import type { CreateTopicInput, UpdateTopicInput } from "./schemas";
 
-export async function listTopics(moduleId?: string) {
-  const where = moduleId ? { moduleId } : {};
+export async function listTopics(
+  moduleId?: string,
+  opts?: ContentVisibilityOptions
+) {
+  const where = {
+    ...(moduleId ? { moduleId } : {}),
+    ...publishedOnly(opts),
+  };
 
   return prisma.topic.findMany({
     where,
@@ -15,8 +26,9 @@ export async function listTopics(moduleId?: string) {
   });
 }
 
-export async function listAllTopics() {
+export async function listAllTopics(opts?: ContentVisibilityOptions) {
   return prisma.topic.findMany({
+    where: publishedOnly(opts),
     orderBy: [{ moduleId: "asc" }, { orderIndex: "asc" }],
     include: {
       module: { select: { id: true, name: true, subject: { select: { id: true, name: true } } } },
@@ -24,7 +36,10 @@ export async function listAllTopics() {
   });
 }
 
-export async function getTopicById(id: string) {
+export async function getTopicById(
+  id: string,
+  opts?: ContentVisibilityOptions
+) {
   const topic = await prisma.topic.findUnique({
     where: { id },
     include: {
@@ -36,12 +51,14 @@ export async function getTopicById(id: string) {
         },
       },
       lessons: {
+        // Nested drafts are hidden from non-privileged callers as well.
+        ...(opts?.includeUnpublished ? {} : { where: { status: "PUBLISHED" as const } }),
         orderBy: { orderIndex: "asc" },
       },
     },
   });
 
-  if (!topic) {
+  if (!topic || !isVisible(topic.status, opts)) {
     throw new NotFoundError("Topic not found");
   }
 

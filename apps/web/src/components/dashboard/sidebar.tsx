@@ -25,6 +25,7 @@ import {
   Award,
   Building,
   Target,
+  ShieldCheck,
 } from "lucide-react";
 import { cn } from "@aratc/ui";
 import { Avatar, AvatarFallback, Button, Badge } from "@/components/ui";
@@ -244,7 +245,18 @@ export function Sidebar({ role = "student", children }: SidebarProps) {
     });
   };
 
-  const nav = role === "admin" ? adminNav : role === "teacher" ? teacherNav : studentNav;
+  const baseNav = role === "admin" ? adminNav : role === "teacher" ? teacherNav : studentNav;
+  // Superadmin-only platform management section (CS#7) — visible only to
+  // users holding the super_admin platform role.
+  const isSuperAdmin = user?.roles?.includes("super_admin") ?? false;
+  const platformGroup: NavGroup = {
+    label: "PLATFORM",
+    items: [
+      { label: "Organizations", href: "/platform/organizations", icon: ShieldCheck },
+    ],
+  };
+  const nav =
+    isSuperAdmin && role === "admin" ? [platformGroup, ...baseNav] : baseNav;
 
   // Get user initials for avatar
   const getInitials = () => {

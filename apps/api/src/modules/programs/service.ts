@@ -2,13 +2,29 @@ import { prisma } from "@aratc/database";
 import { createProgramSchema } from "@aratc/shared";
 import { z } from "zod";
 import { NotFoundError, ValidationError } from "../../lib/errors";
+import {
+  type ContentVisibilityOptions,
+  isVisible,
+} from "../../lib/visibility";
+import {
+  orgReadScope,
+  assertCanEditContent,
+  assertTransition,
+  assertCanPublish,
+} from "../../lib/tenant-scope";
 import type { CurriculumTemplate, CetExamTemplate } from "./templates";
 
 type CreateProgramInput = z.infer<typeof createProgramSchema>;
 
-export async function listPrograms(args?: { status?: "DRAFT" | "PUBLISHED" | "ARCHIVED" }) {
+export async function listPrograms(
+  args?: { status?: "DRAFT" | "PUBLISHED" | "ARCHIVED" },
+  organizationId?: string
+) {
   return prisma.program.findMany({
-    where: args?.status ? { status: args.status } : undefined,
+    where: {
+      ...(args?.status ? { status: args.status } : {}),
+      ...orgReadScope(organizationId),
+    },
     orderBy: { createdAt: "desc" },
     include: {
       _count: {
@@ -22,7 +38,10 @@ export async function listPrograms(args?: { status?: "DRAFT" | "PUBLISHED" | "AR
   });
 }
 
-export async function getProgramById(id: string) {
+export async function getProgramById(
+  id: string,
+  opts?: ContentVisibilityOptions
+) {
   const program = await prisma.program.findUnique({
     where: { id },
     include: {
@@ -44,7 +63,8 @@ export async function getProgramById(id: string) {
     },
   });
 
-  if (!program) {
+  // Draft/archived programs read as "not found" for non-privileged callers.
+  if (!program || !isVisible(program.status, opts)) {
     throw new NotFoundError("Program not found");
   }
 
@@ -111,7 +131,10 @@ export async function getProgramBySlug(slug: string) {
   return program;
 }
 
-export async function createProgram(input: CreateProgramInput) {
+export async function createProgram(
+  input: CreateProgramInput,
+  owner?: { organizationId?: string; userId?: string }
+) {
   return prisma.program.create({
     data: {
       name: input.name,
@@ -121,15 +144,28 @@ export async function createProgram(input: CreateProgramInput) {
       programType: input.stage,
       imageUrl: input.imageUrl || undefined,
       status: "DRAFT",
+      organizationId: owner?.organizationId ?? undefined,
+      createdById: owner?.userId ?? undefined,
     },
   });
 }
 
-export async function updateProgram(id: string, input: Partial<CreateProgramInput>) {
+export async function updateProgram(
+  id: string,
+  input: Partial<CreateProgramInput>,
+  requester?: { organizationId?: string; roles?: string[] }
+) {
   const existing = await prisma.program.findUnique({ where: { id } });
   if (!existing) {
     throw new NotFoundError("Program not found");
   }
+
+  // §44 ownership check — caller must manage this program's org.
+  assertCanEditContent(
+    requester?.organizationId,
+    requester?.roles,
+    existing.organizationId
+  );
 
   // Validate slug uniqueness if slug is being changed
   if (input.slug && input.slug !== existing.slug) {
@@ -151,11 +187,31 @@ export async function updateProgram(id: string, input: Partial<CreateProgramInpu
   });
 }
 
-export async function publishProgram(id: string) {
-  const existing = await prisma.program.findUnique({ where: { id } });
+export async function publishProgram(
+  id: string,
+  requester?: { organizationId?: string; roles?: string[] }
+) {
+  const existing = await prisma.program.findUnique({
+    where: { id },
+    include: { organization: { select: { metadata: true } } },
+  });
   if (!existing) {
     throw new NotFoundError("Program not found");
   }
+
+  assertCanEditContent(
+    requester?.organizationId,
+    requester?.roles,
+    existing.organizationId
+  );
+
+  // §17 approval workflow — orgs with review mode require APPROVED first.
+  assertCanPublish(
+    existing.status,
+    existing.organizationId,
+    existing.organization?.metadata,
+    requester?.roles
+  );
 
   return prisma.program.update({
     where: { id },
@@ -163,11 +219,90 @@ export async function publishProgram(id: string) {
   });
 }
 
-export async function deleteProgram(id: string) {
+// ============================================================
+// Approval workflow (CS#6 — §17): submit → review → approve/reject
+// ============================================================
+
+export async function submitProgramForReview(
+  id: string,
+  requester?: { organizationId?: string; roles?: string[] }
+) {
   const existing = await prisma.program.findUnique({ where: { id } });
   if (!existing) {
     throw new NotFoundError("Program not found");
   }
+
+  assertCanEditContent(
+    requester?.organizationId,
+    requester?.roles,
+    existing.organizationId
+  );
+  assertTransition(existing.status, "SUBMIT_REVIEW");
+
+  return prisma.program.update({
+    where: { id },
+    data: { status: "UNDER_REVIEW" },
+  });
+}
+
+export async function approveProgram(
+  id: string,
+  requester?: { organizationId?: string; roles?: string[] }
+) {
+  const existing = await prisma.program.findUnique({ where: { id } });
+  if (!existing) {
+    throw new NotFoundError("Program not found");
+  }
+
+  assertCanEditContent(
+    requester?.organizationId,
+    requester?.roles,
+    existing.organizationId
+  );
+  assertTransition(existing.status, "APPROVE");
+
+  return prisma.program.update({
+    where: { id },
+    data: { status: "APPROVED" },
+  });
+}
+
+export async function rejectProgram(
+  id: string,
+  requester?: { organizationId?: string; roles?: string[] }
+) {
+  const existing = await prisma.program.findUnique({ where: { id } });
+  if (!existing) {
+    throw new NotFoundError("Program not found");
+  }
+
+  assertCanEditContent(
+    requester?.organizationId,
+    requester?.roles,
+    existing.organizationId
+  );
+  assertTransition(existing.status, "REJECT");
+
+  return prisma.program.update({
+    where: { id },
+    data: { status: "DRAFT" },
+  });
+}
+
+export async function deleteProgram(
+  id: string,
+  requester?: { organizationId?: string; roles?: string[] }
+) {
+  const existing = await prisma.program.findUnique({ where: { id } });
+  if (!existing) {
+    throw new NotFoundError("Program not found");
+  }
+
+  assertCanEditContent(
+    requester?.organizationId,
+    requester?.roles,
+    existing.organizationId
+  );
 
   // Delete associated records first to avoid FK constraint errors,
   // since Curriculum.programId and Assessment.programId are optional

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { validateRequest } from "../../lib/validate";
+import { contentVisibility } from "../../lib/visibility";
 import {
   listModules,
   getModuleById,
@@ -18,7 +19,7 @@ export async function list(
 ): Promise<void> {
   try {
     const subjectId = req.query.subjectId as string | undefined;
-    const modules = await listModules(subjectId);
+    const modules = await listModules(subjectId, contentVisibility(req));
     res.json(modules);
   } catch (error) {
     next(error);
@@ -31,7 +32,7 @@ export async function getById(
   next: NextFunction
 ): Promise<void> {
   try {
-    const module = await getModuleById(req.params.id);
+    const module = await getModuleById(req.params.id, contentVisibility(req));
     res.json(module);
   } catch (error) {
     next(error);
@@ -44,7 +45,7 @@ export async function create(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { createModuleSchema } = await import("./schemas");
+    const { createModuleSchema } = await import("./schemas.js");
     const input = validateRequest(createModuleSchema, req.body);
     const module = await createModule(input);
     res.status(201).json(module);
@@ -59,7 +60,7 @@ export async function update(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { updateModuleSchema } = await import("./schemas");
+    const { updateModuleSchema } = await import("./schemas.js");
     const input = validateRequest(updateModuleSchema, req.body);
     const module = await updateModule(req.params.id, input);
     res.json(module);

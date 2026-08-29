@@ -12,13 +12,7 @@
  * `ImageData` — all of which pdfjs needs as globals in a Node environment.
  */
 
-import { createRequire } from "module";
-import { pathToFileURL } from "url";
-import { Worker } from "worker_threads";
 import { Buffer } from "buffer";
-
-// CommonJS require for resolving the worker module path under ESM.
-const requireLocal = createRequire(import.meta.url);
 
 // Polyfill global canvas constructors that pdfjs expects in a Node
 // environment.  `canvas@3` exports these, but pdfjs checks `globalThis`

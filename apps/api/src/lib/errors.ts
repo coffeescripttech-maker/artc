@@ -37,3 +37,9 @@ export class BadRequestError extends ApiError {
     super(message, 400);
   }
 }
+
+export class RateLimitError extends ApiError {
+  constructor(message: string = "Too many requests") {
+    super(message, 429);
+  }
+}

@@ -1,9 +1,20 @@
 import { prisma } from "@aratc/database";
 import { NotFoundError, BadRequestError } from "../../lib/errors";
+import {
+  type ContentVisibilityOptions,
+  isVisible,
+  publishedOnly,
+} from "../../lib/visibility";
 import type { CreateModuleInput, UpdateModuleInput } from "./schemas";
 
-export async function listModules(subjectId?: string) {
-  const where = subjectId ? { subjectId } : {};
+export async function listModules(
+  subjectId?: string,
+  opts?: ContentVisibilityOptions
+) {
+  const where = {
+    ...(subjectId ? { subjectId } : {}),
+    ...publishedOnly(opts),
+  };
 
   return prisma.module.findMany({
     where,
@@ -15,12 +26,17 @@ export async function listModules(subjectId?: string) {
   });
 }
 
-export async function getModuleById(id: string) {
+export async function getModuleById(
+  id: string,
+  opts?: ContentVisibilityOptions
+) {
   const module = await prisma.module.findUnique({
     where: { id },
     include: {
       subject: { select: { id: true, name: true, slug: true, code: true } },
       topics: {
+        // Nested drafts are hidden from non-privileged callers as well.
+        ...(opts?.includeUnpublished ? {} : { where: { status: "PUBLISHED" as const } }),
         orderBy: { orderIndex: "asc" },
         include: {
           _count: { select: { lessons: true } },
@@ -29,7 +45,7 @@ export async function getModuleById(id: string) {
     },
   });
 
-  if (!module) {
+  if (!module || !isVisible(module.status, opts)) {
     throw new NotFoundError("Module not found");
   }
 

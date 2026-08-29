@@ -5,6 +5,9 @@ import {
   create,
   update,
   publish,
+  submitReview,
+  approve,
+  reject,
   archive,
   remove,
   reorder,
@@ -17,6 +20,11 @@ import {
   getQuestionResponse,
 } from "./controller";
 import { authenticate, requireRole } from "../../middleware/auth";
+import { resolveOrgContext } from "../../middleware/org-context";
+import {
+  requireContentEditor,
+  requireContentApprover,
+} from "../../middleware/content-editor";
 
 const router: IRouter = Router();
 
@@ -38,12 +46,17 @@ router.put("/:id/progress", authenticate, setProgress);
 router.post("/:id/questions/:questionId/respond", authenticate, requireRole("student", "content_admin", "super_admin"), saveQuestionResponse);
 router.get("/:id/questions/:questionId/response", authenticate, getQuestionResponse);
 
-// Protected admin routes
-router.post("/", authenticate, requireRole("content_admin", "super_admin"), create);
-router.put("/:id", authenticate, requireRole("content_admin", "super_admin"), update);
-router.patch("/:id/publish", authenticate, requireRole("content_admin", "super_admin"), publish);
-router.patch("/:id/archive", authenticate, requireRole("content_admin", "super_admin"), archive);
-router.delete("/:id", authenticate, requireRole("super_admin"), remove);
-router.put("/topic/:topicId/reorder", authenticate, requireRole("content_admin", "super_admin"), reorder);
+// Protected content routes — org managers may create/update/publish within
+// their active org; deletes remain super_admin-only for safety.
+router.post("/", authenticate, resolveOrgContext, requireContentEditor(), create);
+router.put("/:id", authenticate, resolveOrgContext, requireContentEditor(), update);
+router.patch("/:id/publish", authenticate, resolveOrgContext, requireContentEditor(), publish);
+// Approval workflow (CS#6 — §17): editors submit, org approvers review.
+router.patch("/:id/submit-review", authenticate, resolveOrgContext, requireContentEditor(), submitReview);
+router.patch("/:id/approve", authenticate, resolveOrgContext, requireContentApprover(), approve);
+router.patch("/:id/reject", authenticate, resolveOrgContext, requireContentApprover(), reject);
+router.patch("/:id/archive", authenticate, resolveOrgContext, requireContentEditor(), archive);
+router.delete("/:id", authenticate, resolveOrgContext, requireRole("super_admin"), remove);
+router.put("/topic/:topicId/reorder", authenticate, resolveOrgContext, requireRole("content_admin", "super_admin"), reorder);
 
 export { router as lessonRoutes };

@@ -1,0 +1,421 @@
+Unexpected error: PrismaClientInitializationError: 
+Invalid `prisma.organizationMembership.findUnique()` invocation in
+C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:60
+
+  56   return next();
+  57 }
+  58 
+→ 59 const membership = await prisma.organizationMembership.findUnique(
+Can't reach database server at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`
+
+Please make sure your database server is running at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`.
+    at $n.handleRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:7615)
+    at $n.handleAndLogRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async resolveOrgContext (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:24) {
+  clientVersion: '5.22.0',
+  errorCode: undefined
+}
+Warning: TrueType Collection does not contain "DCWGQU+CambriaMath" font, falling back to "CambriaMath" font instead.
+Warning: TT: invalid function id: 136
+Unexpected error: PrismaClientKnownRequestError: 
+Invalid `prisma.organizationMembership.findUnique()` invocation in
+C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:60
+
+  56   return next();
+  57 }
+  58 
+→ 59 const membership = await prisma.organizationMembership.findUnique(
+Can't reach database server at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`
+
+Please make sure your database server is running at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`.
+    at $n.handleRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async resolveOrgContext (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:24) {
+  code: 'P1001',
+  clientVersion: '5.22.0',
+  meta: {
+    modelName: 'OrganizationMembership',
+    database_host: 'ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech',
+    database_port: 5432
+  }
+}
+Unexpected error: PrismaClientKnownRequestError: 
+Invalid `prisma.organizationMembership.findUnique()` invocation in
+C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:60
+
+  56   return next();
+  57 }
+  58 
+→ 59 const membership = await prisma.organizationMembership.findUnique(
+Can't reach database server at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`
+
+Please make sure your database server is running at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`.
+    at $n.handleRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async resolveOrgContext (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:24) {
+  code: 'P1001',
+  clientVersion: '5.22.0',
+  meta: {
+    modelName: 'OrganizationMembership',
+    database_host: 'ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech',
+    database_port: 5432
+  }
+}
+Unexpected error: PrismaClientKnownRequestError: 
+Invalid `prisma.organizationMembership.findUnique()` invocation in
+C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:60
+
+  56   return next();
+  57 }
+  58 
+→ 59 const membership = await prisma.organizationMembership.findUnique(
+Can't reach database server at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`
+
+Please make sure your database server is running at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`.
+    at $n.handleRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async resolveOrgContext (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:24) {
+  code: 'P1001',
+  clientVersion: '5.22.0',
+  meta: {
+    modelName: 'OrganizationMembership',
+    database_host: 'ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech',
+    database_port: 5432
+  }
+}
+Unexpected error: PrismaClientKnownRequestError: 
+Invalid `prisma.curriculum.findMany()` invocation in
+C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\modules\curriculum\service.ts:9:28
+
+  6 export async function listCurriculums(programId?: string) {
+  7   const where = programId ? { programId } : {};
+  8 
+→ 9   return prisma.curriculum.findMany(
+Timed out fetching a new connection from the connection pool. More info: http://pris.ly/d/connection-pool (Current connection pool timeout: 10, connection limit: 9)
+    at $n.handleRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async list (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\modules\curriculum\controller.ts:26:25) {
+  code: 'P2024',
+  clientVersion: '5.22.0',
+  meta: { modelName: 'Curriculum', connection_limit: 9, timeout: 10 }
+}
+Unexpected error: PrismaClientKnownRequestError: 
+Invalid `prisma.assessment.findMany()` invocation in
+C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\modules\assessments\service.ts:25:28
+
+  22   where.status = filters.status;
+  23 }
+  24 
+→ 25 return prisma.assessment.findMany(
+Timed out fetching a new connection from the connection pool. More info: http://pris.ly/d/connection-pool (Current connection pool timeout: 10, connection limit: 9)
+    at $n.handleRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async list (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\modules\assessments\controller.ts:32:25) {
+  code: 'P2024',
+  clientVersion: '5.22.0',
+  meta: { modelName: 'Assessment', connection_limit: 9, timeout: 10 }
+}
+Unexpected error: PrismaClientKnownRequestError: 
+Invalid `prisma.organizationMembership.findUnique()` invocation in
+C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:60
+
+  56   return next();
+  57 }
+  58 
+→ 59 const membership = await prisma.organizationMembership.findUnique(
+Can't reach database server at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`
+
+Please make sure your database server is running at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`.
+    at $n.handleRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async resolveOrgContext (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:24) {
+  code: 'P1001',
+  clientVersion: '5.22.0',
+  meta: {
+    modelName: 'OrganizationMembership',
+    database_host: 'ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech',
+    database_port: 5432
+  }
+}
+node:internal/modules/cjs/loader:1517
+  const err = new Error(message);
+              ^
+
+Error: Cannot find module './auth-middleware'
+Require stack:
+- C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\modules\platform\organizations\router.ts
+- C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\app.ts
+- C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\index.ts
+    at node:internal/modules/cjs/loader:1517:15
+    at nextResolveSimple (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\tsx@4.23.12\node_modules\tsx\dist\register-C557imBs.cjs:10:1006)
+    at C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\tsx@4.23.12\node_modules\tsx\dist\register-C557imBs.cjs:9:4959
+    at C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\tsx@4.23.12\node_modules\tsx\dist\register-C557imBs.cjs:9:4261
+    at resolveTsPaths (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\tsx@4.23.12\node_modules\tsx\dist\register-C557imBs.cjs:10:759)
+    at C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\tsx@4.23.12\node_modules\tsx\dist\register-C557imBs.cjs:10:1199
+    at j._resolveFilename (file:///C:/Users/ACER/Desktop/2026%20CAPSTONE/ARATC_LMS/node_modules/.pnpm/tsx@4.23.12/node_modules/tsx/dist/register-C4vWVmug.mjs:2:17957)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1071:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1095:10)
+    at defaultResolve (node:internal/modules/cjs/loader:1152:20) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    'C:\\Users\\ACER\\Desktop\\2026 CAPSTONE\\ARATC_LMS\\apps\\api\\src\\modules\\platform\\organizations\\router.ts',
+    'C:\\Users\\ACER\\Desktop\\2026 CAPSTONE\\ARATC_LMS\\apps\\api\\src\\app.ts',
+    'C:\\Users\\ACER\\Desktop\\2026 CAPSTONE\\ARATC_LMS\\apps\\api\\src\\index.ts'
+  ]
+}
+
+Node.js v24.19.0
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2167:16)
+    at listenInCluster (node:net:2224:12)
+    at Server.listen (node:net:2344:7)
+    at app.listen (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\express@4.22.2\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\index.ts:7:5)
+    at Object.<anonymous> (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\index.ts:9:2)
+    at Module._compile (node:internal/modules/cjs/loader:1872:14)
+    at Object.transformer (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\tsx@4.23.12\node_modules\tsx\dist\register-C557imBs.cjs:9:3619)
+    at Module.load (node:internal/modules/cjs/loader:1594:32)
+    at Module._load (node:internal/modules/cjs/loader:1396:12)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2203:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.19.0
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2167:16)
+    at listenInCluster (node:net:2224:12)
+    at Server.listen (node:net:2344:7)
+    at app.listen (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\express@4.22.2\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\index.ts:7:5)
+    at Object.<anonymous> (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\index.ts:9:2)
+    at Module._compile (node:internal/modules/cjs/loader:1872:14)
+    at Object.transformer (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\tsx@4.23.12\node_modules\tsx\dist\register-C557imBs.cjs:9:3619)
+    at Module.load (node:internal/modules/cjs/loader:1594:32)
+    at Module._load (node:internal/modules/cjs/loader:1396:12)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2203:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.19.0
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2167:16)
+    at listenInCluster (node:net:2224:12)
+    at Server.listen (node:net:2344:7)
+    at app.listen (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\express@4.22.2\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\index.ts:7:5)
+    at Object.<anonymous> (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\index.ts:9:2)
+    at Module._compile (node:internal/modules/cjs/loader:1872:14)
+    at Object.transformer (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\tsx@4.23.12\node_modules\tsx\dist\register-C557imBs.cjs:9:3619)
+    at Module.load (node:internal/modules/cjs/loader:1594:32)
+    at Module._load (node:internal/modules/cjs/loader:1396:12)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2203:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.19.0
+node:events:487
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2167:16)
+    at listenInCluster (node:net:2224:12)
+    at Server.listen (node:net:2344:7)
+    at app.listen (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\express@4.22.2\node_modules\express\lib\application.js:635:24)
+    at <anonymous> (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\index.ts:7:5)
+    at Object.<anonymous> (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\index.ts:9:2)
+    at Module._compile (node:internal/modules/cjs/loader:1872:14)
+    at Object.transformer (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\tsx@4.23.12\node_modules\tsx\dist\register-C557imBs.cjs:9:3619)
+    at Module.load (node:internal/modules/cjs/loader:1594:32)
+    at Module._load (node:internal/modules/cjs/loader:1396:12)
+Emitted 'error' event on Server instance at:
+    at emitErrorNT (node:net:2203:8)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.19.0
+Unexpected error: PrismaClientKnownRequestError: 
+Invalid `prisma.organizationMembership.findUnique()` invocation in
+C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:60
+
+  56   return next();
+  57 }
+  58 
+→ 59 const membership = await prisma.organizationMembership.findUnique(
+Timed out fetching a new connection from the connection pool. More info: http://pris.ly/d/connection-pool (Current connection pool timeout: 10, connection limit: 9)
+    at $n.handleRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async resolveOrgContext (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:24) {
+  code: 'P2024',
+  clientVersion: '5.22.0',
+  meta: {
+    modelName: 'OrganizationMembership',
+    connection_limit: 9,
+    timeout: 10
+  }
+}
+Unexpected error: PrismaClientKnownRequestError: 
+Invalid `prisma.organizationMembership.findUnique()` invocation in
+C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:60
+
+  56   return next();
+  57 }
+  58 
+→ 59 const membership = await prisma.organizationMembership.findUnique(
+Can't reach database server at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`
+
+Please make sure your database server is running at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`.
+    at $n.handleRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async resolveOrgContext (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:24) {
+  code: 'P1001',
+  clientVersion: '5.22.0',
+  meta: {
+    modelName: 'OrganizationMembership',
+    database_host: 'ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech',
+    database_port: 5432
+  }
+}
+Unexpected error: PrismaClientKnownRequestError: 
+Invalid `prisma.organizationMembership.findUnique()` invocation in
+C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:60
+
+  56   return next();
+  57 }
+  58 
+→ 59 const membership = await prisma.organizationMembership.findUnique(
+Server has closed the connection.
+    at $n.handleRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async resolveOrgContext (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:24) {
+  code: 'P1017',
+  clientVersion: '5.22.0',
+  meta: { modelName: 'OrganizationMembership' }
+}
+Unexpected error: PrismaClientKnownRequestError: 
+Invalid `prisma.organizationMembership.findUnique()` invocation in
+C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:60
+
+  56   return next();
+  57 }
+  58 
+→ 59 const membership = await prisma.organizationMembership.findUnique(
+Can't reach database server at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`
+
+Please make sure your database server is running at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`.
+    at $n.handleRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async resolveOrgContext (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:24) {
+  code: 'P1001',
+  clientVersion: '5.22.0',
+  meta: {
+    modelName: 'OrganizationMembership',
+    database_host: 'ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech',
+    database_port: 5432
+  }
+}
+Unexpected error: PrismaClientKnownRequestError: 
+Invalid `prisma.organizationMembership.findUnique()` invocation in
+C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:60
+
+  56   return next();
+  57 }
+  58 
+→ 59 const membership = await prisma.organizationMembership.findUnique(
+Can't reach database server at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`
+
+Please make sure your database server is running at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`.
+    at $n.handleRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async resolveOrgContext (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:24) {
+  code: 'P1001',
+  clientVersion: '5.22.0',
+  meta: {
+    modelName: 'OrganizationMembership',
+    database_host: 'ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech',
+    database_port: 5432
+  }
+}
+Unexpected error: PrismaClientKnownRequestError: 
+Invalid `prisma.organizationMembership.findUnique()` invocation in
+C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:60
+
+  56   return next();
+  57 }
+  58 
+→ 59 const membership = await prisma.organizationMembership.findUnique(
+Can't reach database server at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`
+
+Please make sure your database server is running at `ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech:5432`.
+    at $n.handleRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:7315)
+    at $n.handleAndLogRequestError (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async resolveOrgContext (C:\Users\ACER\Desktop\2026 CAPSTONE\ARATC_LMS\apps\api\src\middleware\org-context.ts:59:24) {
+  code: 'P1001',
+  clientVersion: '5.22.0',
+  meta: {
+    modelName: 'OrganizationMembership',
+    database_host: 'ep-floral-pond-b3sp8mny-pooler.c-4.ap-southeast-1.aws.neon.tech',
+    database_port: 5432
+  }
+}

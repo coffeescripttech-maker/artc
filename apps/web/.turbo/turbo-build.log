@@ -5,3 +5,101 @@
   ▲ Next.js 14.2.7
 
    Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+ ⨯ ESLint: Invalid Options: - Unknown options: useEslintrc, extensions - 'extensions' has been removed.
+   Collecting page data ...
+   Generating static pages (0/60) ...
+   Generating static pages (15/60) 
+   Generating static pages (30/60) 
+   Generating static pages (45/60) 
+ ✓ Generating static pages (60/60)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                                Size     First Load JS
+┌ ƒ /                                                      232 B           122 kB
+├ ƒ /_not-found                                            879 B          88.2 kB
+├ ƒ /about                                                 5.14 kB         127 kB
+├ ƒ /admin                                                 8.38 kB         134 kB
+├ ƒ /admin/analytics                                       3.84 kB         129 kB
+├ ƒ /admin/assessments                                     6.92 kB         181 kB
+├ ƒ /admin/assessments/[assessmentId]                      9.82 kB         184 kB
+├ ƒ /admin/assessments/new                                 6.43 kB         180 kB
+├ ƒ /admin/cet                                             2.4 kB          125 kB
+├ ƒ /admin/cet/exams                                       2.85 kB         125 kB
+├ ƒ /admin/cet/profiles                                    3.08 kB         125 kB
+├ ƒ /admin/cet/universities                                3.09 kB         125 kB
+├ ƒ /admin/curriculums                                     7.17 kB         181 kB
+├ ƒ /admin/curriculums/[curriculumId]                      6.42 kB         180 kB
+├ ƒ /admin/curriculums/new                                 5.22 kB         179 kB
+├ ƒ /admin/lessons                                         3.06 kB         182 kB
+├ ƒ /admin/lessons/[lessonId]                              126 kB          307 kB
+├ ƒ /admin/lessons/new                                     5.26 kB         179 kB
+├ ƒ /admin/members                                         4.94 kB         127 kB
+├ ƒ /admin/modules                                         7.35 kB         181 kB
+├ ƒ /admin/modules/[moduleId]                              3.56 kB         182 kB
+├ ƒ /admin/modules/new                                     4.63 kB         179 kB
+├ ƒ /admin/parents                                         3.45 kB         126 kB
+├ ƒ /admin/passages                                        7.48 kB         182 kB
+├ ƒ /admin/programs                                        8.83 kB         183 kB
+├ ƒ /admin/programs/[programId]                            9.9 kB          184 kB
+├ ƒ /admin/programs/[programId]/curriculum                 6.3 kB          180 kB
+├ ƒ /admin/programs/[programId]/curriculum/[curriculumId]  6.48 kB         181 kB
+├ ƒ /admin/programs/[programId]/edit                       7.02 kB         181 kB
+├ ƒ /admin/programs/[programId]/exams                      6.8 kB          181 kB
+├ ƒ /admin/programs/new                                    6.42 kB         180 kB
+├ ƒ /admin/question-bank                                   7.4 kB          181 kB
+├ ƒ /admin/question-bank/[questionId]                      9.35 kB         183 kB
+├ ƒ /admin/question-bank/categories                        5.13 kB         179 kB
+├ ƒ /admin/question-bank/import                            148 B          87.5 kB
+├ ƒ /admin/reports                                         3.98 kB         126 kB
+├ ƒ /admin/settings                                        4.31 kB         159 kB
+├ ƒ /admin/students                                        3.65 kB         126 kB
+├ ƒ /admin/subjects                                        7.26 kB         181 kB
+├ ƒ /admin/subjects/[subjectId]                            7.78 kB         182 kB
+├ ƒ /admin/subjects/new                                    4.86 kB         179 kB
+├ ƒ /admin/topics                                          7.14 kB         181 kB
+├ ƒ /admin/topics/[topicId]                                8.07 kB         182 kB
+├ ƒ /admin/topics/new                                      4.66 kB         179 kB
+├ ƒ /admin/users                                           5.68 kB         128 kB
+├ ƒ /contact                                               3.16 kB         125 kB
+├ ƒ /dashboard                                             3.66 kB         129 kB
+├ ƒ /dashboard/achievements                                3.82 kB         126 kB
+├ ƒ /dashboard/activity                                    2.29 kB         128 kB
+├ ƒ /dashboard/analytics                                   3.46 kB         126 kB
+├ ƒ /dashboard/assessments                                 3.05 kB         128 kB
+├ ƒ /dashboard/assessments/[assessmentId]                  7.06 kB         116 kB
+├ ƒ /dashboard/assessments/[assessmentId]/recommendations  3.25 kB         128 kB
+├ ƒ /dashboard/assessments/[assessmentId]/report           8.62 kB        98.8 kB
+├ ƒ /dashboard/assessments/[assessmentId]/review           5.68 kB         114 kB
+├ ƒ /dashboard/assessments/history                         2.88 kB         128 kB
+├ ƒ /dashboard/classes                                     1.81 kB         124 kB
+├ ƒ /dashboard/classes/[batchId]                           5.15 kB         196 kB
+├ ƒ /dashboard/exams                                       4.37 kB         127 kB
+├ ƒ /dashboard/help                                        4.01 kB         126 kB
+├ ƒ /dashboard/lessons/[lessonId]                          3.85 kB         166 kB
+├ ƒ /dashboard/practice                                    3.99 kB         126 kB
+├ ƒ /dashboard/practice/topic/[topicId]                    2.97 kB         141 kB
+├ ƒ /dashboard/practice/weak-topics                        1.95 kB         127 kB
+├ ƒ /dashboard/programs                                    3.16 kB         128 kB
+├ ƒ /dashboard/progress                                    2.56 kB         128 kB
+├ ƒ /dashboard/progression                                 3.53 kB         129 kB
+├ ƒ /dashboard/questions                                   2.27 kB         125 kB
+├ ƒ /dashboard/questions/import                            12.2 kB         147 kB
+├ ƒ /dashboard/reports                                     2.19 kB         125 kB
+├ ƒ /dashboard/settings                                    4.94 kB         127 kB
+├ ƒ /features                                              3.56 kB         126 kB
+├ ƒ /forgot-password                                       5.11 kB         116 kB
+├ ƒ /login                                                 6.36 kB         117 kB
+├ ƒ /pricing                                               4.6 kB          127 kB
+├ ƒ /programs                                              4.5 kB          127 kB
+└ ƒ /register                                              7.56 kB         119 kB
++ First Load JS shared by all                              87.3 kB
+  ├ chunks/8739-76aabb96c8d44b0d.js                        31.7 kB
+  ├ chunks/fb55d62e-d8668d06626123a9.js                    53.6 kB
+  └ other shared chunks (total)                            1.97 kB
+
+
+ƒ  (Dynamic)  server-rendered on demand
+

@@ -1,10 +1,16 @@
 import { prisma } from "@aratc/database";
 import { createSubjectSchema } from "./schemas";
 import { NotFoundError } from "../../lib/errors";
+import {
+  type ContentVisibilityOptions,
+  isVisible,
+  publishedOnly,
+} from "../../lib/visibility";
 import type { CreateSubjectInput } from "./schemas";
 
-export async function listSubjects() {
+export async function listSubjects(opts?: ContentVisibilityOptions) {
   return prisma.subject.findMany({
+    where: publishedOnly(opts),
     orderBy: { name: "asc" },
     include: {
       _count: {
@@ -18,11 +24,16 @@ export async function listSubjects() {
   });
 }
 
-export async function getSubjectById(id: string) {
+export async function getSubjectById(
+  id: string,
+  opts?: ContentVisibilityOptions
+) {
   const subject = await prisma.subject.findUnique({
     where: { id },
     include: {
       modules: {
+        // Nested drafts are hidden from non-privileged callers as well.
+        ...(opts?.includeUnpublished ? {} : { where: { status: "PUBLISHED" as const } }),
         orderBy: { orderIndex: "asc" },
         include: {
           _count: { select: { topics: true } },
@@ -37,18 +48,22 @@ export async function getSubjectById(id: string) {
     },
   });
 
-  if (!subject) {
+  if (!subject || !isVisible(subject.status, opts)) {
     throw new NotFoundError("Subject not found");
   }
 
   return subject;
 }
 
-export async function getSubjectBySlug(slug: string) {
+export async function getSubjectBySlug(
+  slug: string,
+  opts?: ContentVisibilityOptions
+) {
   const subject = await prisma.subject.findUnique({
     where: { slug },
     include: {
       modules: {
+        ...(opts?.includeUnpublished ? {} : { where: { status: "PUBLISHED" as const } }),
         orderBy: { orderIndex: "asc" },
         include: {
           topics: {
@@ -72,7 +87,7 @@ export async function getSubjectBySlug(slug: string) {
     },
   });
 
-  if (!subject) {
+  if (!subject || !isVisible(subject.status, opts)) {
     throw new NotFoundError("Subject not found");
   }
 

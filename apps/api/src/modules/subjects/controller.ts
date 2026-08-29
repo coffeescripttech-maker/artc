@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { validateRequest } from "../../lib/validate";
+import { contentVisibility } from "../../lib/visibility";
 import {
   listSubjects,
   getSubjectById,
@@ -13,12 +14,12 @@ import {
 } from "./service";
 
 export async function list(
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
   try {
-    const subjects = await listSubjects();
+    const subjects = await listSubjects(contentVisibility(req));
     res.json(subjects);
   } catch (error) {
     next(error);
@@ -31,7 +32,7 @@ export async function getById(
   next: NextFunction
 ): Promise<void> {
   try {
-    const subject = await getSubjectById(req.params.id);
+    const subject = await getSubjectById(req.params.id, contentVisibility(req));
     res.json(subject);
   } catch (error) {
     next(error);
@@ -44,7 +45,7 @@ export async function getBySlug(
   next: NextFunction
 ): Promise<void> {
   try {
-    const subject = await getSubjectBySlug(req.params.slug);
+    const subject = await getSubjectBySlug(req.params.slug, contentVisibility(req));
     res.json(subject);
   } catch (error) {
     next(error);
@@ -57,7 +58,7 @@ export async function create(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { createSubjectSchema } = await import("./schemas");
+    const { createSubjectSchema } = await import("./schemas.js");
     const input = validateRequest(createSubjectSchema, req.body);
     const subject = await createSubject(input);
     res.status(201).json(subject);
@@ -72,7 +73,7 @@ export async function update(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { updateSubjectSchema } = await import("./schemas");
+    const { updateSubjectSchema } = await import("./schemas.js");
     const input = validateRequest(updateSubjectSchema, req.body);
     const subject = await updateSubject(req.params.id, input);
     res.json(subject);

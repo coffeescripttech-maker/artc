@@ -1,4 +1,5 @@
 import type { BrandSettings, GeneralSettings } from "@aratc/shared";
+import { getActiveOrgId } from "../org-api";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
 
@@ -27,6 +28,15 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
   const authToken = _skipAuth ? undefined : token || getToken();
   if (authToken) {
     (headers as Record<string, string>)["Authorization"] = `Bearer ${authToken}`;
+  }
+
+  // Attach the active organization context (Change Set #4/#5): the backend's
+  // org-context middleware verifies this against server-side memberships to
+  // scope content creation to the selected organization. Same key as the
+  // org switcher writes (lib/org-api.ts).
+  const activeOrgId = getActiveOrgId();
+  if (authToken && activeOrgId) {
+    (headers as Record<string, string>)["x-organization-id"] = activeOrgId;
   }
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -168,6 +178,13 @@ export const lessonsApi = {
     apiFetch(`/lessons/${id}`, { method: "PUT", body: JSON.stringify(data), token }),
   publish: (id: string, token?: string) =>
     apiFetch(`/lessons/${id}/publish`, { method: "PATCH", token }),
+  // Content approval workflow (CS#6 — §17)
+  submitReview: (id: string, token?: string) =>
+    apiFetch(`/lessons/${id}/submit-review`, { method: "PATCH", token }),
+  approve: (id: string, token?: string) =>
+    apiFetch(`/lessons/${id}/approve`, { method: "PATCH", token }),
+  reject: (id: string, token?: string) =>
+    apiFetch(`/lessons/${id}/reject`, { method: "PATCH", token }),
   archive: (id: string, token?: string) =>
     apiFetch(`/lessons/${id}/archive`, { method: "PATCH", token }),
   delete: (id: string, token?: string) => apiFetch(`/lessons/${id}`, { method: "DELETE", token }),
@@ -606,6 +623,13 @@ export const programsApi = {
     apiFetch(`/programs/${id}`, { method: "PUT", body: JSON.stringify(data), token }),
   publish: (id: string, token?: string) =>
     apiFetch(`/programs/${id}/publish`, { method: "PATCH", token }),
+  // Content approval workflow (CS#6 — §17)
+  submitReview: (id: string, token?: string) =>
+    apiFetch(`/programs/${id}/submit-review`, { method: "PATCH", token }),
+  approve: (id: string, token?: string) =>
+    apiFetch(`/programs/${id}/approve`, { method: "PATCH", token }),
+  reject: (id: string, token?: string) =>
+    apiFetch(`/programs/${id}/reject`, { method: "PATCH", token }),
   delete: (id: string, token?: string) => apiFetch(`/programs/${id}`, { method: "DELETE", token }),
   createFromTemplate: (token?: string) => apiFetch("/programs/template", { method: "POST", token }),
   generateCetExams: (programId: string, token?: string) =>

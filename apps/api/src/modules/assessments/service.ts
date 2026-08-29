@@ -1,4 +1,4 @@
-import { prisma } from "@aratc/database";
+import { prisma, Prisma } from "@aratc/database";
 import { createAssessmentSchema } from "./schemas";
 import { NotFoundError, BadRequestError } from "../../lib/errors";
 import type { CreateAssessmentInput, UpdateAssessmentInput, AddQuestionInput, AutoGenerateInput } from "./schemas";
@@ -732,7 +732,9 @@ async function rollupMastery(
           moduleId: null,
           topicId: null,
           lessonId: null,
-        },
+          // Prisma's generated compound-unique input types nullable members as
+          // `string`, but the runtime accepts null to match NULL rows exactly.
+        } as unknown as Prisma.ProgressWhereUniqueInput["learnerId_programId_curriculumId_subjectId_moduleId_topicId_lessonId"],
       },
       update: {
         completionPercentage: avgPct,
@@ -779,7 +781,8 @@ async function rollupMastery(
           moduleId: null,
           topicId: null,
           lessonId: null,
-        },
+          // Same nullable-member cast as the subject-level rollup above.
+        } as unknown as Prisma.ProgressWhereUniqueInput["learnerId_programId_curriculumId_subjectId_moduleId_topicId_lessonId"],
       },
       update: {
         completionPercentage: avgPct,
@@ -874,7 +877,6 @@ export async function getAttemptWithAnswers(attemptId: string, userId: string) {
               correctAnswer: true,
               explanation: true,
               hint: true,
-              tolerance: true,
             },
           },
         },

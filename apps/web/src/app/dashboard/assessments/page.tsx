@@ -84,13 +84,16 @@ export default function StudentAssessmentsPage() {
         if (p?.grades) {
           for (const g of p.grades) {
             currUnlocked.set(g.curriculumId, g.unlocked);
-            for (const s of g.subjects) for (const t of s.topics) topicCurr.set(t.id, g.curriculumId);
+            for (const s of g.subjects)
+              for (const t of s.topics) topicCurr.set(t.id, g.curriculumId);
           }
         }
         const lockMap: Record<string, boolean> = {};
         for (const a of listArr) {
           const cids = [
-            ...new Set((a.topicIds ?? []).map((id) => topicCurr.get(id)).filter(Boolean) as string[]),
+            ...new Set(
+              (a.topicIds ?? []).map((id) => topicCurr.get(id)).filter(Boolean) as string[]
+            ),
           ];
           const known = cids.filter((c) => currUnlocked.has(c));
           lockMap[a.id] = known.length > 0 && !known.some((c) => currUnlocked.get(c));
@@ -140,11 +143,15 @@ export default function StudentAssessmentsPage() {
         ) : takeable.length === 0 ? (
           <div className="bg-arc-slate-50 rounded-xl p-10 text-center">
             <FileQuestion className="h-10 w-10 text-arc-slate-300 mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-arc-navy-900 mb-1">No assessments available</h3>
-            <p className="text-arc-slate-500">Published assessments will appear here once your program adds them.</p>
+            <h3 className="text-lg font-semibold text-arc-navy-900 mb-1">
+              No assessments available
+            </h3>
+            <p className="text-arc-slate-500">
+              Published assessments will appear here once your program adds them.
+            </p>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {takeable.map((a) => {
               const gate = a.masteryThreshold ?? a.passingScore ?? 95;
               const best = bestByAssessment[a.id];
@@ -155,7 +162,9 @@ export default function StudentAssessmentsPage() {
                 <div
                   key={a.id}
                   className={`rounded-2xl border p-5 flex flex-col ${
-                    locked ? "border-arc-slate-200 bg-arc-slate-50" : "border-arc-slate-200 bg-white"
+                    locked
+                      ? "border-arc-slate-200 bg-arc-slate-50"
+                      : "border-arc-slate-200 bg-white"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2 mb-2">
@@ -195,7 +204,8 @@ export default function StudentAssessmentsPage() {
 
                   {attempted && !locked && (
                     <div className="mt-3 text-sm text-arc-slate-600">
-                      Best score: <span className="font-semibold text-arc-navy-900">{Math.round(best)}%</span>
+                      Best score:{" "}
+                      <span className="font-semibold text-arc-navy-900">{Math.round(best)}%</span>
                     </div>
                   )}
 

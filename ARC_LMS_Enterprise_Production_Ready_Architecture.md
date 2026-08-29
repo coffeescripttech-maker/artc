@@ -4646,3 +4646,115 @@ AI Learning Services
 ```
 
 without requiring a platform rewrite as the business grows.
+
+---
+
+# Appendix A — Implementation Progress Tracker
+
+> **How to use this tracker:** Update as change sets ship. Each row reflects the delta between this architecture document (target) and the live codebase. Status legend: `✅ DONE` · `🔄 IN PROGRESS` · `⬜ NOT STARTED` · `⚠️ PARTIAL`.
+
+## A.1 Change Set Log
+
+| # | Change Set | Scope | Status | Notes |
+|---|---|---|---|---|
+| 0 | Phase-0 hardening | Security fixes + test harness | ✅ DONE | Registration role-escalation fix, auth rate limiting, published-only visibility, Vitest suite (87 tests), ESLint 9 flat-config migration |
+| 1 | `organization_memberships` + tenant context | Multi-tenancy foundation | ✅ DONE | `OrganizationMembership` table (roles OWNER/ADMIN/TEACHER/LEARNER, status ACTIVE/PENDING/CANCELLED), `resolveOrgContext` middleware (server-verified, §44), derived backfill migration |
+| 2 | Organization switcher + Members UI | Frontend multi-tenancy | ✅ DONE | Org switcher in top nav, admin Members page (`/admin/members`), `lib/org-api.ts` client |
+| 3 | Content ownership + tenant isolation | Multi-tenant content | ✅ DONE | `Program.createdById`, `Lesson.organizationId`/`createdById`; `orgReadScope` + `assertCanEditContent` + `canReadContent`; write **and** read isolation live-verified |
+| 3b | Read-scope closure | Security hardening | ✅ DONE | Global `resolveOrgContext` moved ahead of route mounts (list scoping); by-id/by-slug return 404 to non-owners (§44 — existence not revealed); `apiFetch` now sends `x-organization-id` |
+| 4 | School Admin content creation | RBAC extension | ✅ DONE | `requireContentEditor` gate (flag `ENABLE_SCHOOL_ADMIN_CONTENT`), org managers create/publish within their org |
+| 5 | Content approval workflow | Content governance (§15/§17) | ✅ DONE | State machine DRAFT→UNDER_REVIEW→APPROVED→PUBLISHED (+reject); `requireContentApprover` (org OWNER/ADMIN or platform admin); per-org policy `Organization.metadata.teacher_auto_publish` (default = direct publish, backward compatible); teachers create drafts + submit; helper `packages/database/src/set-review-mode.ts` |
+| 6b | Superadmin platform org management | Platform administration | ✅ DONE | `requirePlatformAdmin` guard; `/api/platform/organizations` CRUD + invite-admin + suspend/activate (maps to ARCHIVED/PUBLISHED; cuid-ID fix); `/platform/*` UI (org list, detail, review-policy toggle, member list); superadmin-only sidebar PLATFORM section; verified live end-to-end |
+| 6c | User-search picker | UX + authorization | ✅ DONE | `GET /api/organizations/users/search` (platform admin or org OWNER/ADMIN; 2+ chars, max 10 results); reusable `UserSearchPicker` wired into `/platform` invite-admin and `/admin/members` Add Member (replaces paste-raw-ID) |
+| 6d | Platform org UX polish | UX / design-system consistency | ✅ DONE | List: portfolio StatCards, search filter, friendly status labels (Active/Suspended), CardHeader w/ title, skeleton loading, EmptyState, sonner toasts, auto-slug on create. Detail: summary StatCards, member role selector + remove-with-confirm (reuses membership PATCH/DELETE), joined dates, skeleton loading, EmptyState, toasts. Both pages inside the shared Sidebar+TopNav shell |
+| 6e | Platform org list enterprise UX | UX / consistency with /admin/programs | ✅ DONE | Compact clickable stat cards (p-3 style matching admin/programs), full toolbar (search + status filter + sort select + clear filters), result count + sorted-by summary, client-side pagination (matches admin/users), empty/no-match states. Detail page: stat cards compressed to same compact pattern, Policy + Invite landed side-by-side in a 2-col grid to cut vertical space |
+| | 6f | Org images + card view + modal create + delete | UX / platform org management | ✅ DONE | Org `imageUrl` (upload via `/api/media` or URL, stored in metadata; create modal + detail page card); card view rebuilt 1:1 with ProgramCard (image header, ⋮ dropdown w/ delete, inline stats, Manage→ footer); New Organization modal; delete via ConfirmModal (superadmin-only, server-enforced) |
+| | 6g | Delete workflow fix | Correctness | ✅ DONE | Delete previously ≡ suspend (both ARCHIVED, list returned everything). Now soft-delete stamps `metadata.deletedAt`, list excludes deleted by default (`?include_deleted=true` shows them), Activate restores (clears marker); red "Deleted" badge + "Show deleted" toggle + Restore action; live-verified delete→hide→restore cycle |
+| 7 | Enrollment enhancement | Access control (§19/§20) | ✅ DONE | `Enrollment.sourceType` (ADMIN_GRANT/SELF_ENROLL/ENROLLMENT_CODE/BATCH/IMPORT/PURCHASE)/`sourceId`/`enrolledById`/`expiresAt` (all nullable — legacy rows unaffected); `lib/program-access.ts` policy (ACTIVE + unexpired + PUBLISHED); progression prefers active unexpired enrollment; enrollment API: `GET/POST /api/programs/:id/enrollments`, `PATCH /api/enrollments/:id` (view = teacher+, manage = school_admin+); live E2E verified |
+| 8 | Content versioning | Immutable published content (§18) | ⬜ NOT STARTED | New `content_versions` table; publish snapshots; draft-from-current flow |
+| 9 | Entitlement layer | Paid access (§20) | ⬜ NOT STARTED | Only when purchase/subscription sources exist |
+| 10 | Assessment / Question bank enhancement | Learning (§23/§24) | ⬜ NOT STARTED | Ownership, permissions, approval, grading states |
+| 11 | Billing hardening | Orders → webhooks → idempotency (§26/§27) | ⬜ NOT STARTED | Requires gateway selection; never trust frontend success callbacks |
+| 12 | Audit logging | Governance (§43) | ⬜ NOT STARTED | High-risk ops first |
+| 13 | AI / PDF import hardening | Production controls (§25) | ⬜ NOT STARTED | Job tracking, tenant isolation, draft-only AI output |
+| 14 | School structure (academic years/classes) | School LMS (§21) | ⬜ NOT STARTED | Optional per org type; review-center flows unaffected |
+| 15 | Progress / analytics / notifications | Operations | ⬜ NOT STARTED | Learning events, notifications |
+| 16 | Enterprise (SSO/SCIM/API keys/webhooks) | Enterprise (§54) | ⬜ NOT STARTED | Architecture must not preclude; build only when needed |
+| — | Migration-history baseline | Ops | ⬜ NOT STARTED | Neon DB built with `db push`; baseline `_prisma_migrations` before production (see §A.4) |
+
+## A.2 Architecture Domain Coverage (target → current)
+
+| Domain (Architecture Doc) | Target | Current | Delta | Risk |
+|---|---|---|---|---|
+| Identity | Production auth | JWT + bcrypt, registration allowlist, rate-limited auth | Small | Med |
+| Organizations | Multi-tenant | `organizations` + `organization_memberships` + org context | Medium | Med |
+| Memberships | Full membership lifecycle | ADDED — roles/status, admin CRUD, org switcher | Small | Low |
+| RBAC / Permissions | Granular permissions | Role-based middleware + org membership roles | Medium | Med |
+| Content hierarchy | Program→…→Lesson | Unchanged (existing foundation) | None | — |
+| Content ownership | PLATFORM/ORG/TEACHER scopes | `organizationId`/`createdById` on Program & Lesson; org-scoped reads/writes | Medium | Med |
+| Teacher content | §15 workflow | Teachers create drafts (membership-gated, flag) | Medium | Med |
+| Approval workflow | §17 state machine | DONE — DRAFT→UNDER_REVIEW→APPROVED→PUBLISHED, per-org policy | None | Low |
+| Content versioning | §18 | NOT STARTED | Large | Med |
+| Enrollment / Entitlement | §19/§20 | Enrollment sources + expiry + admin API DONE (CS#7); entitlement NOT STARTED | Small→Med | Med |
+| Assessments / Question bank | §23/§24 | Existing rich assessment system; ownership/approval NOT STARTED | Medium | Med |
+| Billing | §26/§27 | `payments` stub only; orders/webhooks NOT STARTED | Large | High |
+| AI / PDF import | §25 | Existing, synchronous; hardening NOT STARTED | Medium | Med |
+| Audit logs | §43 | NOT STARTED | Large | Medium |
+| Media | Storage | Local disk uploads; object storage/hardening NOT STARTED | Medium | Medium |
+| Observability | §38–40 | No structured logging/request IDs yet | Medium | Low |
+
+## A.3 Current Demo Accounts (pre-production seed)
+
+All passwords `Test@1234`. See `packages/database/src/seed.ts` + `demo-memberships.ts`.
+
+| Email | Roles | Org membership | Why it matters |
+|---|---|---|---|
+| `admin@aratc.edu.ph` | super_admin | ADMIN (ARC, Sto. Niño) | Platform admin — everything |
+| `content@aratc.edu.ph` | content_admin | ADMIN (ARC) | Platform content admin |
+| `teacher@aratc.edu.ph` | teacher | TEACHER (ARC) | Creates drafts, submits review |
+| `school@aratc.edu.ph` | school_admin | OWNER (Sto. Niño) | Org manager — approves/publishes |
+| `student@aratc.edu.ph` | student | LEARNER (ARC) | Published-only read access |
+| `student2@aratc.edu.ph` | student | LEARNER (Sto. Niño) | Cross-org read check |
+
+**Org review policies (current demo state):**
+- `arc-review-center` → **direct publish** (`teacher_auto_publish: true`) — review-center org keeps one-click publishing
+- `sto-nino-academy` → **review required** (`teacher_auto_publish: false`) — school workflow
+- Toggle per-org via `packages/database/src/set-review-mode.ts <slug> <direct|review>`
+
+## A.4 Known Technical Debt (pre-existing, flagged)
+
+1. **No migration history** — the Neon DB was built with `prisma db push`; `_prisma_migrations` is empty and `migrate dev` fails on shadow DB. **Before production:** baseline history with `prisma migrate resolve --applied` for each existing migration during a maintenance window. Until then, schema changes ship via `db push` (additive only).
+2. **Dual route mounts** (`/api/*` and unprefixed) — deliberate compatibility; keep auth coverage identical on both (CS#3b fixed the org-context ordering; audit remaining routes for org scoping).
+3. **Local-disk uploads** — fine for single-instance; revisit before horizontal scale.
+4. **`sessions` table unused** — JWT is stateless; sessions intended for revocation/logout tracking; either enforce or remove (decide, don't leave dead).
+5. **`Test`/`TestAttempt` parallel assessment system** — pre-existing duplication; freeze and consolidate later, not in early phases.
+6. **`Organization.status` typed as `ContentStatus`** — semantic mismatch (org status vs content status); additive fix later.
+7. **`@@unique([learnerId, programId])` on enrollments** — blocks re-enrollment after expiry; relax via migration when enrollment enhancement ships.
+
+## A.5 Security Acceptance Tests (running suite)
+
+| Test | File | Status |
+|---|---|---|
+| User A cannot access Organization B (list/get-by-id/get-by-slug) | `tenant-scope`, `tenant-api`, `content-api` | ✅ |
+| Teacher cannot edit another org's lesson/program (403) | `tenant-api` | ✅ |
+| Student cannot publish content / cannot create | `content-api`, `content-editor` | ✅ |
+| Student cannot access unpublished content | `visibility` | ✅ |
+| School Admin cannot modify platform-only content | `tenant-scope` (`assertCanEditContent`) | ✅ |
+| Expired/revoked membership context denied | `org-context` (status ≠ ACTIVE) | ✅ |
+| Registration cannot self-assign privileged roles | `auth-allowlist` | ✅ |
+| Approval workflow state machine + org policy | `workflow` | ✅ |
+
+## A.6 Rollout & Rollback Notes
+
+- **Schema changes** ship via `prisma db push` — always **additive** (new tables / nullable columns / new enum values). Never destructive on the shared dev DB.
+- **Feature flags:** `ENABLE_SCHOOL_ADMIN_CONTENT` (env) gates org content creation; per-org `teacher_auto_publish` (metadata) gates the review workflow. Flip off → previous behavior.
+- **Rollback any change set** via `git revert` — all CS#s are self-contained commits; the org-policy metadata and status enums are data, not breaking.
+
+## A.7 Next Recommended Change Sets (priority order)
+
+1. **Enrollment enhancement** (method/source/expiry + access policy) — foundation for paid access
+2. **Content versioning** (snapshot on publish) — makes published content immutable (§18)
+3. **More superadmin platform tools** — feature-flag management UI, platform-wide settings, audit/security events view, platform analytics (extend `/platform/*`)
+4. **Students/Users admin pages → real data** — replaces mock tables, completes the demo
+5. **Audit logging** for role changes / publishing / enrollment (§43)
+6. **Migration-history baseline** (see §A.4.1) before any future production push

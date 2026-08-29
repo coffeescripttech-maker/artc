@@ -1,11 +1,15 @@
 import { Request, Response, NextFunction } from "express";
 import { validateRequest, getAuthUserId } from "../../lib/validate";
+import { contentVisibility } from "../../lib/visibility";
 import {
   listLessons,
   getLessonById,
   createLesson,
   updateLesson,
   publishLesson,
+  submitLessonForReview,
+  approveLesson,
+  rejectLesson,
   archiveLesson,
   deleteLesson,
   reorderLessons,
@@ -25,7 +29,7 @@ export async function list(
 ): Promise<void> {
   try {
     const topicId = req.query.topicId as string | undefined;
-    const lessons = await listLessons(topicId);
+    const lessons = await listLessons(topicId, contentVisibility(req), req.organizationId);
     res.json(lessons);
   } catch (error) {
     next(error);
@@ -38,7 +42,7 @@ export async function getById(
   next: NextFunction
 ): Promise<void> {
   try {
-    const lesson = await getLessonById(req.params.id);
+    const lesson = await getLessonById(req.params.id, contentVisibility(req));
     // Published lessons are safe to cache on shared caches/CDNs; browsers still
     // revalidate (max-age=0) so admins see fresh content right after editing.
     if ((lesson as { status?: string }).status === "PUBLISHED") {
@@ -58,9 +62,12 @@ export async function create(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { createLessonSchema } = await import("./schemas");
+    const { createLessonSchema } = await import("./schemas.js");
     const input = validateRequest(createLessonSchema, req.body);
-    const lesson = await createLesson(input);
+    const lesson = await createLesson(input, {
+      organizationId: req.organizationId,
+      userId: req.userId,
+    });
     res.status(201).json(lesson);
   } catch (error) {
     next(error);
@@ -73,9 +80,12 @@ export async function update(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { updateLessonSchema } = await import("./schemas");
+    const { updateLessonSchema } = await import("./schemas.js");
     const input = validateRequest(updateLessonSchema, req.body);
-    const lesson = await updateLesson(req.params.id, input);
+    const lesson = await updateLesson(req.params.id, input, {
+      organizationId: req.organizationId,
+      roles: req.userRoles,
+    });
     res.json(lesson);
   } catch (error) {
     next(error);
@@ -88,7 +98,62 @@ export async function publish(
   next: NextFunction
 ): Promise<void> {
   try {
-    const lesson = await publishLesson(req.params.id);
+    const lesson = await publishLesson(req.params.id, {
+      organizationId: req.organizationId,
+      roles: req.userRoles,
+    });
+    res.json(lesson);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ============================================================
+// Approval workflow (CS#6 — §17)
+// ============================================================
+
+export async function submitReview(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const lesson = await submitLessonForReview(req.params.id, {
+      organizationId: req.organizationId,
+      roles: req.userRoles,
+    });
+    res.json(lesson);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function approve(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const lesson = await approveLesson(req.params.id, {
+      organizationId: req.organizationId,
+      roles: req.userRoles,
+    });
+    res.json(lesson);
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function reject(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const lesson = await rejectLesson(req.params.id, {
+      organizationId: req.organizationId,
+      roles: req.userRoles,
+    });
     res.json(lesson);
   } catch (error) {
     next(error);
@@ -101,7 +166,10 @@ export async function archive(
   next: NextFunction
 ): Promise<void> {
   try {
-    const lesson = await archiveLesson(req.params.id);
+    const lesson = await archiveLesson(req.params.id, {
+      organizationId: req.organizationId,
+      roles: req.userRoles,
+    });
     res.json(lesson);
   } catch (error) {
     next(error);
@@ -114,7 +182,10 @@ export async function remove(
   next: NextFunction
 ): Promise<void> {
   try {
-    await deleteLesson(req.params.id);
+    await deleteLesson(req.params.id, {
+      organizationId: req.organizationId,
+      roles: req.userRoles,
+    });
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -146,7 +217,7 @@ export async function bySubject(
   next: NextFunction
 ): Promise<void> {
   try {
-    const lessons = await getLessonsBySubject(req.params.subjectId);
+    const lessons = await getLessonsBySubject(req.params.subjectId, contentVisibility(req));
     res.json(lessons);
   } catch (error) {
     next(error);

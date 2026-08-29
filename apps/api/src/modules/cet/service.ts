@@ -102,7 +102,7 @@ export async function listExams() {
         select: { id: true, name: true, status: true },
       },
       _count: {
-        select: { programTargets: true, coverages: true },
+        select: { programTargets: true },
       },
     },
   });

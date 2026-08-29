@@ -72,7 +72,7 @@ export async function create(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { createQuestionSchema } = await import("./schemas");
+    const { createQuestionSchema } = await import("./schemas.js");
     const input = validateRequest(createQuestionSchema, req.body);
     const question = await createQuestion(input, req.userId!);
     res.status(201).json(question);
@@ -87,7 +87,7 @@ export async function update(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { updateQuestionSchema } = await import("./schemas");
+    const { updateQuestionSchema } = await import("./schemas.js");
     const input = validateRequest(updateQuestionSchema, req.body);
     const question = await updateQuestion(req.params.id, input);
     res.json(question);
@@ -160,7 +160,7 @@ export async function createLink(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { linkQuestionSchema } = await import("./schemas");
+    const { linkQuestionSchema } = await import("./schemas.js");
     const input = validateRequest(linkQuestionSchema, req.body);
     const link = await linkQuestion(req.params.id, input);
     res.status(201).json(link);
@@ -175,7 +175,7 @@ export async function updateLink(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { linkQuestionSchema } = await import("./schemas");
+    const { linkQuestionSchema } = await import("./schemas.js");
     const input = validateRequest(linkQuestionSchema.partial(), req.body);
     const link = await updateQuestionLink(req.params.linkId, input);
     res.json(link);

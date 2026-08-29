@@ -62,7 +62,7 @@ export async function create(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { createCurriculumSchema } = await import("./schemas");
+    const { createCurriculumSchema } = await import("./schemas.js");
     const input = validateRequest(createCurriculumSchema, req.body);
     const curriculum = await createCurriculum(input);
     res.status(201).json(curriculum);
@@ -77,7 +77,7 @@ export async function update(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { updateCurriculumSchema } = await import("./schemas");
+    const { updateCurriculumSchema } = await import("./schemas.js");
     const input = validateRequest(updateCurriculumSchema, req.body);
     const curriculum = await updateCurriculum(req.params.id, input);
     res.json(curriculum);
@@ -131,7 +131,7 @@ export async function addItem(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { addCurriculumItemSchema } = await import("./schemas");
+    const { addCurriculumItemSchema } = await import("./schemas.js");
     const input = validateRequest(addCurriculumItemSchema, req.body);
     const item = await addCurriculumItem(req.params.id, input);
     res.status(201).json(item);
@@ -146,7 +146,7 @@ export async function updateItem(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { updateCurriculumItemSchema } = await import("./schemas");
+    const { updateCurriculumItemSchema } = await import("./schemas.js");
     const input = validateRequest(updateCurriculumItemSchema, req.body);
     const item = await updateCurriculumItem(req.params.itemId, input);
     res.json(item);

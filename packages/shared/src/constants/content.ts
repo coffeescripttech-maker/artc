@@ -1,8 +1,29 @@
 export const CONTENT_STATUS = {
   DRAFT: "DRAFT",
   UNDER_REVIEW: "UNDER_REVIEW",
+  APPROVED: "APPROVED",
   PUBLISHED: "PUBLISHED",
   ARCHIVED: "ARCHIVED",
+} as const;
+
+/**
+ * Content approval workflow (Change Set #6) — §17 of the architecture doc.
+ *
+ * DRAFT ──submit──> UNDER_REVIEW ──approve──> APPROVED ──publish──> PUBLISHED
+ *   ▲                    │
+ *   └───────reject───────┘
+ *
+ * Publishing from DRAFT/UNDER_REVIEW is only permitted when the owning
+ * organization's policy allows direct publishing
+ * (Organization.metadata.teacher_auto_publish, default: true) or when the
+ * caller is a platform admin.
+ */
+export const CONTENT_TRANSITIONS = {
+  SUBMIT_REVIEW: { from: ["DRAFT"], to: "UNDER_REVIEW" },
+  APPROVE: { from: ["UNDER_REVIEW"], to: "APPROVED" },
+  REJECT: { from: ["UNDER_REVIEW"], to: "DRAFT" },
+  PUBLISH: { from: ["DRAFT", "UNDER_REVIEW", "APPROVED"], to: "PUBLISHED" },
+  ARCHIVE: { from: ["DRAFT", "UNDER_REVIEW", "APPROVED", "PUBLISHED"], to: "ARCHIVED" },
 } as const;
 
 export type ContentStatus = (typeof CONTENT_STATUS)[keyof typeof CONTENT_STATUS];

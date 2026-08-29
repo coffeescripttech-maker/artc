@@ -48,7 +48,7 @@ interface Program {
   name: string;
   slug: string;
   description?: string;
-  status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+  status: "DRAFT" | "UNDER_REVIEW" | "APPROVED" | "PUBLISHED" | "ARCHIVED";
   programType?: string;
   imageUrl?: string;
   createdAt?: string;
@@ -71,6 +71,22 @@ type SortOption =
   | "enrollments-asc";
 
 type ContentFilter = "none" | "hasCurriculums" | "hasEnrollments";
+
+// Status badge colors — consistent with ProgramCard's statusConfig (§17).
+function programListStatusColor(status: string): string {
+  switch (status) {
+    case "PUBLISHED":
+      return "bg-green-100 text-green-700";
+    case "UNDER_REVIEW":
+      return "bg-amber-100 text-amber-700";
+    case "APPROVED":
+      return "bg-purple-100 text-purple-700";
+    case "ARCHIVED":
+      return "bg-red-100 text-red-700";
+    default:
+      return "bg-yellow-100 text-yellow-700";
+  }
+}
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "createdAt-desc", label: "Newest first" },
@@ -283,6 +299,32 @@ function ProgramsPage() {
     }
   };
 
+  // Content approval workflow (CS#6 — §17): the backend enforces who may run
+  // each action (§44); this handler just calls it and refreshes the list.
+  const handleWorkflow = async (
+    program: Program,
+    action: "submit" | "approve" | "reject" | "publish",
+  ) => {
+    try {
+      if (action === "submit") await programsApi.submitReview(program.id);
+      else if (action === "approve") await programsApi.approve(program.id);
+      else if (action === "reject") await programsApi.reject(program.id);
+      else await programsApi.publish(program.id);
+      await fetchPrograms();
+      const messages = {
+        submit: `"${program.name}" submitted for review`,
+        approve: `"${program.name}" approved`,
+        reject: `"${program.name}" rejected — back to draft`,
+        publish: `"${program.name}" published`,
+      } as const;
+      toast.success(messages[action]);
+    } catch (err: any) {
+      const msg = err?.message || "Workflow action failed. Please try again.";
+      setError(msg);
+      toast.error(msg);
+    }
+  };
+
   // Thrown errors bubble up to the ConfirmModal, which shows them and stays open.
   const handleConfirmDelete = async () => {
     if (!programToDelete) return;
@@ -421,6 +463,8 @@ function ProgramsPage() {
               <option value="all">All Status</option>
               <option value="published">Published</option>
               <option value="draft">Draft</option>
+              <option value="under_review">Under Review</option>
+              <option value="approved">Approved</option>
               <option value="archived">Archived</option>
             </select>
 
@@ -686,6 +730,10 @@ function ProgramsPage() {
                 onEdit={() => router.push(`/admin/programs/${program.id}/edit`)}
                 onDuplicate={() => handleDuplicate(program)}
                 onDelete={() => setProgramToDelete(program)}
+                onSubmitReview={() => handleWorkflow(program, "submit")}
+                onApprove={() => handleWorkflow(program, "approve")}
+                onReject={() => handleWorkflow(program, "reject")}
+                onPublish={() => handleWorkflow(program, "publish")}
               />
             ))}
           </div>
@@ -778,15 +826,9 @@ function ProgramsPage() {
                           </td>
                           <td className="px-4 py-3">
                             <Badge
-                              className={
-                                program.status === "PUBLISHED"
-                                  ? "bg-green-100 text-green-700"
-                                  : program.status === "ARCHIVED"
-                                    ? "bg-red-100 text-red-700"
-                                    : "bg-yellow-100 text-yellow-700"
-                              }
+                              className={programListStatusColor(program.status)}
                             >
-                              {program.status}
+                              {program.status.replace(/_/g, " ")}
                             </Badge>
                           </td>
                           <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>

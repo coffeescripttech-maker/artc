@@ -19,4 +19,12 @@ export const config = {
     /** Max wait for a MinerU parse (HTTP or CLI). */
     timeoutMs: Number(process.env.MINERU_TIMEOUT_MS || 300000),
   },
+  /**
+   * Feature flag: allow org-scoped content creation by school_admin roles and
+   * org OWNER/ADMIN members (CS#5). Defaults ON for the pre-production stage;
+   * set ENABLE_ORG_CONTENT_CREATION=false to disable. Regardless of this flag,
+   * an org manager can only ever create content inside an active org context —
+   * never platform-level or cross-org content.
+   */
+  enableOrgContentCreation: process.env.ENABLE_ORG_CONTENT_CREATION !== "false",
 } as const;

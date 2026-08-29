@@ -43,7 +43,7 @@ export async function create(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { createPassageSchema } = await import("./schemas");
+    const { createPassageSchema } = await import("./schemas.js");
     const input = validateRequest(createPassageSchema, req.body);
     const passage = await createPassage(input);
     res.status(201).json(passage);
@@ -58,7 +58,7 @@ export async function update(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { updatePassageSchema } = await import("./schemas");
+    const { updatePassageSchema } = await import("./schemas.js");
     const input = validateRequest(updatePassageSchema, req.body);
     const passage = await updatePassage(req.params.id, input);
     res.json(passage);

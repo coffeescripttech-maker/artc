@@ -72,7 +72,7 @@ export async function createUniversityHandler(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { createUniversitySchema } = await import("./schemas");
+    const { createUniversitySchema } = await import("./schemas.js");
     const input = validateRequest(createUniversitySchema, req.body);
     const university = await createUniversity(input);
     res.status(201).json(university);
@@ -87,7 +87,7 @@ export async function updateUniversityHandler(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { updateUniversitySchema } = await import("./schemas");
+    const { updateUniversitySchema } = await import("./schemas.js");
     const input = validateRequest(updateUniversitySchema, req.body);
     const university = await updateUniversity(req.params.id, input);
     res.json(university);
@@ -145,7 +145,7 @@ export async function createExamHandler(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { createExamSchema } = await import("./schemas");
+    const { createExamSchema } = await import("./schemas.js");
     const input = validateRequest(createExamSchema, req.body);
     const exam = await createExam(input);
     res.status(201).json(exam);
@@ -160,7 +160,7 @@ export async function updateExamHandler(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { updateExamSchema } = await import("./schemas");
+    const { updateExamSchema } = await import("./schemas.js");
     const input = validateRequest(updateExamSchema, req.body);
     const exam = await updateExam(req.params.id, input);
     res.json(exam);
@@ -258,7 +258,7 @@ export async function createProfileHandler(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { createProfileSchema } = await import("./schemas");
+    const { createProfileSchema } = await import("./schemas.js");
     const input = validateRequest(createProfileSchema, req.body);
     const profile = await createProfile(input);
     res.status(201).json(profile);
@@ -273,7 +273,7 @@ export async function updateProfileHandler(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { updateProfileSchema } = await import("./schemas");
+    const { updateProfileSchema } = await import("./schemas.js");
     const input = validateRequest(updateProfileSchema, req.body);
     const profile = await updateProfile(req.params.id, input);
     res.json(profile);
@@ -344,7 +344,7 @@ export async function addCoverageHandler(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { addCoverageSchema } = await import("./schemas");
+    const { addCoverageSchema } = await import("./schemas.js");
     const input = validateRequest(addCoverageSchema, req.body);
     const coverage = await addCoverage(req.params.id, input);
     res.status(201).json(coverage);
@@ -359,7 +359,7 @@ export async function updateCoverageHandler(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { updateCoverageSchema } = await import("./schemas");
+    const { updateCoverageSchema } = await import("./schemas.js");
     const input = validateRequest(updateCoverageSchema, req.body);
     const coverage = await updateCoverage(req.params.coverageId, input);
     res.json(coverage);
@@ -391,7 +391,7 @@ export async function linkProgramHandler(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { linkProgramExamSchema } = await import("./schemas");
+    const { linkProgramExamSchema } = await import("./schemas.js");
     const input = validateRequest(linkProgramExamSchema, req.body);
     const link = await linkProgramExam(req.params.programId, input);
     res.status(201).json(link);

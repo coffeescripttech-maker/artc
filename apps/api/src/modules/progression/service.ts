@@ -1,5 +1,6 @@
 import { prisma } from "@aratc/database";
 import { ForbiddenError } from "../../lib/errors";
+import { findActiveEnrollment } from "../../lib/program-access";
 
 // Default mastery gate - used when not configured per program/curriculum
 export const DEFAULT_GATE = 95;
@@ -33,10 +34,8 @@ async function resolveProgramId(userId: string, programId?: string): Promise<str
   if (learner?.currentProgramId) return learner.currentProgramId;
 
   if (learner) {
-    const enrollment = await prisma.enrollment.findFirst({
-      where: { learnerId: learner.id },
-      orderBy: { createdAt: "asc" },
-    });
+    // CS#9: prefer an active, unexpired enrollment (program-access policy).
+    const enrollment = await findActiveEnrollment(learner.id);
     if (enrollment) return enrollment.programId;
   }
 

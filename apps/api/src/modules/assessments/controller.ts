@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { validateRequest, getAuthUserId } from "../../lib/validate";
+import { canViewUnpublishedContent } from "../../lib/visibility";
 import {
   listAssessments,
   getAssessmentById,
@@ -28,12 +29,15 @@ export async function list(
   next: NextFunction
 ): Promise<void> {
   try {
-    const filters = {
+    const assessments = await listAssessments({
       programId: req.query.programId as string | undefined,
       type: req.query.type as string | undefined,
-      status: req.query.status as string | undefined,
-    };
-    const assessments = await listAssessments(filters);
+      // Non-privileged callers are pinned to published assessments,
+      // regardless of any status filter they pass.
+      status: canViewUnpublishedContent(req)
+        ? (req.query.status as string | undefined)
+        : "PUBLISHED",
+    });
     res.json(assessments);
   } catch (error) {
     next(error);
@@ -72,7 +76,7 @@ export async function create(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { createAssessmentSchema } = await import("./schemas");
+    const { createAssessmentSchema } = await import("./schemas.js");
     const input = validateRequest(createAssessmentSchema, req.body);
     const assessment = await createAssessment(input);
     res.status(201).json(assessment);
@@ -87,7 +91,7 @@ export async function update(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { updateAssessmentSchema } = await import("./schemas");
+    const { updateAssessmentSchema } = await import("./schemas.js");
     const input = validateRequest(updateAssessmentSchema, req.body);
     const assessment = await updateAssessment(req.params.id, input);
     res.json(assessment);
@@ -142,7 +146,7 @@ export async function addQ(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { addQuestionSchema } = await import("./schemas");
+    const { addQuestionSchema } = await import("./schemas.js");
     const input = validateRequest(addQuestionSchema, req.body);
     const question = await addQuestion(req.params.id, input);
     res.status(201).json(question);
@@ -188,7 +192,7 @@ export async function autoGenerate(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { autoGenerateSchema } = await import("./schemas");
+    const { autoGenerateSchema } = await import("./schemas.js");
     const input = validateRequest(autoGenerateSchema, req.body);
     const questions = await autoGenerateQuestions(req.params.id, input);
     res.status(201).json(questions);

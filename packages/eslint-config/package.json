@@ -4,6 +4,7 @@
   "private": true,
   "files": [
     "base.js",
+    "flat.js",
     "next.js",
     "node.js"
   ],

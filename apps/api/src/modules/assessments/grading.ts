@@ -105,6 +105,9 @@ export function gradeAnswer(
       if (typeof ca === "number") {
         return Math.abs(numAnswer - ca) < 0.0001; // tolerance for floating point
       }
+      if (ca === null || typeof ca !== "object" || typeof ca.value !== "number") {
+        return false; // malformed correct answer → cannot auto-grade
+      }
       const tolerance = ca.tolerance ?? 0.0001;
       return Math.abs(numAnswer - ca.value) <= tolerance;
     }

@@ -5,11 +5,21 @@ export async function apiRequest(
   options: RequestInit = {}
 ): Promise<unknown> {
   const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const activeOrg =
+    typeof window !== "undefined"
+      ? localStorage.getItem("activeOrganizationId")
+      : null;
 
   const headers = new Headers(options.headers);
   headers.set("Content-Type", "application/json");
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
+  }
+  // Attach verified org context only for authenticated, non-auth requests.
+  // The org-context middleware requires auth, so adding the header on
+  // login/register would reject them.
+  if (token && activeOrg && !path.startsWith("/api/auth/")) {
+    headers.set("x-organization-id", activeOrg);
   }
 
   const response = await fetch(`${API_URL}${path}`, {

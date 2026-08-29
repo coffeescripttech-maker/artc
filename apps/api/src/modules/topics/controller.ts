@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { validateRequest } from "../../lib/validate";
+import { contentVisibility } from "../../lib/visibility";
 import {
   listTopics,
   listAllTopics,
@@ -19,7 +20,7 @@ export async function list(
 ): Promise<void> {
   try {
     const moduleId = req.query.moduleId as string | undefined;
-    const topics = await listTopics(moduleId);
+    const topics = await listTopics(moduleId, contentVisibility(req));
     res.json(topics);
   } catch (error) {
     next(error);
@@ -32,7 +33,7 @@ export async function listAll(
   next: NextFunction
 ): Promise<void> {
   try {
-    const topics = await listAllTopics();
+    const topics = await listAllTopics(contentVisibility(req));
     res.json(topics);
   } catch (error) {
     next(error);
@@ -45,7 +46,7 @@ export async function getById(
   next: NextFunction
 ): Promise<void> {
   try {
-    const topic = await getTopicById(req.params.id);
+    const topic = await getTopicById(req.params.id, contentVisibility(req));
     res.json(topic);
   } catch (error) {
     next(error);
@@ -58,7 +59,7 @@ export async function create(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { createTopicSchema } = await import("./schemas");
+    const { createTopicSchema } = await import("./schemas.js");
     const input = validateRequest(createTopicSchema, req.body);
     const topic = await createTopic(input);
     res.status(201).json(topic);
@@ -73,7 +74,7 @@ export async function update(
   next: NextFunction
 ): Promise<void> {
   try {
-    const { updateTopicSchema } = await import("./schemas");
+    const { updateTopicSchema } = await import("./schemas.js");
     const input = validateRequest(updateTopicSchema, req.body);
     const topic = await updateTopic(req.params.id, input);
     res.json(topic);
