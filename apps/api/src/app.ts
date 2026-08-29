@@ -20,6 +20,7 @@ import { organizationRoutes } from "./modules/organizations/routes";
 import { platformOrganizationsRoutes } from "./modules/platform/organizations/router";
 import { enrollmentRoutes } from "./modules/enrollments/routes";
 import { adminAuditRoutes } from "./modules/admin-audit/routes";
+import contentVersionRoutes from "./modules/content-versions/routes";
 import { errorHandler } from "./middleware/error-handler";
 import { resolveOrgContext } from "./middleware/org-context";
 
@@ -89,8 +90,11 @@ export function buildApp(): express.Express {
     // Superadmin platform-management endpoints (§3 — superadmin-only, separate from /admin/*)
   app.use("/api/platform/organizations", platformOrganizationsRoutes);
 
-  // CS#14 — admin audit log (read-only query surface over append-only events).
+    // CS#14 — admin audit log (read-only query surface over append-only events).
   app.use("/api/admin/audit", adminAuditRoutes);
+
+  // CS#10b — content versioning: draft / publish / rollback / history
+  app.use("/api/versions", contentVersionRoutes);
 
   app.use(errorHandler);
 

@@ -8,33 +8,34 @@ datasource db {
 }
 
 model User {
-  id                String          @id @default(cuid())
-  email             String          @unique
-  passwordHash      String          @map("password_hash")
-  firstName         String          @map("first_name")
-  lastName          String          @map("last_name")
-  avatarUrl         String?         @map("avatar_url")
-  phoneNumber       String?         @map("phone_number")
-  status            UserStatus      @default(PENDING_VERIFICATION)
-  emailVerified     DateTime?       @map("email_verified")
-  createdAt         DateTime        @default(now()) @map("created_at")
-  updatedAt         DateTime        @updatedAt @map("updated_at")
-  teacherBatches    BatchTeacher[]
-  ownedBatches      Batch[]         @relation("BatchOwner")
-     enrollmentsGranted Enrollment[]   @relation("EnrolledByEnrollments")
-  contentVersions    ContentVersion[] @relation("ContentVersionCreator")
-  auditEventsAsActor AuditEvent[]      @relation("ActorAuditEvents")
-  auditEventsAsTarget AuditEvent[]     @relation("TargetAuditEvents")
-  learnerProfile    LearnerProfile?
-  parentLinks       ParentStudent[] @relation("ParentStudentParent")
-  studentLinks      ParentStudent[] @relation("ParentStudentStudent")
-  authoredQuestions Question[]      @relation("QuestionAuthor")
-  reviewedQuestions Question[]      @relation("QuestionReviewer")
-  sessions          Session[]
-  roles             UserRole[]
-  memberships       OrganizationMembership[]
-  createdPrograms   Program[]                  @relation("ProgramsCreated")
-  createdLessons    Lesson[]                   @relation("LessonsCreated")
+  id                  String                   @id @default(cuid())
+  email               String                   @unique
+  passwordHash        String                   @map("password_hash")
+  firstName           String                   @map("first_name")
+  lastName            String                   @map("last_name")
+  avatarUrl           String?                  @map("avatar_url")
+  phoneNumber         String?                  @map("phone_number")
+  status              UserStatus               @default(PENDING_VERIFICATION)
+  emailVerified       DateTime?                @map("email_verified")
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  updatedAt           DateTime                 @updatedAt @map("updated_at")
+  teacherBatches      BatchTeacher[]
+  ownedBatches        Batch[]                  @relation("BatchOwner")
+  enrollmentsGranted  Enrollment[]             @relation("EnrolledByEnrollments")
+  contentVersions     ContentVersion[]         @relation("ContentVersionCreator")
+  auditEventsAsActor  AuditEvent[]             @relation("ActorAuditEvents")
+  auditEventsAsTarget AuditEvent[]             @relation("TargetAuditEvents")
+  learnerProfile      LearnerProfile?
+  parentLinks         ParentStudent[]          @relation("ParentStudentParent")
+  studentLinks        ParentStudent[]          @relation("ParentStudentStudent")
+  authoredQuestions   Question[]               @relation("QuestionAuthor")
+  reviewedQuestions   Question[]               @relation("QuestionReviewer")
+  sessions            Session[]
+  roles               UserRole[]
+  memberships         OrganizationMembership[]
+  createdPrograms     Program[]                @relation("ProgramsCreated")
+  createdLessons      Lesson[]                 @relation("LessonsCreated")
+  assessmentsCreated  Assessment[]             @relation("AssessmentsCreated")
 
   @@map("users")
 }
@@ -115,20 +116,21 @@ model SiteSettings {
 }
 
 model Organization {
-  id              String           @id @default(cuid())
+  id              String                   @id @default(cuid())
   name            String
-  slug            String           @unique
+  slug            String                   @unique
   type            String?
-  status          ContentStatus    @default(PUBLISHED)
+  status          ContentStatus            @default(PUBLISHED)
   metadata        Json?
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  updatedAt       DateTime                 @updatedAt @map("updated_at")
   assessments     Assessment[]
   curriculums     Curriculum[]
   learnerProfiles LearnerProfile[]
   programs        Program[]
   memberships     OrganizationMembership[]
   lessons         Lesson[]
+  questions       Question[]
 
   @@map("organizations")
 }
@@ -338,6 +340,7 @@ model Question {
   tags                String[]
   mediaUrl            String?                  @map("media_url")
   status              ContentStatus            @default(DRAFT)
+  organizationId      String?                  @map("organization_id")
   authorId            String                   @map("author_id")
   reviewerId          String?                  @map("reviewer_id")
   createdAt           DateTime                 @default(now()) @map("created_at")
@@ -349,6 +352,7 @@ model Question {
   bankLinks           QuestionBankLink[]
   exposures           QuestionExposure[]
   author              User                     @relation("QuestionAuthor", fields: [authorId], references: [id])
+  organization        Organization?            @relation(fields: [organizationId], references: [id])
   passage             Passage?                 @relation(fields: [passageId], references: [id])
   reviewer            User?                    @relation("QuestionReviewer", fields: [reviewerId], references: [id])
 
@@ -356,6 +360,7 @@ model Question {
   @@index([status])
   @@index([type])
   @@index([passageId])
+  @@index([organizationId])
   @@map("questions")
 }
 
@@ -482,11 +487,14 @@ model Assessment {
   masteryThreshold   Int?                 @map("mastery_threshold")
   organizationId     String?              @map("organization_id")
   randomizeChoices   Boolean              @default(false) @map("randomize_choices")
+  createdById        String?              @map("created_by_id")
   attempts           AssessmentAttempt[]
   questions          AssessmentQuestion[]
   organization       Organization?        @relation(fields: [organizationId], references: [id])
   program            Program?             @relation(fields: [programId], references: [id])
-  questionLinks      QuestionBankLink[]
+  createdBy          User?                @relation("AssessmentsCreated", fields: [createdById], references: [id])
+
+  questionLinks QuestionBankLink[]
 
   @@index([programId])
   @@index([organizationId])
@@ -774,7 +782,7 @@ model Payment {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-    @@index([userId])
+  @@index([userId])
   @@map("payments")
 }
 
@@ -789,7 +797,7 @@ model AuditEvent {
   targetUserId     String?  @map("target_user_id")
   targetUser       User?    @relation("TargetAuditEvents", fields: [targetUserId], references: [id], onDelete: SetNull)
   targetResourceId String?  @map("target_resource_id")
-  actedOn          String   // denormalized display name at write-time (survives renames)
+  actedOn          String // denormalized display name at write-time (survives renames)
   before           String?  @db.Text
   after            String?  @db.Text
   metadata         String?  @db.Text

@@ -31,7 +31,9 @@ export type AuditEventType =
   | "LESSON_DELETED"
   | "ENROLLMENT_GRANTED"
   | "ENROLLMENT_REVOKED"
-  | "ENROLLMENT_EXPIRED";
+     | "ENROLLMENT_EXPIRED"
+  | "VERSION_PUBLISHED"
+  | "VERSION_ROLLBACK";
 
 export interface AuditEntryParams {
   tenantId: string;
