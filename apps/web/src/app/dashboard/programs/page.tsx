@@ -1,19 +1,23 @@
 "use client";
 
 /**
- * My Programs (CS#22.7 — H-3).
+ * My Programs (CS#22.7 H-3 → CS#22.8 redesign).
  *
- * Lists every ACTIVE enrollment from the real enrollment API
- * (`GET /my/enrollments`) so a learner enrolled in both BUCET and CRP sees
- * both programs. Per-program mastery comes from the real progression API
- * (`GET /progression?programId=…`), which already supports per-program
- * queries — no fabricated data, no hardcoded program assumptions.
+ * Enterprise student-facing program list. Every value is derived from real
+ * backend data — enrollments, program hierarchy (description, subjects,
+ * lessons, assessments), per-program mastery, and real attempt dates.
+ * No fabricated progress, dates, or counts.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { DashboardHeader } from "@/components/dashboard";
-import { Button, Badge, Card, CardContent, Progress } from "@/components/ui";
-import { enrollmentsApi, progressionApi } from "@/lib/api/client";
+import { Button, Badge, Progress } from "@/components/ui";
+import {
+  enrollmentsApi,
+  progressionApi,
+  programsApi,
+  assessmentsApi,
+} from "@/lib/api/client";
 import {
   RefreshCw,
   BookOpen,
@@ -21,6 +25,8 @@ import {
   ChevronRight,
   Clock,
   AlertCircle,
+  FileQuestion,
+  Layers,
 } from "lucide-react";
 
 interface MyEnrollment {
@@ -34,19 +40,46 @@ interface MyEnrollment {
 interface ProgramCard {
   enrollmentId: string;
   programId: string;
-  name: string;
   slug: string;
-  active: boolean;
+  name: string;
+  description: string | null;
   status: string;
+  active: boolean;
   expiresAt: string | null;
-  /** Overall mastery percent from the program's real progression data (null = no data). */
+  subjectCount: number | null;
+  lessonCount: number | null;
+  assessmentCount: number | null;
   masteryPercent: number | null;
+  lastActivityAt: string | null;
+  typeLabel: string | null;
+}
+
+const typeLabels: Record<string, string> = {
+  COLLEGE_ENTRANCE: "College Entrance",
+  COLLEGE: "College",
+  REVIEW_CENTER: "Review Center",
+};
+
+/** Shape of the published curriculum tree returned by GET /programs/{slug}. */
+interface ProgramHierarchy {
+  description?: string | null;
+  programType?: string | null;
+  curriculums?: {
+    items?: {
+      subject: {
+        id: string;
+        modules?: { topics?: { lessons?: { id: string }[] }[] }[];
+      };
+    }[];
+  }[];
+  assessments?: { id: string }[];
 }
 
 export default function MyProgramsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [programs, setPrograms] = useState<ProgramCard[]>([]);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -58,33 +91,85 @@ export default function MyProgramsPage() {
         const list = (Array.isArray(mine) ? mine : []).filter(
           (e) => e.program && e.active && e.status === "ACTIVE"
         );
-        // Real per-program progression (mastery percent) — failures degrade
-        // gracefully to "no data" rather than fabricating a value.
-        const cards = await Promise.all(
+
+        // Real attempt dates mapped to programs via the tenant-scoped list.
+        const [assessmentList, attempts] = await Promise.all([
+          assessmentsApi.list({ status: "PUBLISHED" }).catch(() => []),
+          assessmentsApi.myAttempts().catch(() => []),
+        ]);
+        const progByAssessment = new Map<string, string>();
+        for (const a of Array.isArray(assessmentList) ? assessmentList : []) {
+          if (a?.program?.id) progByAssessment.set(a.id, a.program.id);
+        }
+        const lastByProgram = new Map<string, string>();
+        for (const at of Array.isArray(attempts) ? attempts : []) {
+          const pid = progByAssessment.get(at.assessmentId);
+          if (!pid) continue;
+          const ts = at.completedAt ?? at.startedAt;
+          if (!ts) continue;
+          const prev = lastByProgram.get(pid);
+          if (!prev || new Date(ts).getTime() > new Date(prev).getTime()) {
+            lastByProgram.set(pid, ts);
+          }
+        }
+const cards = await Promise.all(
           list.map(async (e) => {
+            const program = e.program!;
+            let hierarchy: ProgramHierarchy | null = null;
             let masteryPercent: number | null = null;
+
             try {
-              const prog = (await progressionApi.get(e.program!.id)) as {
-                grades?: { subjects?: { percent: number }[] }[];
-              } | null;
-              const subjects = prog?.grades?.flatMap((g) => g.subjects ?? []) ?? [];
-              if (subjects.length > 0) {
+              const [h, prog] = await Promise.all([
+                programsApi.getBySlug(program.slug).catch(() => null),
+                progressionApi.get(program.id).catch(() => null),
+              ]);
+              hierarchy = (h as ProgramHierarchy | null) ?? null;
+              const grades =
+                (prog as { grades?: { subjects?: { percent: number }[] }[] } | null)
+                  ?.grades ?? [];
+              const subjectPcts = grades.flatMap((g) =>
+                (g.subjects ?? []).map((s) => s.percent ?? 0)
+              );
+              if (subjectPcts.length > 0) {
                 masteryPercent = Math.round(
-                  subjects.reduce((s, x) => s + (x.percent ?? 0), 0) / subjects.length
+                  subjectPcts.reduce((s, x) => s + x, 0) / subjectPcts.length
                 );
               }
             } catch {
-              masteryPercent = null;
+              // hierarchy/mastery degrade to neutral states below.
             }
+
+            const subjectIds = new Set<string>();
+            let lessons = 0;
+            for (const cur of hierarchy?.curriculums ?? []) {
+              for (const item of cur.items ?? []) {
+                subjectIds.add(item.subject.id);
+                lessons += (item.subject.modules ?? []).reduce(
+                  (sum, m) =>
+                    sum +
+                    (m.topics ?? []).reduce((s, t) => s + (t.lessons ?? []).length, 0),
+                  0
+                );
+              }
+            }
+
             return {
               enrollmentId: e.id,
-              programId: e.program!.id,
-              name: e.program!.name,
-              slug: e.program!.slug,
+              programId: program.id,
+              slug: program.slug,
+              name: program.name,
+              description: hierarchy?.description ?? null,
+              status: program.status,
               active: e.active,
-              status: e.status,
               expiresAt: e.expiresAt,
+              subjectCount: subjectIds.size > 0 ? subjectIds.size : null,
+              lessonCount: lessons > 0 ? lessons : null,
+              assessmentCount: hierarchy?.assessments?.length ?? null,
               masteryPercent,
+              lastActivityAt: lastByProgram.get(program.id) ?? null,
+              typeLabel: hierarchy?.programType
+                ? (typeLabels[hierarchy.programType] ?? hierarchy.programType)
+                : null,
             } as ProgramCard;
           })
         );
@@ -93,7 +178,7 @@ export default function MyProgramsPage() {
       } catch (err) {
         if (!active) return;
         console.error("Failed to load enrollments:", err);
-        setError("Your enrollments could not be loaded. Please try again.");
+        setError("Your programs could not be loaded. Please try again.");
       } finally {
         if (active) setLoading(false);
       }
@@ -101,109 +186,205 @@ export default function MyProgramsPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadKey]);
 
-
-  if (loading) {
-    return (
-      <>
-        <DashboardHeader title="My Programs" subtitle="Loading your programs…" />
-        <div className="p-6 flex items-center justify-center py-12">
-          <RefreshCw className="h-8 w-8 animate-spin text-arc-orange-500" />
-        </div>
-      </>
-    );
-  }
+  const sorted = useMemo(
+    () =>
+      [...programs].sort((a, b) => {
+        // Highest progress first; programs without progress sort to the end.
+        if (a.masteryPercent === null) return 1;
+        if (b.masteryPercent === null) return -1;
+        return b.masteryPercent - a.masteryPercent;
+      }),
+    [programs]
+  );
 
   return (
     <>
       <DashboardHeader
         title="My Programs"
-        subtitle="Programs you are enrolled in"
+        subtitle="Your enrolled learning programs"
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },
           { label: "My Programs" },
         ]}
       />
-
-      <div className="p-6">
-        {error ? (
-          <div className="max-w-lg mx-auto text-center py-12">
-            <AlertCircle className="h-10 w-10 text-red-400 mx-auto mb-3" />
-            <p className="text-arc-slate-600 mb-4">{error}</p>
-            <Button variant="outline" onClick={() => window.location.reload()}>
-              Retry
-            </Button>
-          </div>
-        ) : programs.length === 0 ? (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <BookOpen className="h-12 w-12 text-arc-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold text-arc-navy-900 mb-2">No Program Enrolled</h3>
-              <p className="text-arc-slate-500">
-                You don&apos;t have an active program. Contact your administrator to get enrolled.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-5 md:grid-cols-2">
-            {programs.map((p) => (
-              <Link
-                key={p.enrollmentId}
-                href={`/dashboard/programs/${p.programId}`}
-                className="group block rounded-2xl border border-arc-slate-200 bg-white overflow-hidden hover:border-arc-orange-300 hover:shadow-lg transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-arc-orange-500"
+<div className="mx-auto max-w-4xl p-6">
+        {/* Loading skeleton */}
+        {loading && (
+          <div className="space-y-4" aria-busy="true" aria-label="Loading programs">
+            {[0, 1].map((i) => (
+              <div
+                key={i}
+                className="rounded-xl border border-arc-slate-200 bg-white p-5 animate-pulse"
               >
-                <div className="bg-arc-navy-900 px-5 py-4 relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-br from-arc-navy-900 via-arc-navy-800 to-arc-navy-700" />
-                  <div className="relative flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="h-9 w-9 rounded-xl bg-arc-orange-500/20 flex items-center justify-center flex-shrink-0">
-                        <GraduationCap className="h-5 w-5 text-arc-orange-300" />
-                      </div>
-                      <h3 className="text-base font-semibold text-white truncate group-hover:text-arc-orange-200 transition-colors">
-                        {p.name}
-                      </h3>
-                    </div>
-                    <Badge
-                      className={
-                        p.active
-                          ? "bg-green-500/20 text-green-300 border border-green-400/30 shrink-0"
-                          : "bg-arc-slate-500/20 text-arc-slate-300 shrink-0"
-                      }
-                    >
-                      {p.active ? "Active" : p.status}
-                    </Badge>
+                <div className="flex gap-4">
+                  <div className="h-11 w-11 rounded-lg bg-arc-slate-200 shrink-0" />
+                  <div className="flex-1 space-y-3">
+                    <div className="h-4 w-1/3 rounded bg-arc-slate-200" />
+                    <div className="h-3 w-2/3 rounded bg-arc-slate-100" />
+                    <div className="h-2 w-full rounded bg-arc-slate-100" />
                   </div>
                 </div>
+              </div>
+            ))}
+          </div>
+        )}
 
-                <div className="p-5">
-                  {p.masteryPercent !== null ? (
-                    <div className="mb-4">
-                      <div className="flex items-center justify-between text-sm mb-1.5">
-                        <span className="text-arc-slate-500">Overall mastery</span>
-                        <span className="font-semibold text-arc-navy-900">{p.masteryPercent}%</span>
+        {/* Error state */}
+        {!loading && error && (
+          <div className="rounded-xl border border-arc-slate-200 bg-white p-10 text-center">
+            <AlertCircle className="h-8 w-8 text-arc-red-500 mx-auto mb-3" />
+            <p className="text-arc-navy-900 font-medium">{error}</p>
+            <p className="text-sm text-arc-slate-500 mt-1">
+              Your enrollment information could not be loaded from the server.
+            </p>
+            <Button
+              variant="accent"
+              size="sm"
+              className="mt-4"
+              onClick={() => setReloadKey((k) => k + 1)}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Try Again
+            </Button>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && !error && sorted.length === 0 && (
+          <div className="rounded-xl border border-dashed border-arc-slate-300 bg-arc-slate-50 p-12 text-center">
+            <GraduationCap className="h-10 w-10 text-arc-slate-300 mx-auto mb-3" />
+            <h3 className="text-lg font-semibold text-arc-navy-900 mb-1">
+              No programs yet
+            </h3>
+            <p className="text-sm text-arc-slate-500 max-w-sm mx-auto">
+              You aren&apos;t enrolled in any active programs. Contact your school
+              or administrator to get enrolled.
+            </p>
+          </div>
+        )}
+
+        {/* Program rows */}
+        {!loading && !error && sorted.length > 0 && (
+          <div className="space-y-4">
+            {sorted.map((p) => (
+              <div
+                key={p.enrollmentId}
+                className="rounded-xl border border-arc-slate-200 bg-white flex flex-col sm:flex-row hover:border-arc-navy-300 hover:shadow-sm transition-all"
+              >
+                {/* Main clickable body */}
+                <Link
+                  href={`/dashboard/programs/${p.programId}`}
+                  className="flex-1 min-w-0 p-5 rounded-l-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-arc-orange-500"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="h-11 w-11 rounded-lg bg-arc-navy-800 text-white flex items-center justify-center shrink-0">
+                      <GraduationCap className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-base font-semibold text-arc-navy-900 truncate">
+                          {p.name}
+                        </h3>
+                        {p.typeLabel && (
+                          <Badge
+                            variant="outline"
+                            className="text-arc-slate-500 shrink-0"
+                          >
+                            {p.typeLabel}
+                          </Badge>
+                        )}
+                        <Badge
+                          className={
+                            p.active
+                              ? "bg-arc-green-100 text-arc-green-700 shrink-0"
+                              : "bg-arc-slate-100 text-arc-slate-500 shrink-0"
+                          }
+                        >
+                          {p.active ? "Active" : p.status}
+                        </Badge>
                       </div>
-                      <Progress value={p.masteryPercent} className="h-2" />
+                      {p.description ? (
+                        <p className="text-sm text-arc-slate-500 mt-1 line-clamp-2">
+                          {p.description}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-arc-slate-400 mt-1">
+                          No description available.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+{/* Metadata */}
+                  <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-arc-slate-500">
+                    {p.subjectCount !== null && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Layers className="h-3.5 w-3.5 text-arc-slate-400" />
+                        {p.subjectCount}{" "}
+                        {p.subjectCount === 1 ? "Subject" : "Subjects"}
+                      </span>
+                    )}
+                    {p.lessonCount !== null && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <BookOpen className="h-3.5 w-3.5 text-arc-slate-400" />
+                        {p.lessonCount}{" "}
+                        {p.lessonCount === 1 ? "Lesson" : "Lessons"}
+                      </span>
+                    )}
+                    {p.assessmentCount !== null && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <FileQuestion className="h-3.5 w-3.5 text-arc-slate-400" />
+                        {p.assessmentCount}{" "}
+                        {p.assessmentCount === 1 ? "Assessment" : "Assessments"}
+                      </span>
+                    )}
+                    {p.lastActivityAt && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5 text-arc-slate-400" />
+                        Last activity:{" "}
+                        {new Date(p.lastActivityAt).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </span>
+                    )}
+                    {p.expiresAt && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5 text-arc-slate-400" />
+                        Expires: {new Date(p.expiresAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Progress */}
+                  {p.masteryPercent !== null ? (
+                    <div className="mt-4">
+                      <div className="flex items-center justify-between text-xs mb-1.5">
+                        <span className="text-arc-slate-500">Progress</span>
+                        <span className="font-semibold text-arc-navy-900">
+                          {p.masteryPercent}%
+                        </span>
+                      </div>
+                      <Progress value={p.masteryPercent} className="h-1.5" />
                     </div>
                   ) : (
-                    <p className="text-sm text-arc-slate-500 mb-4">
-                      No progress recorded yet — start your first lesson to begin tracking mastery.
+                    <p className="mt-4 text-xs text-arc-slate-400">
+                      No progress recorded yet.
                     </p>
                   )}
+                </Link>
 
-                  {p.expiresAt && (
-                    <div className="flex items-center gap-1 text-xs text-arc-slate-500 mb-4">
-                      <Clock className="h-3 w-3" />
-                      Expires {new Date(p.expiresAt).toLocaleDateString()}
-                    </div>
-                  )}
-
-                  <span className="inline-flex items-center gap-1 text-sm font-medium text-arc-orange-600 group-hover:text-arc-orange-700">
-                    View Program
-                    <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                  </span>
+                {/* CTA column */}
+                <div className="px-5 pb-5 sm:p-5 sm:border-l sm:border-arc-slate-100 flex sm:items-center">
+                  <Link href={`/dashboard/programs/${p.programId}`} className="w-full sm:w-auto">
+                    <Button variant="accent" size="sm" className="w-full sm:w-auto">
+                      Continue Learning
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  </Link>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         )}

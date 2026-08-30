@@ -14,11 +14,8 @@ import {
   Clock,
   Calendar,
   Target,
-  Flame,
   Star,
   Play,
-  ArrowUpRight,
-  ArrowDownRight,
   CheckCircle2,
   RefreshCw,
   Lock,
@@ -210,23 +207,30 @@ export default function DashboardPage() {
     return "User";
   };
 
-  // Compute quick stats from real data
-  const totalPoints = progression?.grades.reduce(
-    (sum, g) => sum + g.subjects.reduce((s, subj) => s + subj.percent * 10, 0),
-    0
-  ) ?? 0;
-  const lessonsDone = continueLessons.filter((l) => l.progress === 100).length;
-  const totalLessons = continueLessons.length;
+  // Quick stats — computed solely from real data (no fabricated deltas).
+  // Overall mastery = mean of the current program ladder's subject percentages.
+  const allSubjectPcts = (progression?.grades ?? []).flatMap((g) =>
+    (g.subjects ?? []).map((s) => s.percent ?? 0)
+  );
+  const overallMastery =
+    allSubjectPcts.length > 0
+      ? Math.round(allSubjectPcts.reduce((s, x) => s + x, 0) / allSubjectPcts.length)
+      : null;
+  const activePrograms = enrollments.filter((e) => e.active).length;
+  const completedAttempts = attempts.filter((a) => a.status === "COMPLETED");
   const avgScore =
-    attempts.length > 0
-      ? Math.round(attempts.reduce((s, a) => s + (a.percentage || 0), 0) / attempts.length)
-      : 0;
+    completedAttempts.length > 0
+      ? Math.round(
+          completedAttempts.reduce((s, a) => s + (a.percentage || 0), 0) /
+            completedAttempts.length
+        )
+      : null;
 
   const stats = [
-    { label: "Mastery Points", value: `${Math.round(totalPoints)}`, change: "+12%", positive: true, icon: Star },
-    { label: "Lessons in Progress", value: `${lessonsDone}/${totalLessons || "?"}`, change: "3 new", positive: true, icon: BookOpen },
-    { label: "Practice Tests", value: `${attempts.length}`, change: "+2", positive: true, icon: Trophy },
-    { label: "Avg. Score", value: `${avgScore}%`, change: "+5%", positive: true, icon: TrendingUp },
+    { label: "Overall Mastery", value: `${overallMastery ?? "—"}%`, icon: Star, hint: "average across your subjects" },
+    { label: "Active Programs", value: `${activePrograms}`, icon: BookOpen, hint: "programs you are enrolled in" },
+    { label: "Assessments Taken", value: `${attempts.length}`, icon: Trophy, hint: "attempts recorded" },
+    { label: "Average Score", value: avgScore === null ? "—" : `${avgScore}%`, icon: TrendingUp, hint: "completed assessments only" },
   ];
 
   return (
@@ -240,24 +244,16 @@ export default function DashboardPage() {
         {/* Quick Stats */}
         <div className="grid gap-5 mb-8 md:grid-cols-2 lg:grid-cols-4">
           {stats.map((stat) => (
-            <Card key={stat.label} className="relative overflow-hidden group hover:shadow-xl transition-all duration-300">
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-arc-orange-500 to-arc-navy-500 transform origin-left transition-transform duration-300" />
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="h-12 w-12 rounded-xl flex items-center justify-center bg-arc-orange-100">
-                    <stat.icon className="h-6 w-6 text-arc-orange-500" />
+            <Card key={stat.label} className="hover:shadow-md transition-all duration-300">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <div className="h-9 w-9 rounded-lg bg-arc-navy-100 flex items-center justify-center">
+                    <stat.icon className="h-4.5 w-4.5 text-arc-navy-700" />
                   </div>
-                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
-                    stat.positive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
-                  }`}>
-                    {stat.positive ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-                    {stat.change}
-                  </div>
+                  <h3 className="text-sm font-semibold text-arc-navy-900">{stat.label}</h3>
                 </div>
-                <div className="space-y-1">
-                  <div className="text-3xl font-bold tracking-tight text-arc-navy-900">{stat.value}</div>
-                  <div className="text-sm font-medium text-arc-slate-500">{stat.label}</div>
-                </div>
+                <div className="text-3xl font-bold tracking-tight text-arc-navy-900">{stat.value}</div>
+                <p className="text-xs text-arc-slate-500 mt-1">{stat.hint}</p>
               </CardContent>
             </Card>
           ))}

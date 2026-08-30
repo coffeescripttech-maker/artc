@@ -5,7 +5,7 @@ import Link from "next/link";
 import { DashboardHeader } from "@/components/dashboard";
 import { Card, CardHeader, CardTitle, CardContent, Badge, Progress, Button } from "@/components/ui";
 import { Gauge as ProgressIcon, Lock, Unlock, Trophy, TrendingUp, Minus, AlertCircle, RefreshCw, ChevronRight, BookOpen } from "lucide-react";
-import { progressApi } from "@/lib/api/client";
+import { progressApi, enrollmentsApi } from "@/lib/api/client";
 import { DEFAULT_MASTERY_GATE, MASTERY_BANDS, MASTERY_BAND_CLASSES } from "@/lib/mastery-constants";
 import { cn } from "@aratc/ui";
 
@@ -102,11 +102,40 @@ export default function ProgressionPage() {
   const [expandedGrades, setExpandedGrades] = useState<Set<string>>(new Set());
   const [expandedSubjects, setExpandedSubjects] = useState<Set<string>>(new Set());
 
+  // CS#22.8: surface every ACTIVE enrolled program as a switcher so a learner
+  // enrolled in both BUCET and CRP can view either program's progression.
+  const [enrollments, setEnrollments] = useState<
+    { id: string; name: string; slug: string }[]
+  >([]);
+  const [selectedProgramId, setSelectedProgramId] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const mine = (await enrollmentsApi.mine()) as {
+          id: string;
+          active: boolean;
+          status: string;
+          program: { id: string; name: string; slug: string } | null;
+        }[];
+        const list = (Array.isArray(mine) ? mine : [])
+          .filter((e) => e.active && e.status === "ACTIVE" && e.program)
+          .map((e) => e.program!);
+        setEnrollments(list);
+      } catch {
+        // Progression still loads below; the switcher is an enhancement.
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     async function fetchProgression() {
       try {
         setLoading(true);
-        const result = await progressApi.progression() as ProgressionData;
+        // null → backend default (current program); otherwise the selected program.
+        const result = (await progressApi.progression(
+          selectedProgramId ?? undefined
+        )) as ProgressionData;
         setData(result);
         // Expand first grade by default
         if (result.grades.length > 0) {
@@ -119,7 +148,7 @@ export default function ProgressionPage() {
       }
     }
     fetchProgression();
-  }, []);
+  }, [selectedProgramId]);
 
   const toggleGrade = (id: string) => {
     const next = new Set(expandedGrades);
@@ -157,6 +186,39 @@ export default function ProgressionPage() {
         title="My Learning Progress"
         subtitle="Track your mastery journey through the curriculum"
       />
+
+      {/* Program switcher (CS#22.8): both enrolled programs are reachable. */}
+      {enrollments.length > 1 && (
+        <div className="px-6 pt-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium uppercase tracking-wide text-arc-slate-400 mr-1">
+              Program
+            </span>
+            {enrollments.map((p) => {
+              const isCurrent =
+                selectedProgramId === p.id ||
+                (selectedProgramId === null && data?.program?.id === p.id);
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => setSelectedProgramId(p.id)}
+                  aria-pressed={isCurrent}
+                  className={cn(
+                    "inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-arc-orange-500",
+                    isCurrent
+                      ? "border-arc-orange-400 bg-arc-orange-50 text-arc-orange-700"
+                      : "border-arc-slate-200 bg-white text-arc-slate-600 hover:border-arc-slate-300"
+                  )}
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                  {p.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="p-6 space-y-6">
         {/* Overall Progress Card */}

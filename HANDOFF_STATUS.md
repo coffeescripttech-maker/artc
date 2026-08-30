@@ -25,6 +25,7 @@
 | CS#22 | College Readiness Program (CRP) content package + deterministic assessments | ✅ | 153-test suite + 23-check live E2E flow |
 | CS#22.5 | Dedicated investor demo accounts + idempotent demo seed + verifier | ✅ | 23-check verifier + 15-check live login/auth + 15-check student journey |
 | CS#22.7 | Investor demo integrity & UX fixes (C-1/C-2/H-1/H-2/H-3/H-4/M-1 from the CS#22.6 audit) | ✅ | 164-test suite + 29-check live 5-role E2E probe + CS#19 determinism re-verified |
+| CS#22.8 | Student Portal enterprise UX audit & demo polish (real-data stats, My Programs redesign, progression program switcher) | ✅ | 164-test suite + live data-derivation E2E probe + route smoke tests |
 
 ## Final Gates
 
@@ -268,3 +269,83 @@ Implements the confirmed findings from `AUDIT_CS22.6_UI_UX_DEMO_READINESS.md`. N
   ```
 - **Commit:** `22132d8` — "fix(cs22.7): correct API_BASE_URL to always include /api prefix"
 - **Verified:** Full 5-role E2E probe re-run through the Next.js proxy layer (`/api/*` → `localhost:4000/api/*`): all endpoints return 200 with real data (enrollments, assessments, attempts).
+## CS#22.8 — Student Portal Enterprise UX Audit & Production-Ready Demo Polish
+
+### Objective
+
+Make the Student Portal feel enterprise-grade with real data only: no fabricated
+dashboard deltas, a compact information-dense My Programs page, and every enrolled
+program reachable from Progress.
+
+### Audit summary (read-only Phase 1)
+
+- **Navigation:** audited every Student sidebar item — all routes exist and load; no dead links.
+- **`/dashboard`:** stat cards showed **fabricated deltas** (`+12%`, `+5%`, `3 new`, `+2`) and an invented
+  "Mastery Points" metric (`subject.percent × 10`); a fallback `?` when lesson totals were empty.
+- **`/dashboard/programs`:** oversized, full-width, heavily colored cards (2-per-row), no description,
+  no subject/lesson counts, no last-activity, no progress bar, and no clear primary action.
+- **`/dashboard/progression`:** only ever rendered the backend-default current program (BUCET); a
+  student enrolled in both BUCET and CRP had no way to view CRP progression from Progress.
+- Confirmed via live probes that `matth quiz 1` / foreign DRAFTs remain invisible to students (CS#22.7
+  C-2 intact) and that all APIs return plain arrays (the `{value, Count}` shape seen in an earlier
+  PowerShell probe was a PowerShell serialization artifact, not a server envelope — verified with node).
+
+### Changes
+
+1. **`apps/web/src/app/dashboard/page.tsx`** — removed all fabricated stat deltas and the invented
+   "Mastery Points" metric. New honest quick-stats card row, all derived from real data:
+   - **Overall Mastery** — mean of current program ladder's subject percentages (or `—`).
+   - **Active Programs** — count of ACTIVE enrollments.
+   - **Assessments Taken** — real attempt count.
+   - **Average Score** — mean of COMPLETED attempt percentages only (or `—`).
+   Removed the decorative gradient top borders and swapped orange icon tiles for calm navy tiles.
+   Removed now-unused `ArrowUpRight` / `ArrowDownRight` / `Flame` imports.
+
+2. **`apps/web/src/app/dashboard/programs/page.tsx`** — full redesign (the main CS#22.8 deliverable):
+   - Enterprise list-style rows (max-w-4xl container, one program per row, neutral white surfaces,
+     subtle borders, restrained shadows, small navy accent tile). No giant colored cards.
+   - Real data per program: description, subject count, lesson count, assessment count (derived from
+     `GET /programs/{slug}` published curriculum tree), mastery percent (`GET /progression?programId=`),
+     and last-activity date only when a real attempt exists (mapped via scoped
+     `GET /assessments` + `GET /assessments/me/attempts`).
+   - Semantic link regions (real `<Link>` with focus ring), separate explicit "Continue Learning"
+     CTA, skeleton loading, useful error state with retry, and truthful empty state.
+   - Programs without progress sort to the end; no invented progress values.
+
+3. **`apps/web/src/app/dashboard/progression/page.tsx`** — added an enrolled-program switcher
+   (chip row) built from `GET /my/enrollments` (ACTIVE only). Selecting a chip re-fetches
+   `/progression?programId=…`, so **both BUCET and CRP progression are discoverable** from Progress.
+   Null selection preserves the previous default (backend current-program) behavior.
+
+### Verification
+
+- **Gates:** API typecheck 0 errors · Web typecheck 0 errors · API lint 0 errors · Web lint 0 errors
+  (334 warnings, −1 from the 335 baseline) · **Vitest 164/164 (18 files)** — no regressions.
+- **Route smoke tests:** `/dashboard`, `/dashboard/programs`, `/dashboard/progression` all 200.
+- **Live data-derivation E2E probe (demo.student):** enrollments = `college-readiness-program`,
+  `bucet-reviewer` (both ACTIVE). Program cards derive exactly:
+  - CRP: description ✓ · 4 subjects · 11 lessons · 2 assessments · 58% mastery (real progression).
+  - BUCET: description ✓ · 4 subjects · 12 lessons · 1 assessment · 0% mastery (real — no BUCET
+    curriculum progress recorded yet).
+  - Scoped assessment list = the 3 ARC PUBLISHED only (no legacy `matth quiz 1`, no DRAFT), 7 real attempts.
+  - These match the CS#20/CS#22 regression spec exactly (4 subjects · 12 lessons BUCET, 4 · 11 CRP).
+- **Security/authorization:** no auth or tenant rules touched; every value the new pages render is
+  fetched through existing server-enforced scoped endpoints (the frontend only narrows *display*, and
+  never fabricates data).
+
+### Remaining (documented, intentionally not in CS#22.8 scope)
+
+- **P2:** Single-resource reads of null-org platform content remain "public catalog" by design
+  (unchanged from CS#22.7 — students cannot discover them via any list).
+- **P2:** login-page "10,000+ questions" copy claim; localStorage-JWT architecture notes. On CS#23.x
+  roadmap per owner sequencing.
+- **P3:** the dashboard's "Continue Learning" lesson snapshot is limited to the first unlocked
+  grade's first 3 lessons per subject (pre-existing behavior, unchanged).
+
+### Test-coverage note
+
+The CS#22.8 fixes are frontend presentation/navigation; `apps/web` has no test harness (no
+jsdom/@testing-library deps), and adding one would introduce new dependencies against the milestone's
+"Do not introduce new dependencies" rule. Backend behavior was untouched (0 API file changes), so the
+existing 164-test suite remains fully green and the fixes were verified via live E2E data-derivation
+probes instead.
