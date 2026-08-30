@@ -1,7 +1,7 @@
 import type { BrandSettings, GeneralSettings } from "@aratc/shared";
 import { getActiveOrgId } from "../org-api";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api";
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, "") + "/api";
 
 interface FetchOptions extends RequestInit {
   token?: string;
