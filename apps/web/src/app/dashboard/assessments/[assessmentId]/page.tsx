@@ -478,6 +478,12 @@ export default function AssessmentPlayerPage() {
 
   const unansweredCount = total - answeredCount;
 
+  // Compact adaptive palette: fewer columns for small exams, more for large
+  // ones, so the navigator stays short instead of a long single-column scroll.
+  const navCols =
+    total <= 8 ? "grid-cols-4" : total <= 16 ? "grid-cols-5" : total <= 30 ? "grid-cols-6" : "grid-cols-7";
+  const navFont = total <= 16 ? "text-sm" : "text-xs";
+
   return (
     <div className="flex flex-col h-screen">
       {/* Top bar */}
@@ -530,76 +536,78 @@ export default function AssessmentPlayerPage() {
 
       <div className="flex-1 min-h-0 flex">
         {/* Navigator sidebar */}
-        <aside className="w-56 shrink-0 border-r border-arc-slate-200 bg-white p-4 overflow-y-auto">
-          <p className="text-xs font-semibold text-arc-slate-500 uppercase tracking-wide mb-3">
-            Question Navigator
-          </p>
-          <div className="space-y-2">
-            {data.questions.map((qq, i) => {
-              const active = i === current;
-              const done = isAnswered(qq.id);
-              const flag = flagged.has(qq.id);
-              const rev = reviewed.has(qq.id);
+        <aside className="w-64 shrink-0 border-r border-arc-slate-200 bg-white overflow-y-auto">
+          <div className="sticky top-0 z-10 bg-white/95 backdrop-blur px-4 pt-4 pb-3 border-b border-arc-slate-100">
+            <p className="text-xs font-semibold text-arc-slate-500 uppercase tracking-wide">
+              Question Navigator
+            </p>
+            <p className="text-xs text-arc-slate-500 mt-0.5">
+              {answeredCount} of {total} answered
+            </p>
+          </div>
 
-              let bg = "bg-white text-arc-slate-400 border-arc-slate-200";
-              let dot = "bg-arc-slate-300";
-              if (done) {
-                bg = "bg-arc-navy-900 text-white border-arc-navy-900";
-                dot = "bg-arc-navy-900";
-              }
-              if (flag) {
-                bg = "border-arc-orange-400 bg-arc-orange-50 text-arc-orange-600";
-                dot = "bg-arc-orange-500";
-              }
-              if (active) {
-                bg = "border-arc-orange-400 bg-arc-orange-50 text-arc-orange-600";
-                dot = done ? "bg-arc-navy-900" : "bg-arc-orange-500";
-              }
+          <div className="px-4 py-3">
+            <div className={`grid ${navCols} gap-1.5`}>
+              {data.questions.map((qq, i) => {
+                const active = i === current;
+                const done = isAnswered(qq.id);
+                const flag = flagged.has(qq.id);
+                const rev = reviewed.has(qq.id);
+                const stateLabel = done ? "Answered" : flag ? "Flagged" : rev ? "Reviewed" : "Unanswered";
+                const hoverCls = !done && !active ? "hover:bg-arc-slate-50" : "";
 
-              return (
-                <div key={qq.id} className="flex items-center gap-2">
+                let bg = "bg-white text-arc-slate-400 border-arc-slate-200";
+                if (done) {
+                  bg = "bg-arc-navy-900 text-white border-arc-navy-900";
+                }
+                if (flag) {
+                  bg = "border-arc-orange-400 bg-arc-orange-50 text-arc-orange-600";
+                }
+                if (active) {
+                  bg = "border-arc-orange-400 bg-arc-orange-50 text-arc-orange-600";
+                }
+
+                return (
                   <button
+                    key={qq.id}
                     onClick={() => goToAction(i)}
-                    className={`relative w-9 h-9 rounded-lg text-sm font-medium border transition-all flex items-center justify-center ${bg} ${
-                      active ? "ring-2 ring-arc-orange-400" : ""
+                    title={`Question ${i + 1} — ${stateLabel}`}
+                    aria-label={`Question ${i + 1} — ${stateLabel}`}
+                    aria-current={active ? "true" : undefined}
+                    className={`relative aspect-square w-full rounded-lg ${navFont} font-semibold border transition-all flex items-center justify-center ${bg} ${
+                      active ? "ring-2 ring-arc-orange-400" : hoverCls
                     }`}
                   >
                     {flag && <Flag className="h-2.5 w-2.5 absolute top-0.5 right-0.5 fill-arc-orange-500 text-arc-orange-500" />}
                     {rev && <span className="h-1.5 w-1.5 absolute bottom-0.5 right-0.5 rounded-full bg-green-500" />}
                     {i + 1}
                   </button>
-                  <span className="text-xs text-arc-slate-500 truncate max-w-[120px]">
-                    {qq.type === "ESSAY" || qq.type === "FILL_IN_THE_BLANK" || qq.type === "NUMERIC"
-                      ? `${qq.id.slice(0, 4)}`
-                      : done
-                        ? "Answered"
-                        : flag
-                          ? "Flagged"
-                          : rev
-                            ? "Reviewed"
-                            : "unanswered"}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
 
-          <div className="mt-6 space-y-1 text-xs text-arc-slate-500">
-            <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-arc-slate-300" />
-              <span>Unanswered</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-arc-navy-900" />
-              <span>Answered</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-arc-orange-500" />
-              <span>Flagged</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
-              <span>Reviewed</span>
+            {/* Legend with live counts */}
+            <div className="mt-4 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-arc-slate-600">
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-arc-slate-300" />
+                Unanswered
+                <span className="ml-auto font-semibold text-arc-slate-800">{unansweredCount}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-arc-navy-900" />
+                Answered
+                <span className="ml-auto font-semibold text-arc-slate-800">{answeredCount}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-arc-orange-500" />
+                Flagged
+                <span className="ml-auto font-semibold text-arc-slate-800">{flagged.size}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
+                Reviewed
+                <span className="ml-auto font-semibold text-arc-slate-800">{reviewed.size}</span>
+              </div>
             </div>
           </div>
         </aside>
