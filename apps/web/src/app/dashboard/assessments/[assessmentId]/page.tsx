@@ -19,6 +19,7 @@ import {
   AlertCircle,
   RotateCcw,
   SkipForward,
+  Play,
 } from "lucide-react";
 
 interface PlayerOption {
@@ -103,6 +104,14 @@ export default function AssessmentPlayerPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [recommendations, setRecommendations] = useState<RecommendationsResult | null>(null);
   const [questionStartTime, setQuestionStartTime] = useState<Record<string, number>>({});
+  // CS#21: pre-start "Before You Begin" gate. The attempt is NOT auto-started.
+  const [started, setStarted] = useState(false);
+  const [instr, setInstr] = useState<{
+    name: string;
+    timeLimitMinutes?: number | null;
+    questionCount: number;
+    randomize: boolean;
+  } | null>(null);
 
   const answersRef = useRef(answers);
   answersRef.current = answers;
@@ -137,10 +146,40 @@ export default function AssessmentPlayerPage() {
     }
   };
 
+  // Populate the "Before You Begin" instructions WITHOUT starting an attempt.
   useEffect(() => {
-    void beginAttempt();
+    let active = true;
+    (async () => {
+      try {
+        const meta = (await assessmentsApi.getById(assessmentId)) as {
+          name: string;
+          timeLimitMinutes?: number | null;
+          randomizeQuestions?: boolean;
+          questions?: unknown[];
+        };
+        if (!active) return;
+        setInstr({
+          name: meta.name,
+          timeLimitMinutes: meta.timeLimitMinutes,
+          questionCount: meta.questions?.length ?? 0,
+          randomize: !!meta.randomizeQuestions,
+        });
+      } catch {
+        // Metadata is optional — the instructions still render with defaults.
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assessmentId]);
+
+  const handleStart = async () => {
+    setStarted(true);
+    await beginAttempt();
+  };
 
   const doSubmit = async () => {
     if (submittedRef.current || !data) return;
@@ -182,6 +221,72 @@ export default function AssessmentPlayerPage() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft, result]);
+
+  // ---- CS#21: "Before You Begin" instructions gate (real rules only) ----
+  if (!started) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center p-4">
+        <div className="w-full max-w-lg">
+          <div className="rounded-2xl border border-arc-slate-200 bg-white overflow-hidden shadow-sm">
+            <div className="bg-arc-navy-900 text-white px-6 py-5">
+              <div className="text-xs font-semibold uppercase tracking-widest text-arc-orange-300">
+                Before You Begin
+              </div>
+              <h1 className="text-xl font-bold mt-1">{instr?.name || "Assessment"}</h1>
+            </div>
+
+            <div className="p-6">
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                <div className="rounded-xl bg-arc-slate-50 px-4 py-3">
+                  <div className="text-xs text-arc-slate-500">Questions</div>
+                  <div className="text-2xl font-bold text-arc-navy-900 leading-none mt-1">
+                    {instr ? instr.questionCount || "0" : "…"}
+                  </div>
+                </div>
+                <div className="rounded-xl bg-arc-slate-50 px-4 py-3">
+                  <div className="text-xs text-arc-slate-500">Time limit</div>
+                  <div className="text-2xl font-bold text-arc-navy-900 leading-none mt-1">
+                    {instr?.timeLimitMinutes
+                      ? `${instr.timeLimitMinutes} min`
+                      : instr
+                        ? "Untimed"
+                        : "…"}
+                  </div>
+                </div>
+              </div>
+
+              <ul className="space-y-2.5">
+                {instr?.randomize ? (
+                  <li className="flex items-start gap-2 text-sm text-arc-slate-600">
+                    <CheckCircle2 className="h-4 w-4 text-arc-green-500 mt-0.5 flex-shrink-0" />
+                    Your question order is randomized for this attempt.
+                  </li>
+                ) : null}
+                <li className="flex items-start gap-2 text-sm text-arc-slate-600">
+                  <CheckCircle2 className="h-4 w-4 text-arc-green-500 mt-0.5 flex-shrink-0" />
+                  Your attempt is preserved if you refresh or resume.
+                </li>
+                <li className="flex items-start gap-2 text-sm text-arc-slate-600">
+                  <CheckCircle2 className="h-4 w-4 text-arc-green-500 mt-0.5 flex-shrink-0" />
+                  Submit the examination when you are finished.
+                </li>
+              </ul>
+
+              <Button className="w-full mt-6" size="lg" onClick={handleStart}>
+                <Play className="h-4 w-4 mr-2" />
+                Start Examination
+              </Button>
+              <Link href="/dashboard/assessments" className="block text-center mt-3">
+                <Button variant="ghost" className="text-arc-slate-500">
+                  Cancel and return
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

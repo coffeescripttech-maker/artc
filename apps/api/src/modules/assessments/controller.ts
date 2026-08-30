@@ -300,7 +300,7 @@ export async function getAttempt(
 ): Promise<void> {
   try {
     const userId = getAuthUserId(req);
-    const attempt = await getAttemptWithAnswers(req.params.id, userId);
+    const attempt = await getAttemptWithAnswers(req.params.attemptId, userId);
     if (!attempt) {
       res.status(404).json({ error: "Attempt not found" });
       return;

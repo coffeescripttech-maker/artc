@@ -181,10 +181,27 @@ export default function MyProgramsPage() {
             {/* Program Header */}
             <Card className="mb-6">
               <CardHeader>
-                <CardTitle className="text-xl">{progression.program.name}</CardTitle>
-                <p className="text-sm text-arc-slate-500 mt-1">
-                  Mastery gate: <strong>{progression.gate}%</strong> to unlock the next grade level
-                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-xl">
+                      <Link
+                        href={`/dashboard/programs/${progression.program.id}`}
+                        className="hover:text-arc-orange-600 transition-colors"
+                      >
+                        {progression.program.name}
+                      </Link>
+                    </CardTitle>
+                    <p className="text-sm text-arc-slate-500 mt-1">
+                      Mastery gate: <strong>{progression.gate}%</strong> to unlock the next grade level
+                    </p>
+                  </div>
+                  <Link href={`/dashboard/programs/${progression.program.id}`} className="shrink-0">
+                    <Button variant="outline" size="sm">
+                      <Play className="h-4 w-4 mr-1" />
+                      View Program
+                    </Button>
+                  </Link>
+                </div>
               </CardHeader>
               <CardContent>
                 <MasteryLadder grades={progression.grades} gate={progression.gate} />

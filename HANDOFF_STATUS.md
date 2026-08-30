@@ -21,6 +21,7 @@
 | CS#15 | Assessment/Question org ownership + version-route error hardening | ✅ | 7/7 live smoke, server-crash bug fixed |
 | CS#19 | Persist served question set per assessment attempt | ✅ | 134-test suite + live E2E smoke |
 | CS#20 | BUCET Reviewer + CBT mock-exam content package (deterministic CBT practice) | ✅ | 142-test suite + live E2E smoke |
+| CS#21 | BUCET investor demo polish + ARC branding (UI/UX) | ✅ | gates + 14-check live E2E flow |
 
 ## Final Gates
 
@@ -80,6 +81,24 @@ Demo content for the investor capstone: an admission-test ("BUCET") reviewer pro
 **Tests** (`apps/api/src/__tests__/bucet-content.test.ts`, 8 tests): structural validation, hierarchy, 40–60 budget, difficulty mix, types/answer refs, engine-compatible formats, passage links, CS#19 randomization config (served-set determinism), honest demo labeling.
 
 **Live E2E smoke (10 checks, all PASS):** student login → enrollment (ACTIVE/ADMIN_GRANT) → assessment fetch (org header) → start (48 questions) → deterministic resume (3× identical order) → deterministic choices → **submit (48/48 = 100%)** → tenant isolation (outsider student 404 by id and slug) → org-admin access.
+
+## CS#21 — BUCET Investor Demo Polish + ARC Branding
+Status: COMPLETE
+
+UI/UX polish of the student-facing BUCET flow (program overview → curriculum → lesson → mock exam → instructions gate → CBT player → result → review). All data comes from live API endpoints — no hard-coded statistics.
+
+**Major UI areas changed:**
+- **Program overview** (`dashboard/programs/[programId]/page.tsx`, new): restrained ARC-branded program header (org eyebrow, program title, description), real derived metadata (subjects / lessons / mock-exam count from the program payload), per-subject progress bars fed by `/progression` (percent omitted when unavailable), curriculum presented as Subject → Module → Topic → Lesson expandable hierarchy (no wall of cards), prominent mock-exam card with real metadata (questions / minutes / passing score / "Demo" label) + "Before You Begin" instructions.
+- **My Programs** (`dashboard/programs/page.tsx`): consistent ARC card styling, real enrollment/progress data, clear empty state.
+- **Assessment detail/player** (`dashboard/assessments/[assessmentId]/page.tsx`): added a **"Before You Begin" instructions gate** before `start` (only real rules: question count, time limit, randomized order, resume preserved, submit when finished — no invented proctoring/lockdown claims); polished result screen hierarchy (score %, mastery band badge, correct-of-total, Review Answers / Back actions); result breakdown unchanged in data, presentation cleaned.
+- **API fix** (`assessments/controller.ts`): `getAttempt` used `req.params.id` (assessment id) instead of `req.params.attemptId` — the review endpoint could never resolve an attempt. Fixed; review now returns all 48 answers.
+
+**Design discipline:** existing ARC tokens only (arc-navy/arc-orange/arc-green/arc-purple, slate neutrals); no new dependencies, no chart library, no heavy animation; subtle hover/transition only. Tenant isolation untouched (server-side enforcement authoritative).
+
+**Verification:**
+- Responsive: existing Tailwind responsive architecture preserved; no horizontal overflow, hover-only interactions, or tiny touch targets introduced.
+- Live E2E investor flow (**14 checks, all PASS**): student login → ARC org membership → program hierarchy (4S/9M/12T/12L) → mock exam exposed → 4 subject progress bars → exam instructions (48 q / 60 min / pass 60 / randomized) → demo label → start (48 served) → deterministic resume → submit → **result/review returns 48 answers** → tenant isolation (outsider blocked).
+- Gates: API + Web typecheck 0 errors; API + Web ESLint 0 errors (baseline warnings); Vitest 142/142.
 
 ## Known Good Demo Script
 
