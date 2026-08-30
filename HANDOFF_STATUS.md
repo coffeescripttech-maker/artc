@@ -257,3 +257,14 @@ Implements the confirmed findings from `AUDIT_CS22.6_UI_UX_DEMO_READINESS.md`. N
 - **P2:** Single-resource reads (`GET /assessments/{id|slug}`) of null-org platform content remain "public catalog" by design — a student cannot discover `matth quiz 1` via any list, but a direct-ID read still succeeds. Recommend tightening in a future CS if desired.
 - **P2:** ~8 archived test orgs (E2E scratch, "review center", "Delete Test …") remain soft-deleted — invisible on the platform page, harmless.
 - **P2 (from CS#22.6):** login-page "10,000+ questions" copy claim; localStorage-JWT architecture; web port 8000 documentation. All on the CS#23.x roadmap — future work per owner sequencing.
+
+### Post-commit fix (CS#22.7.1)
+
+- **Bug found during E2E verification:** `Cannot GET /my/enrollments` in the browser console.
+- **Root cause:** `NEXT_PUBLIC_API_URL` env var is `http://localhost:4000` (no `/api` suffix), and the web `apiFetch` client (`lib/api/client.ts`) builds URLs as `${API_BASE_URL}${endpoint}` where endpoints are prefix-less (e.g. `/my/enrollments`). So requests resolved to `http://localhost:4000/my/enrollments` instead of `http://localhost:4000/api/my/enrollments`. The API mounts enrollment routes at `/api/my/enrollments`, so Express returned `Cannot GET`.
+- **Fix:** Changed `API_BASE_URL` to always append `/api` with trailing-slash normalization:
+  ```ts
+  const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000").replace(/\/+$/, "") + "/api";
+  ```
+- **Commit:** `22132d8` — "fix(cs22.7): correct API_BASE_URL to always include /api prefix"
+- **Verified:** Full 5-role E2E probe re-run through the Next.js proxy layer (`/api/*` → `localhost:4000/api/*`): all endpoints return 200 with real data (enrollments, assessments, attempts).
