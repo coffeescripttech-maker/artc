@@ -14,6 +14,7 @@ import {
   autoGenerate,
   start,
   submit,
+  saveAnswers,
   stats,
   myAttempts,
   recommendations,
@@ -50,5 +51,7 @@ router.post("/:id/auto-generate", authenticate, requireRole("content_admin", "su
 
 // Attempt submission
 router.post("/attempts/:attemptId/submit", authenticate, submit);
+// CS#22.8 — incremental answer autosave (upsert, owner + IN_PROGRESS only)
+router.patch("/attempts/:attemptId/answers", authenticate, saveAnswers);
 
 export { router as assessmentRoutes };

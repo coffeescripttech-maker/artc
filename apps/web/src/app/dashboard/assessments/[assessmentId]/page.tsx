@@ -51,10 +51,12 @@ interface PlayerAssessment {
   allowRetake?: boolean;
 }
 interface StartResponse {
-  attempt: { id: string; maxScore: number };
+  attempt: { id: string; maxScore: number; startedAt?: string };
   assessment: PlayerAssessment;
   questions: PlayerQuestion[];
   passages?: PlayerPassage[];
+  // CS#22.8 — answers already saved for a resumed IN_PROGRESS attempt.
+  savedAnswers?: { questionId: string; answer: unknown; timeSpentSeconds?: number }[];
 }
 interface SubmitResult {
   score?: number;
@@ -116,8 +118,15 @@ export default function AssessmentPlayerPage() {
   const answersRef = useRef(answers);
   answersRef.current = answers;
   const submittedRef = useRef(false);
+  // CS#22.8 — autosave/state hydration:
+  const [resumeAttemptId, setResumeAttemptId] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [forceSaveToken, setForceSaveToken] = useState(0);
+  const lastSavedJson = useRef<string | null>(null);
 
-  // Start (or restart) an attempt — a retry draws a fresh variant.
+  // Start (or resume) an attempt — a retry draws a fresh variant, while an
+  // existing IN_PROGRESS attempt (from startAttempt's resume branch) restores
+  // the previously autosaved answers.
   const beginAttempt = async () => {
     setLoading(true);
     setError(null);
@@ -129,11 +138,32 @@ export default function AssessmentPlayerPage() {
     setCurrent(0);
     setTimeLeft(null);
     setShowConfirm(false);
+    lastSavedJson.current = null;
     try {
       const res = (await assessmentsApi.start(assessmentId)) as StartResponse;
       setData(res);
       if (res.assessment.timeLimitMinutes && res.assessment.timeLimitMinutes > 0) {
-        setTimeLeft(res.assessment.timeLimitMinutes * 60);
+        // Resume the in-flight clock when an attempt was already started.
+        const startedAt = res.attempt.startedAt ? new Date(res.attempt.startedAt).getTime() : Date.now();
+        const elapsed = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
+        setTimeLeft(Math.max(0, res.assessment.timeLimitMinutes * 60 - elapsed));
+      }
+      // CS#22.8 — hydrate answers saved by the autosave endpoint (refresh-safe).
+      if (res.savedAnswers && res.savedAnswers.length > 0) {
+        const restored: Record<string, unknown> = {};
+        for (const sa of res.savedAnswers) restored[sa.questionId] = sa.answer;
+        setAnswers(restored);
+        lastSavedJson.current = JSON.stringify(
+          res.savedAnswers.map((sa) => ({
+            questionId: sa.questionId,
+            answer: sa.answer,
+            timeSpentSeconds: sa.timeSpentSeconds,
+          }))
+        );
+        setSaveStatus("saved");
+      } else {
+        lastSavedJson.current = "[]";
+        setSaveStatus("idle");
       }
     } catch (err) {
       console.error("Failed to start assessment:", err);
@@ -146,17 +176,21 @@ export default function AssessmentPlayerPage() {
     }
   };
 
-  // Populate the "Before You Begin" instructions WITHOUT starting an attempt.
+  // Populate the "Before You Begin" instructions WITHOUT starting an attempt,
+  // and detect an existing IN_PROGRESS attempt so the gate offers "Continue".
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const meta = (await assessmentsApi.getById(assessmentId)) as {
-          name: string;
-          timeLimitMinutes?: number | null;
-          randomizeQuestions?: boolean;
-          questions?: unknown[];
-        };
+        const [meta, mine] = await Promise.all([
+          assessmentsApi.getById(assessmentId) as Promise<{
+            name: string;
+            timeLimitMinutes?: number | null;
+            randomizeQuestions?: boolean;
+            questions?: unknown[];
+          }>,
+          assessmentsApi.myAttempts().catch(() => []),
+        ]);
         if (!active) return;
         setInstr({
           name: meta.name,
@@ -164,6 +198,15 @@ export default function AssessmentPlayerPage() {
           questionCount: meta.questions?.length ?? 0,
           randomize: !!meta.randomizeQuestions,
         });
+        // CS#22.8 — an active attempt means the gate should offer resume.
+        const activeAttempt = (Array.isArray(mine) ? mine : []).find(
+          (a) =>
+            a.assessmentId === assessmentId &&
+            a.status === "IN_PROGRESS"
+        );
+        if (activeAttempt) {
+          setResumeAttemptId(activeAttempt.id);
+        }
       } catch {
         // Metadata is optional — the instructions still render with defaults.
       } finally {
@@ -222,6 +265,49 @@ export default function AssessmentPlayerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft, result]);
 
+  // CS#22.8 — incremental autosave with an 800ms debounce (refresh-safe). The
+  // final submit remains authoritative; autosave only persists progress.
+  useEffect(() => {
+    if (!data || !started || result) return;
+    const payload = Object.entries(answers).map(([questionId, answer]) => {
+      const startTime = questionStartTime[questionId];
+      const timeSpentSeconds = startTime
+        ? Math.round((Date.now() - startTime) / 1000)
+        : undefined;
+      return { questionId, answer, timeSpentSeconds };
+    });
+    const json = JSON.stringify(payload);
+    if (json === lastSavedJson.current) return;
+
+    const t = setTimeout(() => {
+      setSaveStatus("saving");
+      assessmentsApi
+        .saveAnswers(data.attempt.id, payload)
+        .then(() => {
+          lastSavedJson.current = json;
+          setSaveStatus("saved");
+        })
+        .catch((err) => {
+          console.error("Autosave failed:", err);
+          setSaveStatus("error");
+        });
+    }, 800);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answers, data, started, result, questionStartTime, forceSaveToken]);
+
+  // Record when each question is first shown so submit can store per-question
+  // time spent (previously this map was never written).
+  useEffect(() => {
+    if (!started || !data || result) return;
+    const qid = data.questions[current]?.id;
+    if (!qid) return;
+    setQuestionStartTime((prev) =>
+      prev[qid] ? prev : { ...prev, [qid]: Date.now() }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, started, data, result]);
+
   // ---- CS#21: "Before You Begin" instructions gate (real rules only) ----
   if (!started) {
     return (
@@ -272,9 +358,19 @@ export default function AssessmentPlayerPage() {
                 </li>
               </ul>
 
-              <Button className="w-full mt-6" size="lg" onClick={handleStart}>
+              {resumeAttemptId ? (
+                <div className="mt-4 rounded-lg bg-arc-slate-100 border border-arc-slate-200 px-4 py-3 flex items-start gap-2 text-sm text-arc-navy-800">
+                  <RefreshCw className="h-4 w-4 text-arc-orange-600 mt-0.5 flex-shrink-0" />
+                  <span>
+                    You have an attempt in progress. Continue to restore your
+                    saved answers and resume where you left off.
+                  </span>
+                </div>
+              ) : null}
+
+              <Button className="w-full mt-4" size="lg" onClick={handleStart}>
                 <Play className="h-4 w-4 mr-2" />
-                Start Examination
+                {resumeAttemptId ? "Continue Attempt" : "Start Examination"}
               </Button>
               <Link href="/dashboard/assessments" className="block text-center mt-3">
                 <Button variant="ghost" className="text-arc-slate-500">
@@ -511,6 +607,28 @@ export default function AssessmentPlayerPage() {
                 <Clock className="h-4 w-4" />
                 {fmtTime(timeLeft)}
               </span>
+            )}
+            {saveStatus === "saving" && (
+              <span className="flex items-center gap-1.5 text-xs text-arc-slate-500">
+                <RefreshCw className="h-3 w-3 animate-spin" />
+                Saving...
+              </span>
+            )}
+            {saveStatus === "saved" && (
+              <span className="flex items-center gap-1.5 text-xs text-arc-green-600">
+                <CheckCircle2 className="h-3 w-3" />
+                Saved
+              </span>
+            )}
+            {saveStatus === "error" && (
+              <button
+                type="button"
+                onClick={() => setForceSaveToken((k) => k + 1)}
+                className="flex items-center gap-1.5 text-xs text-arc-red-500 hover:underline"
+              >
+                <AlertCircle className="h-3 w-3" />
+                Not saved - Retry
+              </button>
             )}
             {flagged.size > 0 && (
               <span className="flex items-center gap-1 text-xs text-arc-orange-600 bg-arc-orange-50 px-2 py-0.5 rounded-lg">

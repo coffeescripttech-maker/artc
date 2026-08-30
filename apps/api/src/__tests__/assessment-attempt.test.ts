@@ -16,7 +16,7 @@ vi.mock('@aratc/database', () => ({
     question: { findMany: vi.fn(), findUnique: vi.fn() },
     passage: { findMany: vi.fn() },
     assessmentQuestion: { findMany: vi.fn() },
-    attemptAnswer: { create: vi.fn() },
+    attemptAnswer: { create: vi.fn(), findMany: vi.fn(), upsert: vi.fn() },
     questionExposure: { upsert: vi.fn() },
     progress: { findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn(), create: vi.fn(), upsert: vi.fn() },
     $transaction: vi.fn(),
@@ -116,6 +116,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockedPrisma.learnerProfile.findUnique.mockResolvedValue({ id: LP_ID, userId: USER_ID } as never);
   mockedPrisma.passage.findMany.mockResolvedValue([] as never);
+  mockedPrisma.attemptAnswer.findMany.mockResolvedValue([] as never);
+  mockedPrisma.attemptAnswer.upsert.mockResolvedValue({} as never);
 });
 
 describe('CS#19 — served question set persistence', () => {
@@ -239,19 +241,19 @@ describe('CS#19 — grading uses the persisted served set', () => {
       (({ where }: { where: { id: string } }) => Promise.resolve(makeQuestion(where.id))) as never,
     );
     mockedPrisma.$transaction.mockResolvedValue([] as never);
-    mockedPrisma.attemptAnswer.create.mockResolvedValue({} as never);
+    mockedPrisma.attemptAnswer.upsert.mockResolvedValue({} as never);
     mockedPrisma.assessmentAttempt.update.mockImplementation(
       (({ data }: { data: Record<string, unknown> }) =>
         Promise.resolve(makeAttempt({ ...data, status: 'COMPLETED' }))) as never,
     );
 
     // q3 was NEVER served to this attempt — submitting it must not be graded
-    const result = await submitAttempt(ATTEMPT_ID, [
+    const result = await submitAttempt(ATTEMPT_ID, USER_ID, [
       { questionId: 'q1', answer: 'q1-a' }, // correct
       { questionId: 'q3', answer: 'q3-a' }, // not served — ignored
     ]);
 
-    expect(mockedPrisma.attemptAnswer.create).toHaveBeenCalledTimes(1);
+    expect(mockedPrisma.attemptAnswer.upsert).toHaveBeenCalledTimes(1);
     expect(result.score).toBe(1);
     // percentage = 1 correct / persisted maxScore (2 served questions) = 50%
     expect(result.percentage).toBe(50);

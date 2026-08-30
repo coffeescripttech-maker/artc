@@ -534,6 +534,12 @@ export const assessmentsApi = {
     }),
   myAttempts: () => apiFetch(`/assessments/me/attempts`),
   getAttempt: (attemptId: string) => apiFetch(`/assessments/attempts/${attemptId}`),
+  // CS#22.8 — incremental autosave (upsert one row per question per attempt)
+  saveAnswers: (attemptId: string, answers: { questionId: string; answer: unknown; timeSpentSeconds?: number }[]) =>
+    apiFetch(`/assessments/attempts/${attemptId}/answers`, {
+      method: "PATCH",
+      body: JSON.stringify({ answers }),
+    }),
   recommendations: (assessmentId: string) =>
     apiFetch(`/assessments/${assessmentId}/recommendations`),
 };

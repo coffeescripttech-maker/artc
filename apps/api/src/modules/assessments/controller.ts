@@ -21,6 +21,7 @@ import {
   reorderQuestions,
   autoGenerateQuestions,
   startAttempt,
+  saveAttemptAnswers,
   submitAttempt,
   getAssessmentStats,
   getMyAttempts,
@@ -284,8 +285,35 @@ export async function submit(
       res.status(400).json({ error: "answers must be an array" });
       return;
     }
-    const attempt = await submitAttempt(req.params.attemptId, answers);
+    const attempt = await submitAttempt(req.params.attemptId, req.userId!, answers);
     res.json(attempt);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * PATCH /assessments/attempts/:attemptId/answers — CS#22.8 incremental
+ * autosave. Only the attempt owner may save, only while IN_PROGRESS; the
+ * service upserts idempotently (one row per question per attempt).
+ */
+export async function saveAnswers(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const answers = (req.body?.answers ?? []) as {
+      questionId: string;
+      answer: unknown;
+      timeSpentSeconds?: number;
+    }[];
+    if (!Array.isArray(answers)) {
+      res.status(400).json({ error: "answers must be an array" });
+      return;
+    }
+    const result = await saveAttemptAnswers(req.params.attemptId, req.userId!, answers);
+    res.json(result);
   } catch (error) {
     next(error);
   }

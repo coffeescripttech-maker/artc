@@ -519,8 +519,16 @@ export async function startAttempt(assessmentId: string, userId: string) {
     programId: assessment.programId,
   });
 
-  // Shared response shape (unchanged API contract — CS#19).
-  const attemptPayload = (attempt: any, questions: any[], passages: any[]) => ({
+  // Shared response shape (unchanged API contract — CS#19). `savedAnswers`
+  // (additive, CS#22.8) lets the player hydrate answers when an attempt is
+  // resumed after a refresh/navigation — without it, answers only existed in
+  // the client and were lost on reload.
+  const getSavedAnswers = (attemptId: string) =>
+    prisma.attemptAnswer.findMany({
+      where: { attemptId },
+      select: { questionId: true, answer: true, timeSpentSeconds: true },
+    });
+  const attemptPayload = (attempt: any, questions: any[], passages: any[], savedAnswers: any[] = []) => ({
     attempt,
     assessment: {
       id: assessment.id,
@@ -535,6 +543,7 @@ export async function startAttempt(assessmentId: string, userId: string) {
     },
     questions,
     passages,
+    savedAnswers,
   });
 
   // Resume in-progress attempt if one exists
@@ -543,6 +552,8 @@ export async function startAttempt(assessmentId: string, userId: string) {
     orderBy: { createdAt: "desc" },
   });
   if (inProgress) {
+    // CS#22.8 — hydrate answers saved via the autosave endpoint.
+    const savedAnswers = await getSavedAnswers(inProgress.id);
     // CS#19 — the database is the source of truth for this attempt's served
     // set. Never re-draw or reshuffle an attempt that has a persisted set.
     if (inProgress.servedQuestionIds.length > 0) {
@@ -552,7 +563,7 @@ export async function startAttempt(assessmentId: string, userId: string) {
         assessment.randomizeChoices,
         inProgress.choiceOrderSeed
       );
-      return attemptPayload(inProgress, questions, passages);
+      return attemptPayload(inProgress, questions, passages, savedAnswers);
     }
 
     // Legacy attempt (created before CS#19): draw once, persist immediately so
@@ -577,10 +588,10 @@ export async function startAttempt(assessmentId: string, userId: string) {
           assessment.randomizeChoices,
           winner.choiceOrderSeed
         );
-        return attemptPayload(inProgress, payload.questions, payload.passages);
+        return attemptPayload(inProgress, payload.questions, payload.passages, savedAnswers);
       }
     }
-    return attemptPayload(inProgress, questions, passages);
+    return attemptPayload(inProgress, questions, passages, savedAnswers);
   }
 
   const existingAttempts = await prisma.assessmentAttempt.count({
@@ -622,16 +633,86 @@ export async function startAttempt(assessmentId: string, userId: string) {
   return attemptPayload(attempt, questions, passages);
 }
 
-export async function submitAttempt(
+/**
+ * CS#22.8 — incremental answer autosave for an in-progress attempt.
+ *
+ * Idempotent: upserts one AttemptAnswer row per (attemptId, questionId) via the
+ * @@unique composite key, so repeated saves and the final submit can never
+ * create duplicate rows. Only the attempt owner may save, and only while the
+ * attempt is IN_PROGRESS (a completed attempt is immutable).
+ *
+ * CS#19 — answers for questions that were NOT served to this attempt are
+ * silently dropped, matching submitAttempt's grading behavior.
+ */
+export async function saveAttemptAnswers(
   attemptId: string,
+  userId: string,
   answers: { questionId: string; answer: unknown; timeSpentSeconds?: number }[]
 ) {
+  const learner = await prisma.learnerProfile.findUnique({ where: { userId } });
+  if (!learner) throw new NotFoundError("Attempt not found");
+
+  const attempt = await prisma.assessmentAttempt.findUnique({
+    where: { id: attemptId },
+    select: { id: true, learnerId: true, status: true, servedQuestionIds: true },
+  });
+  // 404 (not 403) so the existence of another learner's attempt is not revealed.
+  if (!attempt || attempt.learnerId !== learner.id) {
+    throw new NotFoundError("Attempt not found");
+  }
+  if (attempt.status !== "IN_PROGRESS") {
+    throw new BadRequestError("Attempt already completed");
+  }
+
+  const servedIds =
+    attempt.servedQuestionIds.length > 0
+      ? new Set<string>(attempt.servedQuestionIds)
+      : null;
+
+  const ops: any[] = [];
+  for (const { questionId, answer, timeSpentSeconds } of answers) {
+    if (!questionId) continue;
+    if (servedIds && !servedIds.has(questionId)) continue; // CS#19
+    ops.push(
+      prisma.attemptAnswer.upsert({
+        where: {
+          attemptId_questionId: { attemptId, questionId },
+        },
+        update: {
+          answer: (answer ?? null) as any,
+          timeSpentSeconds: timeSpentSeconds ?? null,
+        },
+        create: {
+          attemptId,
+          questionId,
+          answer: (answer ?? null) as any,
+          timeSpentSeconds: timeSpentSeconds ?? null,
+        },
+      })
+    );
+  }
+  if (ops.length > 0) {
+    await prisma.$transaction(ops);
+  }
+  return { saved: ops.length };
+}
+
+export async function submitAttempt(
+  attemptId: string,
+  userId: string,
+  answers: { questionId: string; answer: unknown; timeSpentSeconds?: number }[]
+) {
+  const learner = await prisma.learnerProfile.findUnique({ where: { userId } });
+  if (!learner) throw new NotFoundError("Attempt not found");
+
   const attempt = await prisma.assessmentAttempt.findUnique({
     where: { id: attemptId },
     include: { assessment: true },
   });
 
-  if (!attempt) {
+  // Ownership guard (CS#22.8): a learner may only submit their own attempt.
+  // 404 (not 403) so another learner's attempt existence is not revealed.
+  if (!attempt || attempt.learnerId !== learner.id) {
     throw new NotFoundError("Attempt not found");
   }
   if (attempt.status !== "IN_PROGRESS") {
@@ -678,8 +759,19 @@ export async function submitAttempt(
     maxPossible += weight;
 
     ops.push(
-      prisma.attemptAnswer.create({
-        data: {
+      prisma.attemptAnswer.upsert({
+        where: {
+          attemptId_questionId: { attemptId, questionId },
+        },
+        // CS#22.8 — submit must never produce duplicate rows: the autosave
+        // endpoint may already have written this (attemptId, questionId).
+        update: {
+          answer: (answer ?? null) as any,
+          isCorrect: result,
+          score: points,
+          timeSpentSeconds: timeSpentSeconds ?? null,
+        },
+        create: {
           attemptId,
           questionId,
           answer: (answer ?? null) as any, // store the raw answer object (no double-encoding)
