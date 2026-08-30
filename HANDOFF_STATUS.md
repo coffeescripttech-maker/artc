@@ -23,6 +23,7 @@
 | CS#20 | BUCET Reviewer + CBT mock-exam content package (deterministic CBT practice) | ✅ | 142-test suite + live E2E smoke |
 | CS#21 | BUCET investor demo polish + ARC branding (UI/UX) | ✅ | gates + 14-check live E2E flow |
 | CS#22 | College Readiness Program (CRP) content package + deterministic assessments | ✅ | 153-test suite + 23-check live E2E flow |
+| CS#22.5 | Dedicated investor demo accounts + idempotent demo seed + verifier | ✅ | 23-check verifier + 15-check live login/auth + 15-check student journey |
 
 ## Final Gates
 
@@ -135,6 +136,70 @@ A second demo program (**College Readiness Program**) demonstrating ARC LMS as a
 
 - Live E2E (**23 checks, all PASS**): student login âº ARC org âº CRP program (id, name, COLLEGE type) âº hierarchy 4S/9M/11T/11L âº curriculum âº lesson (4 blocks) âº practice (PRACTICE, 12q/15min/pass60, randomized) âº diagnostic (DIAGNOSTIC, 8q) âº start (12 served) âº deterministic resume (same set+order) âº submit (result) âº result/review (12 answers returned) âº assessments listed under program âº tenant isolation (outsider blocked by id + slug) âº BUCET regression (program + mock exam still accessible).
 - Gates: API + Web typecheck 0 errors; API + Web ESLint 0 errors (92/347 baseline warnings); Vitest 153/153 (142 original + 11 new CRP).
+
+## CS#22.5 — Dedicated Investor Demo Accounts
+
+Dedicated, repeatable investor-demo identities using the EXISTING roles and authorization system (no new roles, no bypassed guards). The demo student is `demo.student@aratc.edu.ph` with ACTIVE enrollments in both BUCET and CRP.
+
+### Investor Demo Accounts
+
+| Account               | Role        | Organization      | Org Role | Status | Purpose                  |
+| --------------------- | ----------- | ----------------- | -------- | ------ | ------------------------ |
+| demo.superadmin@aratc.edu.ph | Super Admin | Platform (global)  | —        | ACTIVE | Platform administration  |
+| demo.admin@aratc.edu.ph      | Org Admin   | ARC Review Center | ADMIN    | ACTIVE | Organization management  |
+| demo.teacher@aratc.edu.ph    | Teacher     | ARC Review Center | TEACHER  | ACTIVE | Teacher experience       |
+| demo.student@aratc.edu.ph ⭐ | Student     | ARC Review Center | LEARNER  | ACTIVE | Primary investor journey |
+| demo.external@aratc.edu.ph   | Student     | Sto. Niño Academy  | LEARNER  | ACTIVE | Tenant isolation         |
+
+**Password:** use the existing local demo convention — `DEMO_PASSWORD` env var (see `.env.example`), defaulting to the project's documented local seed password (`Test@1234`, same as `seed.ts`). Local-only; never a production secret.
+
+### Demo Student State
+
+```text
+Email:            demo.student@aratc.edu.ph
+Organization:     ARC Review Center (LEARNER, ACTIVE)
+BUCET enrollment: ACTIVE  → BUCET Reviewer & CBT Mock Exam (4S/9M/12T/12L, 48q mock exam)
+CRP enrollment:   ACTIVE  → College Readiness Program (4S/9M/11T/11L, practice + diagnostic)
+```
+
+### Available Demo Flow
+
+```text
+Login
+→ My Programs
+→ BUCET Reviewer
+→ Program Overview
+→ Curriculum
+→ Lesson
+→ Mock Exam
+→ Result
+→ CRP
+→ Lesson
+→ Practice
+→ Result
+→ Progress
+```
+
+### Files
+
+- `packages/database/src/seed-demo.ts` — idempotent demo-account seed (users, global roles, org memberships, learner profiles, BUCET + CRP enrollments). Second run creates 0 rows.
+- `packages/database/src/verify-demo.ts` — read-only 23-check verifier.
+- `packages/database/package.json` — scripts `demo:seed` / `demo:verify`.
+- `.env.example` — documented `DEMO_PASSWORD` local-only variable.
+
+**Commands:**
+
+```bash
+pnpm --filter @aratc/database demo:seed     # idempotent seed (run twice → created=0)
+pnpm --filter @aratc/database demo:verify   # read-only 23-check PASS/FAIL report
+```
+
+**Verification (live):**
+
+- Validator: **23/23 PASS** (accounts, roles, ARC org memberships, both enrollments ACTIVE, BUCET + CRP content/assessments/curricula, external tenant isolation).
+- Live login + authorization: **15/15 PASS** (all five accounts log in; Org Admin → ARC programs readable; Student enrollments list shows both programs; Student → `/admin-stats/overview` 403; Teacher → `/admin-stats/overview` 403; External forced with ARC headers still blocked).
+- Demo student journey smoke: **15/15 PASS** (My Programs shows BUCET + CRP; BUCET overview 4S/9M/12T/12L; mock exam 48q; start 48 served; refresh/resume same set+order (CS#19); submit result; review 48 answers; progress 4 subjects; CRP overview; practice 12q start + resume + submit).
+- Idempotency: run-1 `created=18`; run-2 `created=0 updated=0`; DB counts stable.
 
 ## Known Good Demo Script
 
