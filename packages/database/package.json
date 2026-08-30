@@ -17,6 +17,7 @@
     "demo:seed": "npx dotenv-cli tsx src/seed-demo.ts",
     "demo:verify": "npx dotenv-cli tsx src/verify-demo.ts",
     "db:reset-passwords": "npx dotenv-cli tsx src/reset-passwords.ts",
+    "db:fix-org-data": "npx dotenv-cli tsx src/fix-stray-org.ts",
     "db:studio": "dotenv -e ../../.env -- prisma studio --schema=./prisma/schema.prisma",
     "typecheck": "tsc --noEmit"
   },

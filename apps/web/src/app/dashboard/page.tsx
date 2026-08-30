@@ -23,6 +23,7 @@ import {
   RefreshCw,
   Lock,
   Sparkles,
+  ChevronRight,
 } from "lucide-react";
 
 // Get current date formatted
@@ -414,9 +415,14 @@ export default function DashboardPage() {
                     ) : (
                       <div className="space-y-3">
                         {enrollments.map((e) => (
-                          <div
+                          <Link
                             key={e.id}
-                            className="flex items-center justify-between p-3 rounded-lg border border-arc-slate-200 bg-white"
+                            href={
+                              e.program
+                                ? `/dashboard/programs/${e.program.id}`
+                                : "/dashboard/programs"
+                            }
+                            className="flex items-center justify-between p-3 rounded-lg border border-arc-slate-200 bg-white hover:border-arc-orange-300 hover:bg-arc-orange-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-arc-orange-500"
                           >
                             <div className="min-w-0">
                               <div className="text-sm font-medium text-arc-navy-900 truncate">
@@ -431,16 +437,19 @@ export default function DashboardPage() {
                                 <div className="mt-0.5 text-xs text-arc-slate-500">No expiry</div>
                               )}
                             </div>
-                            <Badge
-                              className={
-                                e.active
-                                  ? "bg-green-100 text-green-700"
-                                  : "bg-arc-slate-100 text-arc-slate-500"
-                              }
-                            >
-                              {e.active ? "Active" : e.status}
-                            </Badge>
-                          </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Badge
+                                className={
+                                  e.active
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-arc-slate-100 text-arc-slate-500"
+                                }
+                              >
+                                {e.active ? "Active" : e.status}
+                              </Badge>
+                              <ChevronRight className="h-4 w-4 text-arc-slate-400" />
+                            </div>
+                          </Link>
                         ))}
                       </div>
                     )}

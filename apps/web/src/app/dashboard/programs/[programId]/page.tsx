@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { DashboardHeader } from "@/components/dashboard";
 import { Button, Badge, Progress } from "@/components/ui";
-import { programsApi, progressionApi, assessmentsApi } from "@/lib/api/client";
+import { programsApi, progressionApi } from "@/lib/api/client";
 import {
   RefreshCw,
   ChevronDown,
@@ -63,6 +63,14 @@ interface ProgramAssessmentNode {
   name: string;
   slug: string;
   type: string;
+  description?: string | null;
+  questionCount?: number | null;
+  timeLimitMinutes?: number | null;
+  passingScore?: number | null;
+  randomizeQuestions?: boolean;
+  allowRetake?: boolean;
+  maxAttempts?: number | null;
+  _count?: { questions?: number };
 }
 interface ProgramHierarchy {
   id: string;
@@ -106,26 +114,20 @@ interface ProgressionResult {
   grades: ProgGrade[];
 }
 
-interface MockExamNode {
-  id: string;
-  name: string;
-  slug: string;
-  type: string;
-  description?: string | null;
-  timeLimitMinutes?: number | null;
-  passingScore?: number | null;
-  randomizeQuestions?: boolean;
-  randomizeChoices?: boolean;
-  allowRetake?: boolean;
-  questions?: unknown[];
-  _count?: { questions?: number };
-}
-
 const stageLabel: Record<string, string> = {
   BASIC_EDUCATION: "Basic Education",
   ENTRANCE_EXAM: "College Entrance Exam",
   BOARD_EXAM: "Board Exam",
   PROFESSIONAL: "Professional",
+};
+
+const assessmentTypeLabels: Record<string, string> = {
+  QUIZ: "Quiz",
+  PRACTICE: "Practice Assessment",
+  DIAGNOSTIC: "Diagnostic Assessment",
+  MOCK_EXAM: "Mock Examination",
+  ASSIGNMENT: "Assignment",
+  CET_SIMULATION: "CET Simulation",
 };
 
 /** Flatten every lesson across the hierarchy (ordered subject → module → topic). */
@@ -147,7 +149,6 @@ export default function StudentProgramOverviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [hierarchy, setHierarchy] = useState<ProgramHierarchy | null>(null);
   const [progression, setProgression] = useState<ProgressionResult | null>(null);
-  const [mockExam, setMockExam] = useState<MockExamNode | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -160,19 +161,9 @@ export default function StudentProgramOverviewPage() {
         const meta = (await programsApi.getById(programId)) as { id: string; slug: string };
         const prog = (await programsApi.getBySlug(meta.slug)) as ProgramHierarchy;
         const progData = (await progressionApi.get(programId)) as ProgressionResult;
-        // Mock exam metadata (real question count / time / passing / randomization).
-        let exam: MockExamNode | null = null;
-        try {
-          exam = (await assessmentsApi.getBySlug(
-            "bucet-mock-exam-demo"
-          )) as MockExamNode;
-        } catch {
-          exam = null;
-        }
         if (!active) return;
         setHierarchy(prog);
         setProgression(progData);
-        setMockExam(exam);
         // Expand the first subject by default so the tree reads immediately.
         const firstSubject = prog.curriculums[0]?.items[0]?.subject?.id;
         if (firstSubject) setExpanded({ [firstSubject]: true });
@@ -196,7 +187,18 @@ export default function StudentProgramOverviewPage() {
   const lessons = flattenLessons(hierarchy);
   const modules = subjects.flatMap((s) => s.modules);
   const topics = modules.flatMap((m) => m.topics);
-  const mockExamQuestions = mockExam?.questions?.length ?? mockExam?._count?.questions ?? 0;
+
+  // CS#22.7 (H-4) — the assessment CTA is derived from the program's own
+  // published assessments (mock exam first), never from a hardcoded BUCET slug.
+  const programAssessments = hierarchy?.assessments ?? [];
+  const primaryAssessment: ProgramAssessmentNode | null =
+    programAssessments.find((a) => a.type === "MOCK_EXAM") ?? programAssessments[0] ?? null;
+  const assessmentQuestions =
+    primaryAssessment?.questionCount ?? primaryAssessment?._count?.questions ?? 0;
+  const assessmentTypeLabel =
+    (primaryAssessment && assessmentTypeLabels[primaryAssessment.type]) ||
+    primaryAssessment?.type ||
+    "Assessment";
 
   // Program-level progress = mean of all subject progress rows (0 if none tracked).
   const allSubjects = progression?.grades.flatMap((g) => g.subjects) ?? [];
@@ -289,11 +291,11 @@ export default function StudentProgramOverviewPage() {
                   </Button>
                 </Link>
               ) : null}
-              {mockExam ? (
-                <Link href={`/dashboard/assessments/${mockExam.id}`}>
+              {primaryAssessment ? (
+                <Link href={`/dashboard/assessments/${primaryAssessment.id}`}>
                   <Button className="bg-white/10 hover:bg-white/20 text-white border border-white/20">
                     <Target className="h-4 w-4 mr-2" />
-                    Start Mock Exam
+                    Start {assessmentTypeLabel.replace(" Assessment", "")}
                   </Button>
                 </Link>
               ) : null}
@@ -307,7 +309,11 @@ export default function StudentProgramOverviewPage() {
           <Stat icon={<ListTree />} label="Subjects" value={subjects.length} />
           <Stat icon={<Layers />} label="Modules" value={modules.length} />
           <Stat icon={<FileQuestion />} label="Topics" value={topics.length} />
-          <Stat icon={<Target />} label="Mock Exam" value={mockExamQuestions || "—"} />
+          <Stat
+            icon={<Target />}
+            label={primaryAssessment ? assessmentTypeLabel.replace(" Assessment", "") : "Assessment"}
+            value={assessmentQuestions || "—"}
+          />
         </div>
 
 
@@ -432,28 +438,28 @@ export default function StudentProgramOverviewPage() {
           </div>
 
 
-          {/* Mock exam card + about */}
+          {/* Assessment CTA card + about */}
           <div className="space-y-6">
-            {mockExam && (
+            {primaryAssessment ? (
               <div className="rounded-2xl border border-arc-purple-200 bg-white overflow-hidden shadow-sm">
                 <div className="bg-arc-purple-50 px-5 py-3 flex items-center justify-between">
                   <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-arc-purple-700">
                     <Target className="h-4 w-4" />
-                    Mock Examination
+                    {assessmentTypeLabel}
                   </span>
                   <Badge variant="practice">Demo</Badge>
                 </div>
                 <div className="p-5">
-                  <h3 className="font-semibold text-arc-navy-900">{mockExam.name}</h3>
-                  {mockExam.description && (
-                    <p className="text-sm text-arc-slate-500 mt-1 line-clamp-2">{mockExam.description}</p>
+                  <h3 className="font-semibold text-arc-navy-900">{primaryAssessment.name}</h3>
+                  {primaryAssessment.description && (
+                    <p className="text-sm text-arc-slate-500 mt-1 line-clamp-2">{primaryAssessment.description}</p>
                   )}
 
                   <div className="mt-4 grid grid-cols-2 gap-3">
-                    <Meta icon={<FileQuestion />} label="Questions" value={String(mockExamQuestions || 0)} />
-                    <Meta icon={<Clock />} label="Time" value={mockExam.timeLimitMinutes ? `${mockExam.timeLimitMinutes} min` : "—"} />
-                    <Meta icon={<Target />} label="Passing" value={mockExam.passingScore ? `${mockExam.passingScore}%` : "—"} />
-                    <Meta icon={<Sparkles />} label="Randomized" value={mockExam.randomizeQuestions ? "Questions" : "—"} />
+                    <Meta icon={<FileQuestion />} label="Questions" value={String(assessmentQuestions || 0)} />
+                    <Meta icon={<Clock />} label="Time" value={primaryAssessment.timeLimitMinutes ? `${primaryAssessment.timeLimitMinutes} min` : "—"} />
+                    <Meta icon={<Target />} label="Passing" value={primaryAssessment.passingScore ? `${primaryAssessment.passingScore}%` : "—"} />
+                    <Meta icon={<Sparkles />} label="Randomized" value={primaryAssessment.randomizeQuestions ? "Questions" : "—"} />
                   </div>
 
                   <div className="mt-4 text-xs text-arc-slate-500 flex items-start gap-1.5">
@@ -461,13 +467,20 @@ export default function StudentProgramOverviewPage() {
                     Your attempt is preserved if you refresh or resume.
                   </div>
 
-                  <Link href={`/dashboard/assessments/${mockExam.id}`} className="block mt-4">
+                  <Link href={`/dashboard/assessments/${primaryAssessment.id}`} className="block mt-4">
                     <Button variant="accent" className="w-full">
                       <Play className="h-4 w-4 mr-2" />
-                      Start Mock Exam
+                      Start {assessmentTypeLabel.replace(" Assessment", "")}
                     </Button>
                   </Link>
                 </div>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-arc-slate-200 bg-white p-5 text-center">
+                <Target className="h-8 w-8 text-arc-slate-300 mx-auto mb-2" />
+                <p className="text-sm text-arc-slate-500">
+                  No assessments have been published for this program yet.
+                </p>
               </div>
             )}
 

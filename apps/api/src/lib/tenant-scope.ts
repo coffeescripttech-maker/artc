@@ -3,6 +3,11 @@ import { CONTENT_TRANSITIONS } from "@aratc/shared";
 
 const PLATFORM_ADMIN_ROLES = ["super_admin", "content_admin"];
 
+/** True when the caller holds a platform-admin global role (super_admin / content_admin). */
+export function hasPlatformAdminRole(roles: string[] | undefined | null): boolean {
+  return roles?.some((r) => PLATFORM_ADMIN_ROLES.includes(r)) ?? false;
+}
+
 export type WorkflowAction = keyof typeof CONTENT_TRANSITIONS;
 
 /**
@@ -59,7 +64,31 @@ export function assertCanPublish(
   }
 }
 
-/** Org metadata shape for the approval policy flag. */
+/**
+ * List-scope for assessment LIST endpoints (CS#22.7 — C-2 legacy/tenant leakage).
+ *
+ * Complements `orgReadScope` for the assessments list, where the demo audit
+ * showed unrelated records reaching student lists:
+ * - Platform admins keep the unrestricted global catalog (existing admin tooling).
+ * - Authenticated members are scoped to THEIR organization's assessments only —
+ *   never other tenants, and never platform-orphan (`organizationId: null`)
+ *   records such as the legacy "matth quiz 1".
+ * - Anonymous callers see the public platform catalog (null-org) only.
+ *
+ * Pure function so the scope matrix is unit-testable (see assessment-list-scope.test.ts).
+ */
+export function assessmentListScope(
+  organizationId: string | undefined,
+  isPlatformAdmin: boolean,
+): { organizationId: string } | { organizationId: null } | undefined {
+  if (isPlatformAdmin) return undefined;
+  if (organizationId) return { organizationId };
+  return { organizationId: null };
+}
+
+/**
+ * Org metadata shape for the approval policy flag.
+ */
 export function withAutoPublish(metadata: unknown, enabled: boolean): unknown {
   const meta = (metadata ?? {}) as Record<string, unknown>;
   return { ...meta, teacher_auto_publish: enabled };

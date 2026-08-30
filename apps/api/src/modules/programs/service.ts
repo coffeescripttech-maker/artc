@@ -119,6 +119,17 @@ export async function getProgramBySlug(slug: string) {
           name: true,
           slug: true,
           type: true,
+          // CS#22.7 (H-1/H-4) — the program overview renders "N Questions",
+          // time/passing metadata and the primary assessment CTA from this
+          // payload, so the real configuration must travel with it.
+          description: true,
+          questionCount: true,
+          timeLimitMinutes: true,
+          passingScore: true,
+          randomizeQuestions: true,
+          allowRetake: true,
+          maxAttempts: true,
+          _count: { select: { questions: true } },
         },
       },
     },

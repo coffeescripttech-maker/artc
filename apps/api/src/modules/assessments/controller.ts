@@ -1,7 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import { validateRequest, getAuthUserId } from "../../lib/validate";
-import { canViewUnpublishedContent } from "../../lib/visibility";
-import { canReadContent } from "../../lib/tenant-scope";
+import { canViewUnpublishedContent, getRequestRoles } from "../../lib/visibility";
+import {
+  canReadContent,
+  hasPlatformAdminRole,
+  assessmentListScope,
+} from "../../lib/tenant-scope";
 import { NotFoundError } from "../../lib/errors";
 import {
   listAssessments,
@@ -31,14 +35,40 @@ export async function list(
   next: NextFunction
 ): Promise<void> {
   try {
+    // CS#22.7 (C-2) — tenant scoping for the assessment list. The list route
+    // stays public for the catalog, so the role/org signals are resolved the
+    // same opportunistic way visibility.ts does (never granting access, only
+    // narrowing scope). Authorization for single resources is unchanged.
+    const roles = getRequestRoles(req);
+    const isPlatformAdmin = hasPlatformAdminRole(roles);
+    const privileged = canViewUnpublishedContent(req);
+    const orgId = req.organizationId;
+
+    let organizationScope: Record<string, unknown> | undefined = assessmentListScope(
+      orgId,
+      isPlatformAdmin
+    );
+    if (orgId && !isPlatformAdmin) {
+      organizationScope = privileged
+        ? // Org admins/teachers: their org's content in any lifecycle state,
+          // plus the published platform catalog — but never platform DRAFTs
+          // (e.g. the legacy CET_SIMULATION seeds) and never other tenants.
+          { OR: [{ organizationId: orgId }, { organizationId: null, status: "PUBLISHED" }] }
+        : // Students: their own organization's assessments ONLY. Platform-orphan
+          // records (organizationId null) are admin-catalog content, not
+          // student-facing, and other tenants are invisible by isolation.
+          { organizationId: orgId };
+    }
+
     const assessments = await listAssessments({
       programId: req.query.programId as string | undefined,
       type: req.query.type as string | undefined,
       // Non-privileged callers are pinned to published assessments,
       // regardless of any status filter they pass.
-      status: canViewUnpublishedContent(req)
+      status: privileged
         ? (req.query.status as string | undefined)
         : "PUBLISHED",
+      organizationScope,
     });
     res.json(assessments);
   } catch (error) {

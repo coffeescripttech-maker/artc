@@ -24,6 +24,7 @@
 | CS#21 | BUCET investor demo polish + ARC branding (UI/UX) | ✅ | gates + 14-check live E2E flow |
 | CS#22 | College Readiness Program (CRP) content package + deterministic assessments | ✅ | 153-test suite + 23-check live E2E flow |
 | CS#22.5 | Dedicated investor demo accounts + idempotent demo seed + verifier | ✅ | 23-check verifier + 15-check live login/auth + 15-check student journey |
+| CS#22.7 | Investor demo integrity & UX fixes (C-1/C-2/H-1/H-2/H-3/H-4/M-1 from the CS#22.6 audit) | ✅ | 164-test suite + 29-check live 5-role E2E probe + CS#19 determinism re-verified |
 
 ## Final Gates
 
@@ -208,3 +209,51 @@ pnpm --filter @aratc/database demo:verify   # read-only 23-check PASS/FAIL repor
 3. Org isolation: cross-org content edits → 403
 4. Enrollment expiry → student 403 after window; withdrawal stamps `endedAt`
 5. Audit trail: enrollment grant/revoke → `GET /api/admin/audit/events`
+## CS#22.7 — Investor Demo Integrity & UX Fixes
+
+Implements the confirmed findings from `AUDIT_CS22.6_UI_UX_DEMO_READINESS.md`. No fabricated data anywhere; every student-visible screen is now backed by real backend data with truthful empty/loading/error states.
+
+### Findings fixed
+
+| Finding | Fix |
+|---------|-----|
+| **C-1** fabricated exam dashboard | `/dashboard/exams` fully rewritten on real data: `GET /assessments` (tenant-scoped, PUBLISHED) + `GET /assessments/me/attempts`. Stats (Available / Completed / Avg Score / In Progress) computed from real rows; "—" and empty states when there is no data. Tabs: Available · Mock Exams · My Attempts (resume/review wired to real attempt routes). |
+| **C-2** legacy/DRAFT assessment leakage | Root cause: `GET /assessments` had **no organization scoping**. New scope matrix (`assessmentListScope` in `tenant-scope.ts`): platform admins keep the global catalog; members see own-org content only; students pinned to own-org **PUBLISHED** (null-orphan records like `matth quiz 1` and other tenants can never match); org admins/teachers see own-org any-status + PUBLISHED platform content (the 66 legacy null-org DRAFT CET_SIMULATION records are hidden). Single-resource by-id/by-slug 404 semantics unchanged. `matth quiz 1` remains in the DB (not deleted) but is invisible to students. |
+| **H-1** `questionCount: undefined` | `getProgramBySlug` now selects `questionCount`, `timeLimitMinutes`, `passingScore`, `randomizeQuestions`, `allowRetake`, `maxAttempts`, `description`, `_count.questions` on the program's assessments. "N Questions" renders from real configuration (BUCET 48q, CRP practice 12q, check 8q). |
+| **H-2** enrollment rows dead | Dashboard "My Enrollments" rows are real `<Link>`s to `/dashboard/programs/{programId}` with hover + visible focus ring and a chevron affordance. |
+| **H-3** CRP unreachable | `/dashboard/programs` rewritten: lists every ACTIVE enrollment from `GET /my/enrollments` with real per-program mastery from `GET /progression?programId=…` (API already supported programId — no progression rewrite). BUCET + CRP cards both render; truthful "No progress recorded yet" when a program has no tracked progress. |
+| **H-4** hardcoded BUCET CTA | `/dashboard/programs/[programId]` derives the assessment card from the program payload's own assessments (MOCK_EXAM preferred, else first) — no `bucet-mock-exam-demo` slug hardcoding. Type-aware labels (Mock Examination / Practice / Diagnostic) + truthful empty state. |
+| **M-1** duplicated org name | Root cause = bad data, not code: a stray manually-created org (0 members / 0 programs, created by no seed) PLUS stale `metadata.deletedAt` markers on the live "ARC Review Center" and "Sto. Niño Academy" orgs from an earlier E2E delete-test (restored to PUBLISHED but never unmarked), which made the superadmin platform list empty. `packages/database/src/fix-stray-org.ts` (idempotent, script `db:fix-org-data`) archives the stray org via the platform soft-delete lifecycle and clears stale markers from live orgs. Platform list now shows exactly ARC Review Center + Sto. Niño Academy. |
+
+### Files
+
+- `apps/api/src/lib/tenant-scope.ts` — `assessmentListScope()` + `hasPlatformAdminRole()`
+- `apps/api/src/lib/visibility.ts` — exported `getRequestRoles()` (was private)
+- `apps/api/src/modules/assessments/controller.ts` — tenant-scoped `list`
+- `apps/api/src/modules/assessments/service.ts` — `organizationScope` filter passthrough
+- `apps/api/src/modules/programs/service.ts` — enriched program-overview assessment select
+- `apps/web/src/app/dashboard/exams/page.tsx` — full rewrite (real data)
+- `apps/web/src/app/dashboard/programs/page.tsx` — full rewrite (multi-program)
+- `apps/web/src/app/dashboard/programs/[programId]/page.tsx` — data-driven assessment CTA
+- `apps/web/src/app/dashboard/page.tsx` — clickable enrollment rows
+- `apps/api/src/__tests__/assessment-list-scope.test.ts` — 11 new tests
+- `packages/database/src/fix-stray-org.ts` + `db:fix-org-data` script — org data repair
+- `.gitignore` — `*.log` (dev-server logs never committed)
+
+### Verification
+
+- **Gates:** API typecheck 0 errors · Web typecheck 0 errors · API lint 0 errors · Web lint 0 errors · **Vitest 164/164 (18 files)** — 153 pre-existing + 11 new, zero regressions.
+- **Live E2E probe (29/29 PASS, all 5 demo accounts):**
+  - Student: list = 3 ARC PUBLISHED assessments, no `matth quiz 1`, no DRAFT leakage; both enrollments ACTIVE; BUCET payload 48q/60min; CRP payload 12q/8q; CRP progression reachable by `programId`; myAttempts real; admin-stats 403.
+  - Org admin: scoped list (ARC + platform PUBLISHED only, zero platform DRAFTs); programs + analytics 200.
+  - Teacher: same scoping; platform-admin 403; admin-stats 403.
+  - Superadmin: platform orgs = exactly ARC Review Center + Sto. Niño Academy (doubled-name org gone); global catalog preserved (70 records — admin tooling unchanged).
+  - External (Sto. Niño): zero ARC assessments/programs; direct ARC program read 404.
+- **CS#19 regression:** BUCET mock exam start → 48 served; resume returns identical set+order on the same attempt (no duplicate rows). Deterministic CBT untouched.
+- **Servers:** web hot-reloads the rewritten pages (`:8000` 200); API restarted on the new code (`:4000` health 200).
+
+### Remaining (documented, intentionally NOT in CS#22.7 scope)
+
+- **P2:** Single-resource reads (`GET /assessments/{id|slug}`) of null-org platform content remain "public catalog" by design — a student cannot discover `matth quiz 1` via any list, but a direct-ID read still succeeds. Recommend tightening in a future CS if desired.
+- **P2:** ~8 archived test orgs (E2E scratch, "review center", "Delete Test …") remain soft-deleted — invisible on the platform page, harmless.
+- **P2 (from CS#22.6):** login-page "10,000+ questions" copy claim; localStorage-JWT architecture; web port 8000 documentation. All on the CS#23.x roadmap — future work per owner sequencing.

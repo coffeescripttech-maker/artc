@@ -9,6 +9,8 @@ export async function listAssessments(filters?: {
   programId?: string;
   type?: string;
   status?: string;
+  /** Tenant scope fragment built by the controller (CS#22.7 — C-2). */
+  organizationScope?: Record<string, unknown>;
 }) {
   const where: any = {};
 
@@ -20,6 +22,9 @@ export async function listAssessments(filters?: {
   }
   if (filters?.status) {
     where.status = filters.status;
+  }
+  if (filters?.organizationScope) {
+    Object.assign(where, filters.organizationScope);
   }
 
   return prisma.assessment.findMany({

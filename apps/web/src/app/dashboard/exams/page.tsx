@@ -1,383 +1,386 @@
 "use client";
 
-import { useState } from "react";
+/**
+ * Exams & Mock Tests (CS#22.7 — C-1).
+ *
+ * Previously this page rendered three hardcoded arrays (upcomingExams,
+ * pastExams, mockExams) plus fabricated stat cards — zero API calls. It is now
+ * fully backed by real data:
+ *   - Available assessments: GET /assessments (tenant-scoped, PUBLISHED only)
+ *   - This learner's attempts: GET /assessments/me/attempts
+ * Insufficient data renders truthful empty states ("No attempts yet") — never
+ * invented values.
+ */
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { DashboardHeader } from "@/components/dashboard";
+import { Card, CardContent, Badge, Button } from "@/components/ui";
+import { assessmentsApi } from "@/lib/api/client";
 import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  Badge,
-  Button,
-  Progress,
-} from "@/components/ui";
-import {
-  Trophy,
+  RefreshCw,
   Calendar,
   Clock,
-  FileText,
   Play,
-  CheckCircle,
+  CheckCircle2,
   AlertCircle,
-  BookOpen,
+  FileQuestion,
+  FileText,
   Target,
   TrendingUp,
-  TrendingDown,
-  Award,
-  Star,
-  Calculator,
-  FlaskConical,
-  FileArchive,
-  Crosshair,
-  FlaskRound,
-  BarChart3,
+  BookOpen,
+  RotateCcw,
 } from "lucide-react";
 
-const upcomingExams = [
-  {
-    id: 1,
-    title: "Mathematics Chapter 5 Test",
-    subject: "Mathematics",
-    date: "Tomorrow, 9:00 AM",
-    questions: 20,
-    duration: 30,
-    type: "Chapter Test",
-    icon: Calculator,
-  },
-  {
-    id: 2,
-    title: "Science Quarterly Exam",
-    subject: "Science",
-    date: "Aug 20, 2026, 1:00 PM",
-    questions: 50,
-    duration: 60,
-    type: "Quarterly Exam",
-    icon: FlaskConical,
-  },
-  {
-    id: 3,
-    title: "English Midterm Exam",
-    subject: "English",
-    date: "Aug 25, 2026, 10:00 AM",
-    questions: 40,
-    duration: 45,
-    type: "Midterm Exam",
-    icon: BookOpen,
-  },
-];
+interface AssessmentItem {
+  id: string;
+  name: string;
+  slug: string;
+  type: string;
+  description?: string | null;
+  questionCount?: number | null;
+  timeLimitMinutes?: number | null;
+  passingScore?: number | null;
+  _count?: { questions?: number; attempts?: number };
+}
 
-const pastExams = [
-  {
-    id: 4,
-    title: "Mathematics Chapter 4 Test",
-    subject: "Mathematics",
-    date: "Aug 10, 2026",
-    score: 88,
-    highestScore: 100,
-    totalStudents: 45,
-    rank: 5,
-    status: "reviewed",
-    icon: Calculator,
-  },
-  {
-    id: 5,
-    title: "Science Quiz 3",
-    subject: "Science",
-    date: "Aug 8, 2026",
-    score: 75,
-    highestScore: 95,
-    totalStudents: 42,
-    rank: 12,
-    status: "pending_review",
-    icon: FlaskConical,
-  },
-  {
-    id: 6,
-    title: "Araling Panlipunan Quiz 2",
-    subject: "Araling Panlipunan",
-    date: "Aug 5, 2026",
-    score: 92,
-    highestScore: 100,
-    totalStudents: 38,
-    rank: 2,
-    status: "reviewed",
-    icon: FileArchive,
-  },
-  {
-    id: 7,
-    title: "Mathematics Midterm Exam",
-    subject: "Mathematics",
-    date: "Jul 28, 2026",
-    score: 85,
-    highestScore: 98,
-    totalStudents: 45,
-    rank: 8,
-    status: "reviewed",
-    icon: Calculator,
-  },
-];
+interface AttemptItem {
+  id: string;
+  assessmentId: string;
+  status: string;
+  percentage?: number | null;
+  score?: number | null;
+  maxScore?: number | null;
+  startedAt: string;
+  completedAt?: string | null;
+  assessment: { id: string; name: string; type: string; passingScore?: number | null };
+}
 
-const mockExams = [
-  {
-    id: 8,
-    title: "UPCAT Math Practice Exam",
-    description: "Simulated UPCAT mathematics exam",
-    questions: 60,
-    duration: 90,
-    attempts: 3,
-    bestScore: 78,
-    icon: Crosshair,
-    available: true,
-  },
-  {
-    id: 9,
-    title: "College Entrance: Science",
-    description: "General science for college entrance",
-    questions: 75,
-    duration: 120,
-    attempts: 1,
-    bestScore: 65,
-    icon: FlaskRound,
-    available: true,
-  },
-  {
-    id: 10,
-    title: "Board Exam: Math Basics",
-    description: "Practice for teacher licensure exam",
-    questions: 50,
-    duration: 90,
-    attempts: 0,
-    bestScore: 0,
-    icon: BarChart3,
-    available: false,
-  },
-];
+const typeLabels: Record<string, string> = {
+  QUIZ: "Quiz",
+  PRACTICE: "Practice",
+  DIAGNOSTIC: "Diagnostic",
+  MOCK_EXAM: "Mock Exam",
+  ASSIGNMENT: "Assignment",
+  CET_SIMULATION: "CET Simulation",
+};
 
-const stats = [
-  { label: "Upcoming Exams", value: "3", icon: Calendar, change: "+1", positive: true },
-  { label: "Completed", value: "24", icon: CheckCircle, change: "+3", positive: true },
-  { label: "Avg Score", value: "82%", icon: TrendingUp, change: "+5%", positive: true },
-  { label: "Total Rank", value: "#5", icon: Award, change: "+3", positive: true },
-];
+/** An assessment is takeable when it has a fixed question set or a real pool. */
+function isTakeable(a: AssessmentItem): boolean {
+  const fixed = (a._count?.questions ?? 0) > 0;
+  const pool = !!a.questionCount && a.questionCount > 0;
+  return fixed || pool;
+}
 
 export default function ExamsPage() {
-  const [activeTab, setActiveTab] = useState("upcoming");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [assessments, setAssessments] = useState<AssessmentItem[]>([]);
+  const [attempts, setAttempts] = useState<AttemptItem[]>([]);
+  const [activeTab, setActiveTab] = useState("available");
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [list, myAttempts] = await Promise.all([
+          assessmentsApi.list({ status: "PUBLISHED" }),
+          assessmentsApi.myAttempts(),
+        ]);
+        if (!active) return;
+        setAssessments(Array.isArray(list) ? (list as AssessmentItem[]) : []);
+        setAttempts(Array.isArray(myAttempts) ? (myAttempts as AttemptItem[]) : []);
+      } catch (err) {
+        if (!active) return;
+        console.error("Failed to load exams:", err);
+        setError("Your exams could not be loaded. Please try again.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const takeable = assessments.filter(isTakeable);
+  const mockExams = takeable.filter(
+    (a) => a.type === "MOCK_EXAM" || a.type === "CET_SIMULATION"
+  );
+  const completed = attempts.filter((a) => a.status === "COMPLETED" && a.percentage != null);
+  const inProgress = attempts.filter((a) => a.status === "IN_PROGRESS");
+  const avgScore =
+    completed.length > 0
+      ? Math.round(completed.reduce((s, a) => s + (a.percentage ?? 0), 0) / completed.length)
+      : null;
+
+  const bestScoreByAssessment = new Map<string, number>();
+  for (const a of completed) {
+    bestScoreByAssessment.set(
+      a.assessmentId,
+      Math.max(bestScoreByAssessment.get(a.assessmentId) ?? 0, a.percentage ?? 0)
+    );
+  }
+
+  if (loading) {
+    return (
+      <>
+        <DashboardHeader title="Exams & Mock Tests" subtitle="Loading exams…" />
+        <div className="p-6 flex items-center justify-center py-16">
+          <RefreshCw className="h-8 w-8 animate-spin text-arc-orange-500" />
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
-      <DashboardHeader title="Exams & Mock Tests" subtitle="Track your exam progress and take mock tests" />
+      <DashboardHeader
+        title="Exams & Mock Tests"
+        subtitle="Take assessments and track your exam results"
+        breadcrumbs={[{ label: "Dashboard", href: "/dashboard" }, { label: "Exams" }]}
+      />
 
       <div className="p-6">
-        {/* Stats */}
-        <div className="grid gap-5 mb-8 md:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat, index) => (
-            <Card key={stat.label} className="relative overflow-hidden group hover:shadow-xl transition-all duration-300">
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transform origin-left transition-transform duration-300" />
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="h-12 w-12 rounded-xl flex items-center justify-center bg-blue-100">
-                    <stat.icon className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
-                    stat.positive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
-                  }`}>
-                    {stat.positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                    {stat.change}
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-3xl font-bold tracking-tight text-gray-900">{stat.value}</div>
-                  <div className="text-sm font-medium text-gray-500">{stat.label}</div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-4 mb-6 border-b border-arc-slate-200">
-          {[
-            { id: "upcoming", label: "Upcoming", count: upcomingExams.length },
-            { id: "past", label: "Past Exams", count: pastExams.length },
-            { id: "mock", label: "Mock Exams", count: mockExams.length },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`pb-3 px-1 text-sm font-medium transition-colors relative ${
-                activeTab === tab.id
-                  ? "text-arc-orange-600 border-b-2 border-arc-orange-500"
-                  : "text-arc-slate-500 hover:text-arc-navy-900"
-              }`}
-            >
-              {tab.label}
-              <Badge variant="secondary" className="ml-2">{tab.count}</Badge>
-            </button>
-          ))}
-        </div>
-
-        {/* Upcoming Exams */}
-        {activeTab === "upcoming" && (
-          <div className="grid gap-6 lg:grid-cols-3">
-            {upcomingExams.map((exam) => (
-              <Card key={exam.id} className="border-l-4 border-l-blue-500">
-                <CardContent className="p-5">
-                  <div className="flex items-start gap-4 mb-4">
-                    <div className="h-12 w-12 rounded-xl bg-blue-100 flex items-center justify-center">
-                      <exam.icon className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900">{exam.title}</h3>
-                      <p className="text-sm text-gray-500">{exam.subject}</p>
-                      <Badge className="mt-2" variant="info">{exam.type}</Badge>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 mb-4">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Calendar className="h-4 w-4" />
-                      <span>{exam.date}</span>
-                    </div>
-                    <div className="flex items-center gap-4 text-sm text-gray-600">
-                      <span className="flex items-center gap-1">
-                        <FileText className="h-4 w-4" />
-                        {exam.questions} questions
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-4 w-4" />
-                        {exam.duration} min
-                      </span>
-                    </div>
-                  </div>
-
-                  <Button className="w-full">
-                    <Play className="h-4 w-4 mr-2" />
-                    Take Exam
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+        {error ? (
+          <div className="max-w-lg mx-auto text-center py-12">
+            <AlertCircle className="h-10 w-10 text-red-400 mx-auto mb-3" />
+            <p className="text-arc-slate-600 mb-4">{error}</p>
+            <Button variant="outline" onClick={() => window.location.reload()}>
+              Retry
+            </Button>
           </div>
-        )}
+        ) : (
+          <>
+            {/* Stats — computed from real data only ("—" when there is no data) */}
+            <div className="grid gap-5 mb-8 md:grid-cols-2 lg:grid-cols-4">
+              <StatCard icon={Calendar} label="Available Exams" value={String(takeable.length)} tone="blue" />
+              <StatCard icon={CheckCircle2} label="Completed" value={String(completed.length)} tone="green" />
+              <StatCard
+                icon={TrendingUp}
+                label="Avg Score"
+                value={avgScore !== null ? `${avgScore}%` : "—"}
+                tone="purple"
+              />
+              <StatCard icon={Clock} label="In Progress" value={String(inProgress.length)} tone="orange" />
+            </div>
 
-        {/* Past Exams */}
-        {activeTab === "past" && (
-          <Card>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-arc-slate-50 border-b border-arc-slate-200">
-                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Exam</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Date</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Score</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Rank</th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Status</th>
-                      <th className="px-6 py-4 text-right text-xs font-semibold uppercase tracking-wider text-arc-slate-600">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {pastExams.map((exam) => (
-                      <tr key={exam.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center">
-                              <exam.icon className="h-5 w-5 text-gray-600" />
-                            </div>
-                            <div>
-                              <div className="font-medium text-gray-900">{exam.title}</div>
-                              <div className="text-sm text-gray-500">{exam.subject}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">{exam.date}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <div className="text-lg font-bold text-gray-900">{exam.score}%</div>
-                            <div className="text-xs text-gray-500">/ {exam.highestScore}%</div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <Badge variant={exam.rank <= 3 ? "success" : "secondary"}>
-                            #{exam.rank} of {exam.totalStudents}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4">
-                          <Badge variant={exam.status === "reviewed" ? "success" : "warning"}>
-                            {exam.status === "reviewed" ? "Reviewed" : "Pending Review"}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <Button variant="ghost" size="sm">
-                            View Details
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+            {/* Tabs */}
+            <div className="flex flex-wrap gap-4 mb-6 border-b border-arc-slate-200">
+              {[
+                { id: "available", label: "Available", count: takeable.length },
+                { id: "mock", label: "Mock Exams", count: mockExams.length },
+                { id: "attempts", label: "My Attempts", count: attempts.length },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`pb-3 px-1 text-sm font-medium transition-colors relative ${
+                    activeTab === tab.id
+                      ? "text-arc-orange-600 border-b-2 border-arc-orange-500"
+                      : "text-arc-slate-500 hover:text-arc-navy-900"
+                  }`}
+                >
+                  {tab.label}
+                  <Badge variant="secondary" className="ml-2">{tab.count}</Badge>
+                </button>
+              ))}
+            </div>
 
-        {/* Mock Exams */}
-        {activeTab === "mock" && (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {mockExams.map((exam) => (
-              <Card key={exam.id} className={!exam.available ? "opacity-60" : ""}>
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="h-12 w-12 rounded-xl bg-blue-100 flex items-center justify-center">
-                      <exam.icon className="h-6 w-6 text-blue-600" />
-                    </div>
-                    {exam.available ? (
-                      <Badge variant="success">Available</Badge>
-                    ) : (
-                      <Badge variant="secondary">Locked</Badge>
-                    )}
+            {/* Available assessments */}
+            {activeTab === "available" && (
+              <AssessmentGrid
+                items={takeable}
+                bestScoreByAssessment={bestScoreByAssessment}
+                emptyLabel="No assessments are available to you yet."
+                emptyHint="Assessments published for your organization will appear here."
+              />
+            )}
+
+            {/* Mock exams */}
+            {activeTab === "mock" && (
+              <AssessmentGrid
+                items={mockExams}
+                bestScoreByAssessment={bestScoreByAssessment}
+                emptyLabel="No mock exams have been published yet."
+                emptyHint="Full-length mock examinations from your programs will appear here."
+              />
+            )}
+
+
+            {/* My attempts */}
+            {activeTab === "attempts" && (
+              <div className="space-y-3">
+                {attempts.length === 0 ? (
+                  <div className="bg-arc-slate-50 rounded-xl p-10 text-center border border-arc-slate-200">
+                    <FileQuestion className="h-10 w-10 text-arc-slate-300 mx-auto mb-3" />
+                    <p className="text-arc-slate-500">No attempts yet.</p>
+                    <Link href="/dashboard/assessments" className="mt-3 inline-block">
+                      <Button variant="accent" size="sm">Browse Assessments</Button>
+                    </Link>
                   </div>
-
-                  <h3 className="font-semibold text-gray-900 mb-1">{exam.title}</h3>
-                  <p className="text-sm text-gray-500 mb-4">{exam.description}</p>
-
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    <div className="p-2 bg-gray-50 rounded-lg text-center">
-                      <FileText className="h-4 w-4 text-gray-400 mx-auto mb-1" />
-                      <div className="text-sm font-medium text-gray-900">{exam.questions}</div>
-                      <div className="text-xs text-gray-500">Questions</div>
-                    </div>
-                    <div className="p-2 bg-gray-50 rounded-lg text-center">
-                      <Clock className="h-4 w-4 text-gray-400 mx-auto mb-1" />
-                      <div className="text-sm font-medium text-gray-900">{exam.duration}m</div>
-                      <div className="text-xs text-gray-500">Duration</div>
-                    </div>
-                  </div>
-
-                  {exam.attempts > 0 ? (
-                    <div className="p-3 bg-green-50 rounded-lg mb-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-600">Best Score</span>
-                        <span className="text-lg font-bold text-green-600">{exam.bestScore}%</span>
+                ) : (
+                  attempts.map((a) => {
+                    const pct = a.percentage != null ? Math.round(a.percentage) : null;
+                    const passed =
+                      pct !== null && a.assessment.passingScore != null && pct >= a.assessment.passingScore;
+                    const date = new Date(a.completedAt ?? a.startedAt).toLocaleDateString();
+                    return (
+                      <div
+                        key={a.id}
+                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-arc-slate-200 bg-white"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-arc-navy-900">{a.assessment.name}</span>
+                            <Badge variant="secondary" className="text-xs">
+                              {typeLabels[a.assessment.type] || a.assessment.type}
+                            </Badge>
+                          </div>
+                          <div className="text-sm text-arc-slate-500 mt-1">
+                            {a.status === "COMPLETED"
+                              ? `${pct}% · ${date}`
+                              : a.status === "IN_PROGRESS"
+                              ? `Started ${date}`
+                              : a.status}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {a.status === "COMPLETED" && pct !== null && (
+                            <Badge className={passed ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"}>
+                              {passed ? "Passed" : "Below passing"}
+                            </Badge>
+                          )}
+                          <Link
+                            href={
+                              a.status === "IN_PROGRESS"
+                                ? `/dashboard/assessments/${a.assessmentId}`
+                                : `/dashboard/assessments/${a.assessmentId}/review?attemptId=${a.id}`
+                            }
+                          >
+                            <Button variant={a.status === "IN_PROGRESS" ? "accent" : "outline"} size="sm">
+                              {a.status === "IN_PROGRESS" ? (
+                                <>
+                                  <Play className="h-4 w-4 mr-1" /> Resume
+                                </>
+                              ) : (
+                                <>
+                                  <RotateCcw className="h-4 w-4 mr-1" /> Review
+                                </>
+                              )}
+                            </Button>
+                          </Link>
+                        </div>
                       </div>
-                      <p className="text-xs text-gray-500 mt-1">{exam.attempts} attempt(s) made</p>
-                    </div>
-                  ) : (
-                    <div className="p-3 bg-gray-50 rounded-lg mb-4 text-center">
-                      <p className="text-sm text-gray-500">No attempts yet</p>
-                    </div>
-                  )}
-
-                  <Button className="w-full" disabled={!exam.available}>
-                    <Target className="h-4 w-4 mr-2" />
-                    {exam.attempts > 0 ? "Retake Exam" : "Start Exam"}
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </>
   );
 }
+
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: typeof Calendar;
+  label: string;
+  value: string;
+  tone: "blue" | "green" | "purple" | "orange";
+}) {
+  const tones: Record<string, string> = {
+    blue: "bg-blue-100 text-blue-600",
+    green: "bg-green-100 text-green-600",
+    purple: "bg-purple-100 text-purple-600",
+    orange: "bg-arc-orange-100 text-arc-orange-600",
+  };
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <div className="flex items-center gap-3">
+          <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${tones[tone]}`}>
+            <Icon className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-2xl font-bold text-arc-navy-900">{value}</div>
+            <div className="text-sm text-arc-slate-500">{label}</div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function AssessmentGrid({
+  items,
+  bestScoreByAssessment,
+  emptyLabel,
+  emptyHint,
+}: {
+  items: AssessmentItem[];
+  bestScoreByAssessment: Map<string, number>;
+  emptyLabel: string;
+  emptyHint: string;
+}) {
+  if (items.length === 0) {
+    return (
+      <div className="bg-arc-slate-50 rounded-xl p-10 text-center border border-arc-slate-200">
+        <BookOpen className="h-10 w-10 text-arc-slate-300 mx-auto mb-3" />
+        <p className="text-arc-navy-900 font-medium">{emptyLabel}</p>
+        <p className="text-sm text-arc-slate-500 mt-1">{emptyHint}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {items.map((exam) => {
+        const questions = exam.questionCount ?? exam._count?.questions ?? 0;
+        const best = bestScoreByAssessment.get(exam.id);
+        return (
+          <Card key={exam.id} className="flex flex-col">
+            <CardContent className="p-5 flex flex-col flex-1">
+              <div className="flex items-start justify-between mb-3">
+                <Badge variant="info">{typeLabels[exam.type] || exam.type}</Badge>
+                {best !== undefined && <Badge variant="success">Best {best}%</Badge>}
+              </div>
+              <h3 className="font-semibold text-arc-navy-900">{exam.name}</h3>
+              {exam.description && (
+                <p className="text-sm text-arc-slate-500 mt-1 line-clamp-2">{exam.description}</p>
+              )}
+              <div className="grid grid-cols-2 gap-3 mt-4 mb-4">
+                <div className="p-2 bg-arc-slate-50 rounded-lg text-center">
+                  <FileText className="h-4 w-4 text-arc-slate-400 mx-auto mb-1" />
+                  <div className="text-sm font-medium text-arc-navy-900">{questions}</div>
+                  <div className="text-xs text-arc-slate-500">Questions</div>
+                </div>
+                <div className="p-2 bg-arc-slate-50 rounded-lg text-center">
+                  <Clock className="h-4 w-4 text-arc-slate-400 mx-auto mb-1" />
+                  <div className="text-sm font-medium text-arc-navy-900">
+                    {exam.timeLimitMinutes ? `${exam.timeLimitMinutes}m` : "—"}
+                  </div>
+                  <div className="text-xs text-arc-slate-500">Duration</div>
+                </div>
+              </div>
+              <Link href={`/dashboard/assessments/${exam.id}`} className="mt-auto">
+                <Button className="w-full">
+                  <Target className="h-4 w-4 mr-2" />
+                  {best !== undefined ? "Retake Exam" : "Start Exam"}
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+

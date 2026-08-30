@@ -25,7 +25,7 @@ const PRIVILEGED_CONTENT_ROLES: ReadonlySet<string> = new Set([
   "super_admin",
 ]);
 
-function resolveRequestRoles(req: Request): string[] {
+export function getRequestRoles(req: Request): string[] {
   if (req.userRoles && req.userRoles.length > 0) {
     return req.userRoles;
   }
@@ -47,7 +47,7 @@ function resolveRequestRoles(req: Request): string[] {
 }
 
 export function canViewUnpublishedContent(req: Request): boolean {
-  const roles = resolveRequestRoles(req);
+  const roles = getRequestRoles(req);
   if (roles.length === 0) {
     return false;
   }
