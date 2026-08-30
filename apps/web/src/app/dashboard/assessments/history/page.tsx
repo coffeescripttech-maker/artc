@@ -44,9 +44,18 @@ const typeLabels: Record<string, string> = {
   CET_SIMULATION: "CET Simulation",
 };
 
+// CS#22.9 — lightweight status filtering for the attempt list.
+const ATTEMPT_FILTERS = [
+  { key: "all", label: "All" },
+  { key: "completed", label: "Completed" },
+  { key: "in_progress", label: "In Progress" },
+] as const;
+type AttemptFilter = (typeof ATTEMPT_FILTERS)[number]["key"];
+
 export default function AssessmentHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
+  const [filter, setFilter] = useState<AttemptFilter>("all");
 
   useEffect(() => {
     let active = true;
@@ -84,6 +93,25 @@ export default function AssessmentHistoryPage() {
       />
 
       <div className="p-6">
+        {!loading && (
+          <div className="flex items-center gap-2 mb-6" role="group" aria-label="Filter attempts">
+            {ATTEMPT_FILTERS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                aria-pressed={filter === f.key}
+                onClick={() => setFilter(f.key)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                  filter === f.key
+                    ? "bg-arc-navy-900 text-white border-arc-navy-900"
+                    : "bg-white text-arc-slate-600 border-arc-slate-200 hover:border-arc-slate-300"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <RefreshCw className="h-6 w-6 animate-spin text-arc-orange-500" />
@@ -91,6 +119,7 @@ export default function AssessmentHistoryPage() {
         ) : (
           <div className="space-y-8">
             {/* Completed attempts */}
+            {filter !== "in_progress" && (
             <div>
               <h2 className="text-lg font-semibold text-arc-navy-900 mb-4">Past Attempts</h2>
               {completed.length === 0 ? (
@@ -180,9 +209,10 @@ export default function AssessmentHistoryPage() {
                 </div>
               )}
             </div>
+            )}
 
             {/* In-progress attempts */}
-            {inProgress.length > 0 && (
+            {filter !== "completed" && inProgress.length > 0 && (
               <div>
                 <h2 className="text-lg font-semibold text-arc-navy-900 mb-4">In Progress</h2>
                 <div className="space-y-3">

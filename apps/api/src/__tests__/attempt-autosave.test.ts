@@ -216,3 +216,44 @@ describe('CS#22.8 — resume hydrates saved answers', () => {
     expect(mockedPrisma.assessmentAttempt.update).not.toHaveBeenCalled();
   });
 });
+
+describe('CS#22.9 — autosave retry resilience', () => {
+  it('a retried save after a failed transaction is safe: same upserts, same count, no duplicates possible', async () => {
+    mockedPrisma.assessmentAttempt.findUnique.mockResolvedValue(makeAttempt() as never);
+
+    const payload = [
+      { questionId: 'q1', answer: 'q1-a', timeSpentSeconds: 10 },
+      { questionId: 'q2', answer: 'q2-b', timeSpentSeconds: 5 },
+    ];
+
+    // First attempt: transaction fails (simulated network/API failure).
+    mockedPrisma.$transaction.mockRejectedValueOnce(new Error('network down') as never);
+    await expect(saveAttemptAnswers(ATTEMPT_ID, USER_ID, payload)).rejects.toThrow('network down');
+
+    // Retry succeeds — the composite-key upserts are identical, so no
+    // duplicate answer rows can be created by the retry.
+    mockedPrisma.$transaction.mockResolvedValue([] as never);
+    const result = await saveAttemptAnswers(ATTEMPT_ID, USER_ID, payload);
+
+    expect(result.saved).toBe(2);
+    // 4 total upsert calls (2 failed attempt + 2 retry), all idempotent by
+    // (attemptId, questionId) — retries converge to the same persisted state.
+    expect(mockedPrisma.attemptAnswer.upsert).toHaveBeenCalledTimes(4);
+    expect(mockedPrisma.attemptAnswer.upsert).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        where: { attemptId_questionId: { attemptId: ATTEMPT_ID, questionId: 'q1' } },
+        create: { attemptId: ATTEMPT_ID, questionId: 'q1', answer: 'q1-a', timeSpentSeconds: 10 },
+      }),
+    );
+  });
+
+  it('an empty answer batch is a no-op (no transaction, no error)', async () => {
+    mockedPrisma.assessmentAttempt.findUnique.mockResolvedValue(makeAttempt() as never);
+
+    const result = await saveAttemptAnswers(ATTEMPT_ID, USER_ID, []);
+
+    expect(result.saved).toBe(0);
+    expect(mockedPrisma.$transaction).not.toHaveBeenCalled();
+  });
+});

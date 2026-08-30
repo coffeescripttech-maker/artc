@@ -244,7 +244,7 @@ export default function DashboardPage() {
         {/* Quick Stats */}
         <div className="grid gap-5 mb-8 md:grid-cols-2 lg:grid-cols-4">
           {stats.map((stat) => (
-            <Card key={stat.label} className="hover:shadow-md transition-all duration-300">
+            <Card key={stat.label} className="transition-shadow hover:shadow-sm">
               <CardContent className="p-5">
                 <div className="flex items-center gap-2.5 mb-4">
                   <div className="h-9 w-9 rounded-lg bg-arc-navy-100 flex items-center justify-center">

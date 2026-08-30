@@ -31,6 +31,11 @@ export async function resolveOrgContext(
     const orgId = Array.isArray(headerValue) ? headerValue[0] : headerValue;
 
     if (!orgId) {
+      // CS#22.9 note: callers without the header deliberately proceed with no
+      // organization context (tested contract in org-context.test.ts). The web
+      // client always attaches the header after login, so Student lists stay
+      // tenant-scoped in the application. Headerless API callers (curl/probes)
+      // only ever reach the public platform catalog — documented P2.
       return next();
     }
 

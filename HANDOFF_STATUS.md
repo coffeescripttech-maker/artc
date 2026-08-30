@@ -349,3 +349,92 @@ jsdom/@testing-library deps), and adding one would introduce new dependencies ag
 "Do not introduce new dependencies" rule. Backend behavior was untouched (0 API file changes), so the
 existing 164-test suite remains fully green and the fixes were verified via live E2E data-derivation
 probes instead.
+
+---
+
+# CS#22.9 — Student Portal Final Polish, Resilience & Production Hardening
+
+**Commit:** (see git log — `feat(cs22.9): student portal resilience and production hardening`)
+**Date:** 2026-08-30
+
+## What was done
+
+### 1. Autosave resilience (assessment player, CS#22.8 foundation preserved)
+- Replaced the `forceSaveToken` retry hack with a resilient save engine:
+  - **Mutation sequencing** — every save gets a sequence number; only the
+    latest request may transition the visible save state (stale in-flight
+    responses are ignored, fixing race conditions).
+  - **Bounded automatic retry** — 2 automatic retries with exponential backoff
+    (1.6s, 3.2s), then a persistent error state with a manual Retry button.
+  - **No data loss on failure** — a failed save never discards the answer; the
+    answer stays in player state and is included in the final submit payload.
+  - **Pending-save flush before submit** — if an autosave is pending when the
+    student submits, one final save is attempted (non-fatal on failure; the
+    submit payload always carries the full latest answers).
+  - **`beforeunload` guard** — warns only when genuinely unsaved changes exist
+    on an in-progress attempt.
+  - **Submission failure UX** — a failed submit now shows an inline recovery
+    banner (`role=alert` + Try again) instead of replacing the player with an
+    error page; the attempt and every answer remain intact.
+  - Save state model: `idle ? saving ? saved`, with `retrying` and `error`
+    states; status is text+icon (never color-only, a11y).
+
+### 2. My Attempts (reused existing route — no dead links)
+- Added **status filter chips** (All / Completed / In Progress, `aria-pressed`)
+  to the existing `/dashboard/assessments/history` page.
+- Added **"My Attempts"** to the student sidebar (ClipboardList icon), pointing
+  at the existing route. In-progress attempts show **Resume**, completed show
+  **Review / Retry / Study Plan** per existing authorization rules.
+
+### 3. Fabricated-data elimination (P0 finding from the pre-work audit)
+- **`/dashboard/analytics`** — was 100% hardcoded (fake weekly hours, fake
+  subject scores with fake trends, fake weak/strong areas, fake insights like
+  "2:00 PM most productive time", fake weekly rank). Rewritten on real data:
+  stat cards from `GET /assessments/me/attempts` (taken/completed/avg score),
+  Subject Mastery from the real progression ladder, Areas to Improve from
+  `GET /progression/weak-topics` with real Practice links, Strongest Subjects
+  derived from real mastery >= 75%. Skeletons, error+Retry, truthful empty
+  states throughout. Removed the fake time-range selector (no server support).
+- **`/dashboard/achievements`** — was 100% hardcoded (fake badges, fake
+  leaderboard with invented people, fake streaks). Replaced with **milestones
+  derived from real data** (first assessment, 5 assessments, 75%+ score,
+  perfect score, subject mastery) with real progress labels. No leaderboard.
+- **`/dashboard/questions`** — removed the hardcoded mock question table;
+  students do not author questions. Truthful empty state with a real link to
+  Assessments.
+- Sidebar: removed the decorative "New" badge on Achievements; dashboard stat
+  cards calmed (`transition-shadow hover:shadow-sm`).
+
+### 4. Tests (+2, all green)
+- `attempt-autosave.test.ts` (CS#22.9 block):
+  - retried save after a failed transaction is safe — identical composite-key
+    upserts, no duplicate rows possible (retry idempotency regression);
+  - empty answer batch is a no-op (no transaction, no error).
+- Attempted a server-side default-org fallback in `resolveOrgContext` for
+  headerless authenticated callers; **reverted** after it cascade-failed 31
+  tests that encode the deliberate "no header ? no org context" contract
+  (org-context.test.ts). The headerless public-catalog path remains a
+  documented P2; real web clients always send `x-organization-id`, and scoped
+  behavior through the app was re-verified live (student: 3 own-org PUBLISHED,
+  zero legacy/other-tenant; external: zero ARC). The middleware now carries a
+  comment documenting this decision.
+
+### 5. Gates
+- API typecheck: 0 errors. Web typecheck: 0 errors.
+- API lint: 0 errors (97 pre-existing warnings). Web lint: 0 errors
+  (327 warnings, improved from 334).
+- Vitest: **172/172** (170 CS#22.8 baseline + 2 new).
+- Live E2E probe (student + external, real header flow as the web client
+  sends): 13/13 PASS — login, org-scoped listing, resume same attempt, CS#19
+  deterministic served questions, autosave PATCH, retry idempotent, resume
+  hydration, completed-attempt immutability (400), student?admin 403,
+  external zero ARC exposure.
+
+### Remaining issues
+- **P2 (unchanged):** headerless authenticated API callers reach the public
+  null-org catalog in lists (e.g. legacy `matth quiz 1`). Not reachable via
+  the web app; fixing requires changing the tested org-context contract.
+- **P2 (pre-existing):** `next build` fails on two admin dynamic routes
+  (documented in CS#22.8) — separate admin/build CS.
+- **P3:** two stray IN_PROGRESS attempts exist on the demo student from E2E
+  probing (real records, harmless; they surface as "Resume" rows).

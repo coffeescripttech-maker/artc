@@ -26,6 +26,7 @@ import {
   Building,
   Target,
   ShieldCheck,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@aratc/ui";
 import { Avatar, AvatarFallback, Button, Badge } from "@/components/ui";
@@ -56,6 +57,7 @@ export const studentNav: NavGroup[] = [
       { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
       { label: "My Programs", href: "/dashboard/programs", icon: BookOpen },
       { label: "Assessments", href: "/dashboard/assessments", icon: Zap },
+      { label: "My Attempts", href: "/dashboard/assessments/history", icon: ClipboardList },
       { label: "Practice", href: "/dashboard/practice/weak-topics", icon: Target },
       { label: "Mock Exams", href: "/dashboard/exams", icon: Trophy },
     ],
@@ -71,7 +73,7 @@ export const studentNav: NavGroup[] = [
     items: [
       { label: "My Progress", href: "/dashboard/progression", icon: GraduationCap },
       { label: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
-      { label: "Achievements", href: "/dashboard/achievements", icon: Trophy, badge: "New" },
+      { label: "Achievements", href: "/dashboard/achievements", icon: Trophy },
     ],
   },
   {

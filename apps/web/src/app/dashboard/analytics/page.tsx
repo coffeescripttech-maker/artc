@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { DashboardHeader } from "@/components/dashboard";
 import {
   Card,
@@ -10,261 +11,295 @@ import {
   Badge,
   Button,
   Progress,
+  Skeleton,
 } from "@/components/ui";
+import { assessmentsApi, progressApi, progressionApi } from "@/lib/api/client";
 import {
   TrendingUp,
-  TrendingDown,
-  BookOpen,
   Target,
-  Clock,
   Trophy,
-  BarChart3,
-  PieChart,
-  Activity,
-  Calendar,
+  FileQuestion,
+  RefreshCw,
+  AlertCircle,
+  BookOpen,
 } from "lucide-react";
 
-const weeklyData = [
-  { day: "Mon", hours: 2.5, lessons: 3 },
-  { day: "Tue", hours: 1.8, lessons: 2 },
-  { day: "Wed", hours: 3.2, lessons: 4 },
-  { day: "Thu", hours: 2.0, lessons: 2 },
-  { day: "Fri", hours: 2.8, lessons: 3 },
-  { day: "Sat", hours: 1.5, lessons: 2 },
-  { day: "Sun", hours: 0.5, lessons: 1 },
-];
+// CS#22.9 — every value on this page is derived from real backend data
+// (attempt history, mastery ladder, weak topics). No fabricated analytics.
 
-const subjectPerformance = [
-  { subject: "Mathematics", score: 85, trend: "+5%", color: "bg-blue-500" },
-  { subject: "Science", score: 78, trend: "+3%", color: "bg-green-500" },
-  { subject: "English", score: 92, trend: "+8%", color: "bg-purple-500" },
-  { subject: "Araling Panlipunan", score: 81, trend: "+2%", color: "bg-amber-500" },
-];
+interface AttemptInfo {
+  id: string;
+  status: string;
+  percentage?: number | null;
+}
 
-const weakAreas = [
-  { topic: "Trigonometry", questions: 25, correctRate: 45, improvement: "+12%" },
-  { topic: "Chemical Reactions", questions: 18, correctRate: 52, improvement: "+8%" },
-  { topic: "Grammar: Tenses", questions: 30, correctRate: 65, improvement: "+15%" },
-];
+interface SubjectPerformance {
+  id: string;
+  name: string;
+  percent: number;
+}
 
-const strongAreas = [
-  { topic: "Basic Algebra", questions: 50, correctRate: 95, improvement: "+2%" },
-  { topic: "Cell Biology", questions: 40, correctRate: 92, improvement: "+5%" },
-  { topic: "Vocabulary", questions: 60, correctRate: 98, improvement: "+3%" },
-];
-
-const stats = [
-  { label: "Total Study Time", value: "14.3h", change: "+2.5h", positive: true, icon: Clock },
-  { label: "Lessons This Week", value: "17", change: "+3", positive: true, icon: BookOpen },
-  { label: "Accuracy Rate", value: "78%", change: "+5%", positive: true, icon: Target },
-  { label: "Weekly Rank", value: "#12", change: "+3", positive: true, icon: Trophy },
-];
+interface WeakTopic {
+  id: string;
+  completionPercentage: number;
+  topic: {
+    id: string;
+    name: string;
+    module: { subject: { id: string; name: string } };
+  };
+}
 
 export default function AnalyticsPage() {
-  const [timeRange, setTimeRange] = useState("week");
-  const maxHours = Math.max(...weeklyData.map((d) => d.hours));
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [attempts, setAttempts] = useState<AttemptInfo[]>([]);
+  const [subjects, setSubjects] = useState<SubjectPerformance[]>([]);
+  const [weakTopics, setWeakTopics] = useState<WeakTopic[]>([]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [attemptData, progression, weak] = await Promise.all([
+        assessmentsApi.myAttempts().catch(() => [] as AttemptInfo[]),
+        progressApi.progression().catch(() => null),
+        progressionApi.weakTopics().catch(() => ({ topics: [] as WeakTopic[] })),
+      ]);
+      setAttempts(Array.isArray(attemptData) ? (attemptData as AttemptInfo[]) : []);
+      // Subject performance comes from the real mastery ladder.
+      const grades =
+        (progression as { grades?: { subjects?: SubjectPerformance[] }[] } | null)?.grades ?? [];
+      const perf: SubjectPerformance[] = [];
+      for (const g of grades) {
+        for (const s of g.subjects ?? []) {
+          perf.push({ id: s.id, name: s.name, percent: Math.round(s.percent ?? 0) });
+        }
+      }
+      setSubjects(perf);
+      setWeakTopics((weak as { topics?: WeakTopic[] })?.topics ?? []);
+    } catch (err) {
+      console.error("Failed to load analytics:", err);
+      setError("We couldn't load your analytics. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // Real derived metrics — truthful "—" when there is no data yet.
+  const completed = attempts.filter((a) => a.status === "COMPLETED");
+  const avgScore =
+    completed.length > 0
+      ? Math.round(completed.reduce((s, a) => s + (a.percentage || 0), 0) / completed.length)
+      : null;
+  const avgMastery =
+    subjects.length > 0
+      ? Math.round(subjects.reduce((s, x) => s + x.percent, 0) / subjects.length)
+      : null;
+  const stats = [
+    { label: "Assessments Taken", value: `${attempts.length}`, icon: FileQuestion, hint: "all attempts recorded" },
+    { label: "Completed", value: `${completed.length}`, icon: Trophy, hint: "submitted assessments" },
+    { label: "Average Score", value: avgScore === null ? "—" : `${avgScore}%`, icon: TrendingUp, hint: "completed assessments only" },
+    { label: "Average Mastery", value: avgMastery === null ? "—" : `${avgMastery}%`, icon: Target, hint: "across your subjects" },
+  ];
+
+  const strongAreas = subjects.filter((s) => s.percent >= 75);
 
   return (
     <>
-      <DashboardHeader title="Analytics" subtitle="Track your learning progress and performance" />
+      <DashboardHeader
+        title="Analytics"
+        subtitle="Your learning performance, from real activity"
+      />
 
       <div className="p-6">
-        {/* Time Range Selector */}
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-gray-900">Performance Overview</h2>
-          <div className="flex gap-2">
-            {["week", "month", "year"].map((range) => (
-              <Button
-                key={range}
-                variant={timeRange === range ? "default" : "outline"}
-                size="sm"
-                onClick={() => setTimeRange(range)}
-              >
-                {range === "week" ? "This Week" : range === "month" ? "This Month" : "This Year"}
+        <div className="max-w-5xl mx-auto">
+          {error && (
+            <div
+              role="alert"
+              className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center justify-between gap-4"
+            >
+              <span className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {error}
+              </span>
+              <Button variant="outline" size="sm" onClick={() => void load()}>
+                <RefreshCw className="h-4 w-4 mr-1" />
+                Retry
               </Button>
-            ))}
-          </div>
-        </div>
+            </div>
+          )}
 
-        {/* Stats */}
-        <div className="grid gap-5 mb-8 md:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat, index) => (
-            <Card key={stat.label} className="relative overflow-hidden group hover:shadow-xl transition-all duration-300">
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transform origin-left transition-transform duration-300" />
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="h-12 w-12 rounded-xl flex items-center justify-center bg-blue-100">
-                    <stat.icon className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold ${
-                    stat.positive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
-                  }`}>
-                    {stat.positive ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                    {stat.change}
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-3xl font-bold tracking-tight text-gray-900">{stat.value}</div>
-                  <div className="text-sm font-medium text-gray-500">{stat.label}</div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Weekly Activity Chart */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Activity className="h-5 w-5 text-blue-600" />
-                Weekly Study Activity
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64 flex items-end justify-around gap-2">
-                {weeklyData.map((day) => (
-                  <div key={day.day} className="flex flex-col items-center flex-1">
-                    <div className="w-full flex flex-col items-center">
-                      <span className="text-xs text-gray-500 mb-1">{day.hours}h</span>
-                      <div
-                        className="w-full bg-gradient-to-t from-blue-500 to-indigo-500 rounded-t-lg transition-all hover:from-blue-600 hover:to-indigo-600"
-                        style={{ height: `${(day.hours / maxHours) * 180}px` }}
-                      />
-                    </div>
-                    <span className="text-xs text-gray-500 mt-2">{day.day}</span>
-                  </div>
+          {loading ? (
+            <div className="space-y-6">
+              <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+                {[...Array(4)].map((_, i) => (
+                  <Card key={i}>
+                    <CardContent className="p-5">
+                      <Skeleton className="h-4 w-28 mb-3" />
+                      <Skeleton className="h-8 w-16" />
+                      <Skeleton className="h-3 w-32 mt-2" />
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
-              <div className="mt-4 pt-4 border-t flex justify-around text-sm text-gray-500">
-                <span>Total: 14.3 hours</span>
-                <span>Avg: 2.0 hours/day</span>
-                <span>17 lessons</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Subject Performance */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <PieChart className="h-5 w-5 text-purple-600" />
-                Subject Performance
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {subjectPerformance.map((subject) => (
-                  <div key={subject.subject}>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="font-medium text-gray-700">{subject.subject}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-900 font-semibold">{subject.score}%</span>
-                        <Badge variant="success" className="text-xs">{subject.trend}</Badge>
+              <Card>
+                <CardContent className="p-6 space-y-4">
+                  {[...Array(4)].map((_, i) => (
+                    <Skeleton key={i} className="h-10 w-full" />
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Compact stat row — real derived values */}
+              <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+                {stats.map((stat) => (
+                  <Card key={stat.label}>
+                    <CardContent className="p-5">
+                      <div className="flex items-center gap-2.5 mb-3">
+                        <div className="h-8 w-8 rounded-lg bg-arc-navy-100 flex items-center justify-center">
+                          <stat.icon className="h-4 w-4 text-arc-navy-700" />
+                        </div>
+                        <h3 className="text-sm font-semibold text-arc-navy-900">{stat.label}</h3>
                       </div>
-                    </div>
-                    <div className="h-3 w-full bg-gray-200 rounded-full overflow-hidden">
-                            <div className="h-full rounded-full bg-blue-500" style={{ width: `${subject.score}%` }} />
-                          </div>
-                  </div>
+                      <div className="text-2xl font-bold tracking-tight text-arc-navy-900">
+                        {stat.value}
+                      </div>
+                      <p className="text-xs text-arc-slate-500 mt-1">{stat.hint}</p>
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
-            </CardContent>
-          </Card>
-        </div>
 
-        {/* Weak & Strong Areas */}
-        <div className="grid gap-6 mt-6 lg:grid-cols-2">
-          {/* Weak Areas */}
-          <Card className="border-l-4 border-l-red-400">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-red-600">
-                <TrendingDown className="h-5 w-5" />
-                Areas for Improvement
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {weakAreas.map((area) => (
-                  <div key={area.topic} className="p-3 bg-red-50 rounded-lg">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="font-medium text-gray-900">{area.topic}</span>
-                      <Badge variant="alert">{area.improvement}</Badge>
+              {/* Subject mastery — from the real progression ladder */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <BookOpen className="h-4.5 w-4.5 text-arc-navy-700" />
+                    Subject Mastery
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {subjects.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-arc-slate-500 text-sm">
+                        No subject data yet. Mastery appears once you start learning in an
+                        enrolled program.
+                      </p>
+                      <Link href="/dashboard/programs" className="inline-block mt-3">
+                        <Button variant="outline" size="sm">
+                          View My Programs
+                        </Button>
+                      </Link>
                     </div>
-                    <div className="flex justify-between text-sm text-gray-600">
-                      <span>{area.questions} questions answered</span>
-                      <span>{area.correctRate}% correct rate</span>
-                    </div>
-                    <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden mt-2">
-                            <div className="h-full rounded-full bg-red-500" style={{ width: `${area.correctRate}%` }} />
+                  ) : (
+                    <div className="space-y-3">
+                      {subjects.map((s) => (
+                        <div key={s.id} className="flex items-center gap-4">
+                          <span className="text-sm text-arc-navy-900 w-40 truncate">{s.name}</span>
+                          <div className="flex-1">
+                            <Progress value={s.percent} className="h-2" />
                           </div>
-                  </div>
-                ))}
-              </div>
-              <Button variant="outline" className="w-full mt-4">
-                Practice More on Weak Areas
-              </Button>
-            </CardContent>
-          </Card>
+                          <span className="text-sm font-medium text-arc-navy-900 w-12 text-right">
+                            {s.percent}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-          {/* Strong Areas */}
-          <Card className="border-l-4 border-l-green-400">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-green-600">
-                <TrendingUp className="h-5 w-5" />
-                Strong Areas
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {strongAreas.map((area) => (
-                  <div key={area.topic} className="p-3 bg-green-50 rounded-lg">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="font-medium text-gray-900">{area.topic}</span>
-                      <Badge variant="success">+Mastered</Badge>
-                    </div>
-                    <div className="flex justify-between text-sm text-gray-600">
-                      <span>{area.questions} questions answered</span>
-                      <span>{area.correctRate}% correct rate</span>
-                    </div>
-                    <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden mt-2">
-                            <div className="h-full rounded-full bg-green-500" style={{ width: `${area.correctRate}%` }} />
+              {/* Weak / strong areas — from real mastery data */}
+              <div className="grid gap-6 lg:grid-cols-2">
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Target className="h-4.5 w-4.5 text-arc-red-500" />
+                      Areas to Improve
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {weakTopics.length === 0 ? (
+                      <p className="text-sm text-arc-slate-500 text-center py-6">
+                        No weak topics identified. Keep practicing!
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {weakTopics.slice(0, 5).map((wt) => (
+                          <div
+                            key={wt.id}
+                            className="flex items-center justify-between gap-3 p-3 rounded-lg border border-arc-slate-200"
+                          >
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-arc-navy-900 truncate">
+                                {wt.topic?.name ?? "Topic"}
+                              </div>
+                              <div className="text-xs text-arc-slate-500">
+                                {wt.topic?.module?.subject?.name ?? ""}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 shrink-0">
+                              <Badge className="bg-arc-slate-100 text-arc-slate-600 text-xs">
+                                {Math.round(wt.completionPercentage ?? 0)}%
+                              </Badge>
+                              <Link href={`/dashboard/practice/topic/${wt.topic?.id}`}>
+                                <Button variant="outline" size="sm">
+                                  Practice
+                                </Button>
+                              </Link>
+                            </div>
                           </div>
-                  </div>
-                ))}
-              </div>
-              <Button variant="outline" className="w-full mt-4">
-                Keep Practicing
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
 
-        {/* Learning Insights */}
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-blue-600" />
-              Learning Insights
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="p-4 bg-blue-50 rounded-lg">
-                <div className="text-3xl font-bold text-blue-600 mb-1">2:00 PM</div>
-                <p className="text-sm text-gray-600">Your most productive study time</p>
-              </div>
-              <div className="p-4 bg-purple-50 rounded-lg">
-                <div className="text-3xl font-bold text-purple-600 mb-1">15 min</div>
-                <p className="text-sm text-gray-600">Average lesson duration</p>
-              </div>
-              <div className="p-4 bg-green-50 rounded-lg">
-                <div className="text-3xl font-bold text-green-600 mb-1">78%</div>
-                <p className="text-sm text-gray-600">Your overall accuracy rate</p>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <TrendingUp className="h-4.5 w-4.5 text-arc-green-600" />
+                      Your Strongest Subjects
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {strongAreas.length === 0 ? (
+                      <p className="text-sm text-arc-slate-500 text-center py-6">
+                        Keep going — reach 75% mastery in a subject to see it here.
+                      </p>
+                    ) : (
+                      <div className="space-y-3">
+                        {[...strongAreas]
+                          .sort((a, b) => b.percent - a.percent)
+                          .slice(0, 5)
+                          .map((s) => (
+                            <div
+                              key={s.id}
+                              className="flex items-center justify-between gap-3 p-3 rounded-lg border border-arc-slate-200"
+                            >
+                              <span className="text-sm font-medium text-arc-navy-900 truncate">
+                                {s.name}
+                              </span>
+                              <Badge className="bg-green-100 text-green-700 text-xs">
+                                {s.percent}%
+                              </Badge>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
       </div>
     </>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { assessmentsApi } from "@/lib/api/client";
@@ -58,6 +58,8 @@ interface StartResponse {
   // CS#22.8 — answers already saved for a resumed IN_PROGRESS attempt.
   savedAnswers?: { questionId: string; answer: unknown; timeSpentSeconds?: number }[];
 }
+// CS#22.9 — shape sent to the autosave/submit endpoints.
+type SavePayload = { questionId: string; answer: unknown; timeSpentSeconds?: number }[];
 interface SubmitResult {
   score?: number;
   maxScore: number;
@@ -120,9 +122,23 @@ export default function AssessmentPlayerPage() {
   const submittedRef = useRef(false);
   // CS#22.8 — autosave/state hydration:
   const [resumeAttemptId, setResumeAttemptId] = useState<string | null>(null);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [forceSaveToken, setForceSaveToken] = useState(0);
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "saving" | "saved" | "retrying" | "error"
+  >("idle");
   const lastSavedJson = useRef<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  // CS#22.9 — resilient autosave internals: mutation sequencing (only the
+  // latest request may update the visible save state), bounded automatic
+  // retries with exponential backoff, and a pending payload that is never
+  // discarded on failure (the student's answer stays in local state).
+  const saveSeqRef = useRef(0);
+  const retryCountRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSaveRef = useRef<{ payload: SavePayload; json: string } | null>(null);
+  const dirtyRef = useRef(false);
+  const MAX_AUTO_RETRIES = 2;
+  const dataRef = useRef(data);
+  dataRef.current = data;
 
   // Start (or resume) an attempt — a retry draws a fresh variant, while an
   // existing IN_PROGRESS attempt (from startAttempt's resume branch) restores
@@ -228,14 +244,29 @@ export default function AssessmentPlayerPage() {
     if (submittedRef.current || !data) return;
     submittedRef.current = true;
     setSubmitting(true);
+    setSubmitError(null);
     try {
+      // CS#22.9 — if an autosave is still pending, attempt one final flush so
+      // the persisted progress matches what is being submitted. The submit
+      // payload below always carries the latest answers, so a failed flush
+      // must never block submission.
+      if (pendingSaveRef.current) {
+        try {
+          await assessmentsApi.saveAnswers(data.attempt.id, pendingSaveRef.current.payload);
+          lastSavedJson.current = pendingSaveRef.current.json;
+          pendingSaveRef.current = null;
+        } catch {
+          // Non-fatal: submit sends the full answer set regardless.
+        }
+      }
       const now = Date.now();
-      const payload = Object.entries(answersRef.current).map(([questionId, answer]) => {
+      const payload: SavePayload = Object.entries(answersRef.current).map(([questionId, answer]) => {
         const startTime = questionStartTime[questionId];
         const timeSpentSeconds = startTime ? Math.round((now - startTime) / 1000) : undefined;
         return { questionId, answer, timeSpentSeconds };
       });
       const res = (await assessmentsApi.submit(data.attempt.id, payload)) as SubmitResult;
+      dirtyRef.current = false;
       setResult(res);
       // Fetch retry recommendations after submit
       try {
@@ -246,8 +277,13 @@ export default function AssessmentPlayerPage() {
       }
     } catch (err) {
       console.error("Failed to submit:", err);
+      // CS#22.9 — submission failure must NOT abandon the attempt: keep the
+      // player open with every answer intact so the student can retry.
       submittedRef.current = false;
-      setError("Failed to submit your answers. Please try again.");
+      setSubmitError(
+        (err as Error)?.message ||
+          "Submission failed. Your answers are still preserved — please try again."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -265,11 +301,49 @@ export default function AssessmentPlayerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft, result]);
 
-  // CS#22.8 — incremental autosave with an 800ms debounce (refresh-safe). The
-  // final submit remains authoritative; autosave only persists progress.
+  // CS#22.8 — incremental autosave (refresh-safe). The final submit remains
+  // authoritative; autosave only persists progress.
+  // CS#22.9 — resilience: the visible save state is updated only by the latest
+  // request (older in-flight responses are ignored), failures retry
+  // automatically with exponential backoff (max 2 automatic attempts), and a
+  // failed save never discards the student's answer — it stays in local state
+  // with a manual Retry affordance.
+  const performSave = useCallback(async () => {
+    const attempt = dataRef.current?.attempt;
+    const pending = pendingSaveRef.current;
+    if (!attempt || !pending) return;
+    const seq = ++saveSeqRef.current;
+    setSaveStatus("saving");
+    try {
+      await assessmentsApi.saveAnswers(attempt.id, pending.payload);
+      if (seq !== saveSeqRef.current) return; // a newer save supersedes this response
+      lastSavedJson.current = pending.json;
+      pendingSaveRef.current = null;
+      dirtyRef.current = false;
+      retryCountRef.current = 0;
+      setSaveStatus("saved");
+    } catch (err) {
+      if (seq !== saveSeqRef.current) return;
+      console.error("Autosave failed:", err);
+      if (retryCountRef.current < MAX_AUTO_RETRIES) {
+        retryCountRef.current += 1;
+        // Exponential backoff: 1.6s, then 3.2s.
+        const backoffMs = 800 * Math.pow(2, retryCountRef.current);
+        setSaveStatus("retrying");
+        retryTimerRef.current = setTimeout(() => {
+          void performSave();
+        }, backoffMs);
+      } else {
+        // Persistent failure: keep the answer in local state, surface Retry.
+        setSaveStatus("error");
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (!data || !started || result) return;
-    const payload = Object.entries(answers).map(([questionId, answer]) => {
+    const payload: SavePayload = Object.entries(answers).map(([questionId, answer]) => {
       const startTime = questionStartTime[questionId];
       const timeSpentSeconds = startTime
         ? Math.round((Date.now() - startTime) / 1000)
@@ -279,22 +353,47 @@ export default function AssessmentPlayerPage() {
     const json = JSON.stringify(payload);
     if (json === lastSavedJson.current) return;
 
+    // Track the newest unsaved state and mark the attempt dirty for the
+    // beforeunload guard. Any in-flight retry of older state is superseded.
+    pendingSaveRef.current = { payload, json };
+    dirtyRef.current = true;
+    retryCountRef.current = 0;
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+
     const t = setTimeout(() => {
-      setSaveStatus("saving");
-      assessmentsApi
-        .saveAnswers(data.attempt.id, payload)
-        .then(() => {
-          lastSavedJson.current = json;
-          setSaveStatus("saved");
-        })
-        .catch((err) => {
-          console.error("Autosave failed:", err);
-          setSaveStatus("error");
-        });
+      void performSave();
     }, 800);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [answers, data, started, result, questionStartTime, forceSaveToken]);
+  }, [answers, data, started, result, questionStartTime, performSave]);
+
+  // CS#22.9 — warn before leaving with unsaved answers (only when there is a
+  // genuine risk: unsaved changes exist, the attempt is still in progress and
+  // not submitted). This does not block in-app navigation; it is the browser's
+  // native refresh/close guard.
+  useEffect(() => {
+    if (!started || result) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      if (dirtyRef.current) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [started, result]);
+
+  // Stop pending retry timers on unmount so nothing fires after teardown.
+  useEffect(() => {
+    return () => {
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Record when each question is first shown so submit can store per-question
   // time spent (previously this map was never written).
@@ -614,6 +713,12 @@ export default function AssessmentPlayerPage() {
                 Saving...
               </span>
             )}
+            {saveStatus === "retrying" && (
+              <span className="flex items-center gap-1.5 text-xs text-arc-slate-500">
+                <RefreshCw className="h-3 w-3 animate-spin" />
+                Retrying save…
+              </span>
+            )}
             {saveStatus === "saved" && (
               <span className="flex items-center gap-1.5 text-xs text-arc-green-600">
                 <CheckCircle2 className="h-3 w-3" />
@@ -623,11 +728,12 @@ export default function AssessmentPlayerPage() {
             {saveStatus === "error" && (
               <button
                 type="button"
-                onClick={() => setForceSaveToken((k) => k + 1)}
-                className="flex items-center gap-1.5 text-xs text-arc-red-500 hover:underline"
+                aria-label="Save failed. Retry saving your answers."
+                onClick={() => void performSave()}
+                className="flex items-center gap-1.5 text-xs font-medium text-arc-red-500 hover:underline"
               >
                 <AlertCircle className="h-3 w-3" />
-                Not saved - Retry
+                Unable to save — Retry
               </button>
             )}
             {flagged.size > 0 && (
@@ -642,6 +748,23 @@ export default function AssessmentPlayerPage() {
             </Button>
           </div>
         </div>
+
+        {/* CS#22.9 — inline submission failure: the attempt and every answer
+            remain intact so the student can simply try again. */}
+        {submitError && (
+          <div
+            role="alert"
+            className="shrink-0 border-b border-red-200 bg-red-50 px-6 py-2.5 flex items-center justify-between gap-4"
+          >
+            <span className="flex items-center gap-2 text-sm text-red-700">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {submitError}
+            </span>
+            <Button variant="outline" size="sm" onClick={handleSubmit} disabled={submitting}>
+              Try again
+            </Button>
+          </div>
+        )}
 
         {/* Progress bar */}
         <div className="w-full h-2 bg-arc-slate-100 rounded-full overflow-hidden">
