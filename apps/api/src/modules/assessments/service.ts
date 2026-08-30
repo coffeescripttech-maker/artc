@@ -454,13 +454,20 @@ export async function getServedQuestions(
   },
   choiceOrderSeed?: number | null
 ): Promise<{ questions: any[]; passages: any[]; served: any[] }> {
-  let served = assessment.questions.map((aq) => aq.question);
-  const hasPool =
+  const joined = assessment.questions.map((aq) => aq.question);
+  let served = joined;
+  const declaresPool =
     !!assessment.questionCount &&
     ((assessment.topicIds?.length ?? 0) > 0 ||
       (assessment.questionTags?.length ?? 0) > 0 ||
       (assessment.difficultyLevels?.length ?? 0) > 0);
-  if (hasPool) {
+  // CS#22 — the fixed AssessmentQuestion join set is authoritative when it
+  // already satisfies the requested questionCount. A genuine pool assessment
+  // (no joins, or fewer joins than requested) still draws a fresh random sample
+  // from the question bank. Previously a small fixed-set assessment (e.g. the
+  // CRP practice subset) was silently re-drawn from the whole bank when it also
+  // declared topicIds — inflating the pool and shrinking its maxScore basis.
+  if (declaresPool && joined.length < (assessment.questionCount ?? 0)) {
     const where: any = { status: "PUBLISHED" };
     if (assessment.topicIds?.length) where.bankLinks = { some: { topicId: { in: assessment.topicIds } } };
     if (assessment.difficultyLevels?.length) where.difficulty = { in: assessment.difficultyLevels };

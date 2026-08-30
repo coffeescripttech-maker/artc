@@ -22,12 +22,13 @@
 | CS#19 | Persist served question set per assessment attempt | ✅ | 134-test suite + live E2E smoke |
 | CS#20 | BUCET Reviewer + CBT mock-exam content package (deterministic CBT practice) | ✅ | 142-test suite + live E2E smoke |
 | CS#21 | BUCET investor demo polish + ARC branding (UI/UX) | ✅ | gates + 14-check live E2E flow |
+| CS#22 | College Readiness Program (CRP) content package + deterministic assessments | ✅ | 153-test suite + 23-check live E2E flow |
 
 ## Final Gates
 
 | Gate | Result |
 |------|--------|
-| Tests | 142/142 (16 files) |
+| Tests | 153/153 (17 files) |
 | typecheck | 0 errors |
 | ESLint | clean |
 | `prisma migrate status` | "Database schema is up to date!" |
@@ -99,6 +100,41 @@ UI/UX polish of the student-facing BUCET flow (program overview → curriculum �
 - Responsive: existing Tailwind responsive architecture preserved; no horizontal overflow, hover-only interactions, or tiny touch targets introduced.
 - Live E2E investor flow (**14 checks, all PASS**): student login → ARC org membership → program hierarchy (4S/9M/12T/12L) → mock exam exposed → 4 subject progress bars → exam instructions (48 q / 60 min / pass 60 / randomized) → demo label → start (48 served) → deterministic resume → submit → **result/review returns 48 answers** → tenant isolation (outsider blocked).
 - Gates: API + Web typecheck 0 errors; API + Web ESLint 0 errors (baseline warnings); Vitest 142/142.
+
+## CS#22 — College Readiness Program (CRP) Content Package
+
+Status: COMPLETE
+
+A second demo program (**College Readiness Program**) demonstrating ARC LMS as a broader learning + practice + assessment + progression platform beyond the BUCET exam simulator.
+
+**Content package** (`packages/shared/src/content/crp-demo.ts`):
+
+| Dimension | Count |
+|---|---|
+| Program | 1 (`college-readiness-program`, slug, COLLEGE type) |
+| Curriculum | 1 (`college-readiness-curriculum`, COLLEGE stage) |
+| Subjects | 4 (Mathematics Foundations âº blue, Science Foundations âº green, Language & Communication âº purple, Critical Thinking âº orange) |
+| Modules | 9 (Algebra Essentials, Quantitative Reasoning, Problem Solving, Scientific Thinking, Life & Physical Science, Grammar & Usage, Reading Comprehension, Logical Reasoning, Data Interpretation) |
+| Topics | 11 (one lesson per topic) |
+| Lessons | 11 (rich block content: intro, core concept, worked example, key takeaway, tip callout) |
+| Questions | 36 (MULTIPLE_CHOICE, TRUE_FALSE, MULTIPLE_SELECT, NUMERIC â balanced Easy ~30% / Medium ~50% / Hard ~20%) |
+| Assessments | 2 (`crp-foundations-practice` 12q/15min PRACTICE, `college-readiness-check` 8q/12min DIAGNOSTIC) â both randomized, allowRetake |
+
+**Files added/changed:**
+
+- `packages/shared/src/content/crp-demo.ts` â CRP content definition + `crpQuestionStats()` + `validateCrpSeed()` (structural integrity validation)
+- `packages/shared/src/content/index.ts` â export wiring (`export * from "./crp-demo"`)
+- `packages/database/src/seed-crp.ts` â idempotent seeder (upsert by stable slug/id)
+- `apps/api/src/modules/assessments/service.ts` â `getServedQuestions()` CS#22 fix: fixed-set assessments that already satisfy `questionCount` are no longer silently re-drawn from the whole bank when they also declare `topicIds`; genuine pool assessments still draw a fresh random sample. Preserves CS#19 deterministic attempt persistence.
+- `apps/api/src/__tests__/crp-content.test.ts` â 11 structural tests
+- `e2e-cs22.cjs` â 23-check live investor flow
+
+**Seeding:** `pnpm --filter @aratc/database exec tsx src/seed-crp.ts` (idempotent â 0 newly created on second run).
+
+**Verification:**
+
+- Live E2E (**23 checks, all PASS**): student login âº ARC org âº CRP program (id, name, COLLEGE type) âº hierarchy 4S/9M/11T/11L âº curriculum âº lesson (4 blocks) âº practice (PRACTICE, 12q/15min/pass60, randomized) âº diagnostic (DIAGNOSTIC, 8q) âº start (12 served) âº deterministic resume (same set+order) âº submit (result) âº result/review (12 answers returned) âº assessments listed under program âº tenant isolation (outsider blocked by id + slug) âº BUCET regression (program + mock exam still accessible).
+- Gates: API + Web typecheck 0 errors; API + Web ESLint 0 errors (92/347 baseline warnings); Vitest 153/153 (142 original + 11 new CRP).
 
 ## Known Good Demo Script
 
