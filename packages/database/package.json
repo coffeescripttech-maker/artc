@@ -19,6 +19,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aratc/shared": "workspace:*",
     "@prisma/client": "^5.19.0"
   },
   "devDependencies": {

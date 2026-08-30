@@ -1,4 +1,4 @@
-import { prisma, Prisma } from "@aratc/database";
+import { prisma } from "@aratc/database";
 import { createAssessmentSchema } from "./schemas";
 import { NotFoundError, BadRequestError } from "../../lib/errors";
 import type { CreateAssessmentInput, UpdateAssessmentInput, AddQuestionInput, AutoGenerateInput } from "./schemas";
@@ -808,9 +808,14 @@ async function rollupMastery(
         ? "LEARNING"
         : "NOT_STARTED";
 
-    await prisma.progress.upsert({
-      where: {
-        learnerId_programId_curriculumId_subjectId_moduleId_topicId_lessonId: {
+    // Upsert via findFirst + update/create: the compound unique on
+    // (learnerId, programId, curriculumId, subjectId, moduleId, topicId,
+    // lessonId) contains nullable members, and Prisma's runtime rejects
+    // null in a unique `where`. Matching the NULL rollup rows with a plain
+    // `where` guarantees the same semantics without that validation error.
+    const subjectRollupId = (
+      await prisma.progress.findFirst({
+        where: {
           learnerId,
           programId: programId ?? null,
           curriculumId: null,
@@ -818,23 +823,31 @@ async function rollupMastery(
           moduleId: null,
           topicId: null,
           lessonId: null,
-          // Prisma's generated compound-unique input types nullable members as
-          // `string`, but the runtime accepts null to match NULL rows exactly.
-        } as unknown as Prisma.ProgressWhereUniqueInput["learnerId_programId_curriculumId_subjectId_moduleId_topicId_lessonId"],
-      },
-      update: {
-        completionPercentage: avgPct,
-        mastery,
-        lastActivityAt: new Date(),
-      },
-      create: {
-        learnerId,
-        programId: programId ?? null,
-        subjectId,
-        completionPercentage: avgPct,
-        mastery,
-      },
-    });
+        },
+        select: { id: true },
+      })
+    )?.id;
+
+    if (subjectRollupId) {
+      await prisma.progress.update({
+        where: { id: subjectRollupId },
+        data: {
+          completionPercentage: avgPct,
+          mastery,
+          lastActivityAt: new Date(),
+        },
+      });
+    } else {
+      await prisma.progress.create({
+        data: {
+          learnerId,
+          programId: programId ?? null,
+          subjectId,
+          completionPercentage: avgPct,
+          mastery,
+        },
+      });
+    }
   }
 
   // Roll up to program level
@@ -857,9 +870,10 @@ async function rollupMastery(
         ? "LEARNING"
         : "NOT_STARTED";
 
-    await prisma.progress.upsert({
-      where: {
-        learnerId_programId_curriculumId_subjectId_moduleId_topicId_lessonId: {
+    // Same null-safe upsert pattern as the subject rollup above.
+    const programRollupId = (
+      await prisma.progress.findFirst({
+        where: {
           learnerId,
           programId,
           curriculumId: null,
@@ -867,21 +881,30 @@ async function rollupMastery(
           moduleId: null,
           topicId: null,
           lessonId: null,
-          // Same nullable-member cast as the subject-level rollup above.
-        } as unknown as Prisma.ProgressWhereUniqueInput["learnerId_programId_curriculumId_subjectId_moduleId_topicId_lessonId"],
-      },
-      update: {
-        completionPercentage: avgPct,
-        mastery,
-        lastActivityAt: new Date(),
-      },
-      create: {
-        learnerId,
-        programId,
-        completionPercentage: avgPct,
-        mastery,
-      },
-    });
+        },
+        select: { id: true },
+      })
+    )?.id;
+
+    if (programRollupId) {
+      await prisma.progress.update({
+        where: { id: programRollupId },
+        data: {
+          completionPercentage: avgPct,
+          mastery,
+          lastActivityAt: new Date(),
+        },
+      });
+    } else {
+      await prisma.progress.create({
+        data: {
+          learnerId,
+          programId,
+          completionPercentage: avgPct,
+          mastery,
+        },
+      });
+    }
   }
 }
 

@@ -221,6 +221,9 @@ importers:
 
   packages/database:
     dependencies:
+      '@aratc/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@prisma/client':
         specifier: ^5.19.0
         version: 5.22.0(prisma@5.22.0)

@@ -20,12 +20,13 @@
 | CS#14 | Audit log service + `/api/admin/audit` + enrollment instrumentation | ✅ | 7 tests + live smoke |
 | CS#15 | Assessment/Question org ownership + version-route error hardening | ✅ | 7/7 live smoke, server-crash bug fixed |
 | CS#19 | Persist served question set per assessment attempt | ✅ | 134-test suite + live E2E smoke |
+| CS#20 | BUCET Reviewer + CBT mock-exam content package (deterministic CBT practice) | ✅ | 142-test suite + live E2E smoke |
 
 ## Final Gates
 
 | Gate | Result |
 |------|--------|
-| Tests | 134/134 (15 files) |
+| Tests | 142/142 (16 files) |
 | typecheck | 0 errors |
 | ESLint | clean |
 | `prisma migrate status` | "Database schema is up to date!" |
@@ -59,6 +60,26 @@ Roadmap §26: randomization must be deterministic for the lifetime of an attempt
 **Migration:** `20260829010000_cs19_attempt_served_questions` (deployed + verified; baseline untouched)
 
 **Verification:** full live E2E smoke — start → refresh/resume ×2 → submit → result. DB row confirmed `servedQuestionIds` populated in start order; resume returned identical question AND choice order; submit scored 3/3 = 100%.
+
+## CS#20 — BUCET Reviewer & CBT Mock Exam Content Package
+
+Demo content for the investor capstone: an admission-test ("BUCET") reviewer program with a randomized, deterministic CBT mock exam, fully tenant-isolated under the ARC org.
+
+**Content package** (`packages/shared/src/content/bucet-demo.ts`, exported via `content/index.ts`):
+- **4 subjects** (Reading, Math, Science, English) → **9 modules** → **12 topics** → **12 lessons**
+- **48 questions**: 41 MC + 2 NUMERIC + 2 MULTI_SELECT + 3 TRUE_FALSE (17 EASY / 22 MEDIUM / 9 HARD), one passage-linked; engine-compatible formats (TF defs transformed to `options[]` + `["true"|"false"]` answer, numeric `{value,tolerance}`, multi-select answer array)
+- **1 mock exam** (`bucet-mock-exam-demo`): 60 min, passing 60, randomize questions+choices, `maxAttempts` 3, **`allowRetake: true`**, honest "demo" labeling
+- `validateBucetSeed()` + shared `typecheck` (0 errors)
+
+**Seeder** (`packages/database/src/seed-bucet.ts`, idempotent: upserts + `createMany skipDuplicates`, per-slice 500) + verifier (`verify-bucet.ts`, 15 checks: org-scoped, PUBLISHED, TF transform, passage link, assessment config, ACTIVE `ADMIN_GRANT` demo enrollment for `student@aratc.edu.ph`).
+
+**Tenant-isolation hardening** (`assessments/controller.ts`): `getById` + `getBySlug` now wrap with `canReadContent(req.organizationId, req.userRoles, assessment.organizationId)` → 404 for cross-org (mirrors the programs pattern).
+
+**Bug fixed (root cause of live submit 500):** `rollupMastery` used `prisma.progress.upsert` with a compound-unique `where` containing `null` members (`curriculumId: null`, etc.) — a pattern Prisma 5.22's runtime rejects ("Argument `curriculumId` must not be null") on write. Replaced both subject- and program-level rollups with findFirst + update/create (identical NULL-row semantics, no null-in-unique-where). The BUCET program (first to carry real topics/modules through a full mock-exam submit) surfaced this latent bug; it was pre-existing and unrelated to CS#20 content.
+
+**Tests** (`apps/api/src/__tests__/bucet-content.test.ts`, 8 tests): structural validation, hierarchy, 40–60 budget, difficulty mix, types/answer refs, engine-compatible formats, passage links, CS#19 randomization config (served-set determinism), honest demo labeling.
+
+**Live E2E smoke (10 checks, all PASS):** student login → enrollment (ACTIVE/ADMIN_GRANT) → assessment fetch (org header) → start (48 questions) → deterministic resume (3× identical order) → deterministic choices → **submit (48/48 = 100%)** → tenant isolation (outsider student 404 by id and slug) → org-admin access.
 
 ## Known Good Demo Script
 

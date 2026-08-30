@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { validateRequest, getAuthUserId } from "../../lib/validate";
 import { canViewUnpublishedContent } from "../../lib/visibility";
+import { canReadContent } from "../../lib/tenant-scope";
+import { NotFoundError } from "../../lib/errors";
 import {
   listAssessments,
   getAssessmentById,
@@ -51,6 +53,12 @@ export async function getById(
 ): Promise<void> {
   try {
     const assessment = await getAssessmentById(req.params.id);
+    // Same read scope as programs (§44) — org-owned assessments stay in their
+    // organization. Platform content (organizationId null) stays public.
+    if (!canReadContent(req.organizationId, req.userRoles, assessment.organizationId)) {
+      next(new NotFoundError("Assessment not found"));
+      return;
+    }
     res.json(assessment);
   } catch (error) {
     next(error);
@@ -64,6 +72,11 @@ export async function getBySlug(
 ): Promise<void> {
   try {
     const assessment = await getAssessmentBySlug(req.params.slug);
+    // Same read scope as by-id (§44) — org-owned assessments stay in their org.
+    if (!canReadContent(req.organizationId, req.userRoles, assessment.organizationId)) {
+      next(new NotFoundError("Assessment not found"));
+      return;
+    }
     res.json(assessment);
   } catch (error) {
     next(error);
