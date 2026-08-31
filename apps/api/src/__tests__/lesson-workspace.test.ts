@@ -3,9 +3,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@aratc/database", () => ({
   prisma: {
     learnerProfile: { findUnique: vi.fn(), create: vi.fn() },
-    lesson: { findUnique: vi.fn(), findMany: vi.fn() },
+    lesson: { findUnique: vi.fn(), findMany: vi.fn(), count: vi.fn() },
     curriculumItem: { findMany: vi.fn() },
-    progress: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+    progress: { findMany: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), count: vi.fn() },
     lessonQuestionResponse: { findMany: vi.fn() },
     assessment: { findMany: vi.fn() },
   },
@@ -156,6 +156,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockedPrisma.learnerProfile.findUnique.mockResolvedValue({ id: LP_ID, userId: USER_ID } as never);
   mockedAccess.mockResolvedValue(true);
+  mockedPrisma.lesson.count.mockResolvedValue(2 as never);
+  mockedPrisma.progress.count.mockResolvedValue(1 as never);
   mockedPrisma.lessonQuestionResponse.findMany.mockResolvedValue([] as never);
   mockedPrisma.assessment.findMany.mockResolvedValue([
     {
@@ -277,6 +279,29 @@ describe("CS#23.1 — completion authorization (setLessonProgress)", () => {
     );
   });
 
+  it("rolls lesson completion up into the topic progress row (real lesson/topic counts)", async () => {
+    mockedPrisma.lesson.findUnique.mockResolvedValue(makeLesson() as never);
+    mockedPrisma.curriculumItem.findMany.mockResolvedValue([makeCurriculumItem()] as never);
+    mockedPrisma.progress.findFirst.mockResolvedValue(null as never);
+    mockedPrisma.lesson.count.mockResolvedValue(2 as never);
+    mockedPrisma.progress.count.mockResolvedValue(1 as never);
+
+    await setLessonProgress(USER_ID, LESSON_ID, true);
+
+    // Topic-level rollup row (lessonId: null) — this is what /progression reads.
+    expect(mockedPrisma.progress.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          learnerId: LP_ID,
+          topicId: "topic-1",
+          lessonId: null,
+          completionPercentage: 50,
+          mastery: "PRACTICING",
+        }),
+      })
+    );
+  });
+
   it("is idempotent — repeat completion updates the existing row, never duplicates", async () => {
     mockedPrisma.lesson.findUnique.mockResolvedValue(makeLesson() as never);
     mockedPrisma.curriculumItem.findMany.mockResolvedValue([makeCurriculumItem()] as never);
@@ -292,8 +317,10 @@ describe("CS#23.1 — completion authorization (setLessonProgress)", () => {
     await setLessonProgress(USER_ID, LESSON_ID, true);
     await setLessonProgress(USER_ID, LESSON_ID, true);
 
+    // No new rows are created (idempotent). Each completion updates TWO rows:
+    // the lesson-level row and its topic-level rollup (what /progression reads).
     expect(mockedPrisma.progress.create).not.toHaveBeenCalled();
-    expect(mockedPrisma.progress.update).toHaveBeenCalledTimes(2);
+    expect(mockedPrisma.progress.update).toHaveBeenCalledTimes(4);
     expect(mockedPrisma.progress.update).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: "prg-1" } })
     );

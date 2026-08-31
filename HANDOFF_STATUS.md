@@ -569,5 +569,27 @@ RESTORE → set back to incomplete (clean demo state)
   block types already cover worked example, key point, callouts, formula,
   media (lazy), resources.
 
+## Lesson completion → progression rollup (backend, CS#23.1 final)
+- **Problem:** completing a lesson only wrote a lesson-level Progress row
+  (`lessonId` set). The `/progression` ladder reads **topic-level** rows
+  (`lessonId: null`), so lesson completion never moved subject/program
+  percentages — only assessment practice did.
+- **Fix (`lessons/service.ts → setLessonProgress`):** after upserting the
+  lesson row, the service recomputes the parent topic's completion from real
+  counts: `completed PUBLISHED lessons in topic / total PUBLISHED lessons in
+  topic`, then updates or creates the topic-level rollup row with the mapped
+  mastery band (`masteryFromCompletion`). Same `findFirst → update/create`
+  pattern as the existing assessment rollups (no null-in-unique-where upserts).
+- **Idempotent & bidirectional:** un-completing a lesson drops the topic
+  percentage back; repeating the same completion never creates duplicates.
+  Verified live on the demo student (CRP):
+  - uncompleted → "Expressions & Equations" topic 0% (NOT_STARTED)
+  - completed → 100% (MASTERED); uncompleted again → 0% (back)
+  - demo lesson restored to completed afterwards (1/11, clean state)
+- **Tests:** `lesson-workspace.test.ts` +2 — topic rollup row is created with
+  the real ratio (2 total / 1 completed → 50% PRACTICING); idempotency test
+  now also asserts the topic update (4 updates across 2 completions, zero
+  creates).
+
 ## Next
 - None outstanding for CS#23.1. Owner review + manual UI validation.

@@ -544,6 +544,51 @@ export async function setLessonProgress(userId: string, lessonId: string, comple
     });
   }
 
+  // Roll the lesson completion up into the TOPIC progress row. The progression
+  // ladder (/progression → subject/topic percentages) reads topic-level rows
+  // (lessonId: null), so without this rollup completing lessons would never
+  // move the program/subject percentages. Same findFirst+update/create
+  // pattern as the assessment rollups (no null-in-unique-where upserts).
+  if (lesson.topicId) {
+    const [totalLessons, completedLessons] = await Promise.all([
+      prisma.lesson.count({ where: { topicId: lesson.topicId, status: "PUBLISHED" } }),
+      prisma.progress.count({
+        where: {
+          learnerId: learner.id,
+          topicId: lesson.topicId,
+          lessonId: { not: null },
+          completionPercentage: 100,
+        },
+      }),
+    ]);
+    const topicPct =
+      totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+    const topicData = {
+      completionPercentage: topicPct,
+      mastery: masteryFromCompletion(topicPct),
+      lastActivityAt: new Date(),
+    };
+    const topicRow = await prisma.progress.findFirst({
+      where: { learnerId: learner.id, topicId: lesson.topicId, lessonId: null },
+    });
+    if (topicRow) {
+      await prisma.progress.update({ where: { id: topicRow.id }, data: topicData });
+    } else {
+      await prisma.progress.create({
+        data: {
+          learnerId: learner.id,
+          topicId: lesson.topicId,
+          lessonId: null,
+          programId: scope.curriculum.programId ?? undefined,
+          curriculumId: scope.curriculum.id,
+          subjectId: lesson.topic?.module?.subject?.id ?? undefined,
+          moduleId: lesson.topic?.module?.id ?? undefined,
+          ...topicData,
+        },
+      });
+    }
+  }
+
   return getLessonProgress(userId, lessonId);
 }
 
