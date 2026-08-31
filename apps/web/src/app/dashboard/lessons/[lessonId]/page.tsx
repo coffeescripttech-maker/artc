@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { DashboardHeader } from "@/components/dashboard";
 import { LessonBlockRenderer } from "@/components/lesson/block-renderer";
@@ -17,9 +17,11 @@ import {
   CheckCircle2,
   BookOpen,
   Trophy,
-  CheckCircle,
   GraduationCap,
   ClipboardList,
+  X,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 
 interface LessonApi {
@@ -117,47 +119,41 @@ const typeLabels: Record<string, string> = {
   PRACTICE: "Practice",
 };
 
-function MasteryBadge({ mastery }: { mastery: string }) {
-  const cfg: Record<string, { label: string; className: string; icon: JSX.Element }> = {
-    MASTERED: {
-      label: "Mastered",
-      className: "bg-green-100 text-green-700",
-      icon: <CheckCircle className="h-3 w-3 mr-1" />,
-    },
-    IN_PROGRESS: {
-      label: "In Progress",
-      className: "bg-yellow-100 text-yellow-700",
-      icon: <Clock className="h-3 w-3 mr-1" />,
-    },
-    NOT_STARTED: {
-      label: "Not Started",
-      className: "bg-arc-slate-100 text-arc-slate-600",
-      icon: <BookOpen className="h-3 w-3 mr-1" />,
-    },
-  };
-  const c = cfg[mastery] || cfg.NOT_STARTED;
-  return (
-    <Badge className={`inline-flex items-center text-xs font-medium ${c.className}`}>
-      {c.icon}
-      {c.label}
-    </Badge>
-  );
-}
-
 /**
- * CS#23.1 — compact course-tree sidebar built from the workspace payload:
- * subject → module → topic → lesson with real completion state. Renders as a
- * sticky sidebar on desktop and a collapsible outline on mobile.
+ * Compact Course/Lesson Outline built from the workspace payload:
+ * subject → module → topic → lesson with real completion state.
+ * Desktop: collapsible sticky panel or slim icon rail (240-260px when open).
+ * Mobile: header button + slide-in drawer — never a permanent outline.
+ * All states come from real data — no fabricated progress.
  */
 function CourseOutline({
   workspace,
   currentLessonId,
+  collapsed,
+  onToggleCollapsed,
 }: {
   workspace: WorkspacePayload;
   currentLessonId: string;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }) {
+  const [mobileOpen, setMobileOpen] = useState(false);
   const completed = new Set(workspace.completedLessonIds);
-  const tree = (
+  const doneCount = workspace.completedLessonIds.length;
+  const totalCount = workspace.flatLessons.length;
+  const coursePct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+
+  // Close the mobile drawer with Escape.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileOpen]);
+
+  const renderTree = (onNavigate?: () => void) => (
     <>
       {workspace.courses.map((course) => (
         <div key={course.subjectId} className="mb-4 last:mb-0">
@@ -180,6 +176,8 @@ function CourseOutline({
                         <li key={l.id}>
                           <Link
                             href={`/dashboard/lessons/${l.id}`}
+                            onClick={onNavigate}
+                            aria-current={isCurrent ? "page" : undefined}
                             className={cn(
                               "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors border-l-2",
                               isCurrent
@@ -207,35 +205,166 @@ function CourseOutline({
     </>
   );
 
+  const progressRow = (
+    <div className="px-2 mb-3">
+      <div className="flex justify-between text-[11px] font-medium text-arc-slate-400 mb-1">
+        <span>Course progress</span>
+        <span>
+          {doneCount}/{totalCount}
+        </span>
+      </div>
+      <div className="h-1.5 rounded-full bg-arc-slate-100 overflow-hidden">
+        <div
+          className="h-full bg-arc-green-500 transition-all duration-300"
+          style={{ width: `${coursePct}%` }}
+        />
+      </div>
+    </div>
+  );
+
   return (
     <>
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:block">
-        <div className="sticky top-6 rounded-xl border border-arc-slate-200 bg-white p-4 max-h-[calc(100vh-3rem)] overflow-y-auto">
-          <div className="flex items-center gap-2 mb-3">
-            <GraduationCap className="h-4 w-4 text-arc-navy-700 flex-shrink-0" />
-            <span className="text-sm font-semibold text-arc-navy-900 truncate">
-              {workspace.program.name}
-            </span>
+      {/* Desktop — expanded outline */}
+      {!collapsed && (
+        <aside className="hidden lg:block">
+          <div className="sticky top-6 rounded-xl border border-arc-slate-200 bg-white p-4 max-h-[calc(100vh-3rem)] overflow-y-auto">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <GraduationCap className="h-4 w-4 text-arc-navy-700 flex-shrink-0" />
+                <span className="text-sm font-semibold text-arc-navy-900 truncate">
+                  {workspace.program.name}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={onToggleCollapsed}
+                aria-label="Collapse lesson outline"
+                className="p-1.5 rounded-md text-arc-slate-400 hover:text-arc-navy-700 hover:bg-arc-slate-100 transition-colors flex-shrink-0"
+              >
+                <PanelLeftClose className="h-4 w-4" />
+              </button>
+            </div>
+            {progressRow}
+            {renderTree()}
           </div>
-          {tree}
-        </div>
-      </aside>
+        </aside>
+      )}
 
-      {/* Mobile collapsible outline */}
-      <details className="lg:hidden mb-6 rounded-xl border border-arc-slate-200 bg-white px-4 py-3">
-        <summary className="flex items-center gap-2 text-sm font-semibold text-arc-navy-900 cursor-pointer">
-          <GraduationCap className="h-4 w-4 text-arc-navy-700 flex-shrink-0" />
-          Course outline · {workspace.program.name}
-        </summary>
-        <div className="mt-3">{tree}</div>
-      </details>
+      {/* Desktop — collapsed icon rail */}
+      {collapsed && (
+        <aside className="hidden lg:block">
+          <div className="sticky top-6 rounded-xl border border-arc-slate-200 bg-white p-2 flex flex-col items-center">
+            <button
+              type="button"
+              onClick={onToggleCollapsed}
+              aria-label="Expand lesson outline"
+              title="Expand lesson outline"
+              className="p-2 rounded-lg text-arc-navy-700 hover:bg-arc-slate-100 transition-colors"
+            >
+              <PanelLeftOpen className="h-4 w-4" />
+            </button>
+            <div className="w-6 h-px bg-arc-slate-200 my-2" aria-hidden="true" />
+            <nav aria-label="Lesson outline" className="flex flex-col items-center gap-1">
+              {workspace.flatLessons.map((l) => {
+                const isCurrent = l.id === currentLessonId;
+                const isDone = completed.has(l.id);
+                return (
+                  <Link
+                    key={l.id}
+                    href={`/dashboard/lessons/${l.id}`}
+                    title={l.title}
+                    aria-label={l.title}
+                    aria-current={isCurrent ? "page" : undefined}
+                    className={cn(
+                      "p-2 rounded-lg transition-colors",
+                      isCurrent
+                        ? "bg-arc-orange-50 text-arc-orange-600 ring-1 ring-arc-orange-300"
+                        : isDone
+                        ? "text-green-500 hover:bg-arc-slate-100"
+                        : "text-arc-slate-300 hover:bg-arc-slate-100"
+                    )}
+                  >
+                    {isDone ? (
+                      <CheckCircle2 className="h-4 w-4" />
+                    ) : (
+                      <BookOpen className="h-4 w-4" />
+                    )}
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
+        </aside>
+      )}
+
+      {/* Mobile — outline button */}
+      {/* Mobile — outline button (drawer below) */}
+      <div className="lg:hidden mb-5">
+        <button
+          type="button"
+          onClick={() => setMobileOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={mobileOpen}
+          className="w-full flex items-center justify-between gap-3 rounded-xl border border-arc-slate-200 bg-white px-4 py-3 text-sm font-semibold text-arc-navy-900 hover:border-arc-orange-300 transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            <GraduationCap className="h-4 w-4 text-arc-navy-700" />
+            Lesson Outline
+          </span>
+          <span className="text-xs font-normal text-arc-slate-500">
+            {doneCount}/{totalCount} completed
+          </span>
+        </button>
+      </div>
+
+      {/* Mobile — slide-in drawer */}
+      <div
+        className={cn("lg:hidden fixed inset-0 z-50", !mobileOpen && "pointer-events-none")}
+        aria-hidden={!mobileOpen}
+      >
+        <div
+          className={cn(
+            "absolute inset-0 bg-arc-navy-900/50 transition-opacity duration-200",
+            mobileOpen ? "opacity-100" : "opacity-0"
+          )}
+          onClick={() => setMobileOpen(false)}
+        />
+        <aside
+          role="dialog"
+          aria-modal="true"
+          aria-label="Lesson outline"
+          className={cn(
+            "absolute inset-y-0 left-0 w-80 max-w-[85vw] bg-white shadow-xl flex flex-col transition-transform duration-200",
+            mobileOpen ? "translate-x-0" : "-translate-x-full"
+          )}
+        >
+          <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-arc-slate-200">
+            <span className="flex items-center gap-2 text-sm font-semibold text-arc-navy-900 min-w-0">
+              <GraduationCap className="h-4 w-4 text-arc-navy-700 flex-shrink-0" />
+              <span className="truncate">{workspace.program.name}</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => setMobileOpen(false)}
+              aria-label="Close lesson outline"
+              className="p-1.5 rounded-md text-arc-slate-400 hover:text-arc-navy-700 hover:bg-arc-slate-100 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            {progressRow}
+            {renderTree(() => setMobileOpen(false))}
+          </div>
+        </aside>
+      </div>
     </>
   );
 }
 
 export default function StudentLessonViewerPage() {
   const params = useParams();
+  const router = useRouter();
   const lessonId = params.lessonId as string;
 
   const [lesson, setLesson] = useState<LessonApi | null>(null);
@@ -243,6 +372,7 @@ export default function StudentLessonViewerPage() {
   const [workspace, setWorkspace] = useState<WorkspacePayload | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [outlineCollapsed, setOutlineCollapsed] = useState(false);
 
   const [progressData, setProgressData] = useState<ProgressWithQuestions | null>(null);
   const [savingProgress, setSavingProgress] = useState(false);
@@ -257,6 +387,17 @@ export default function StudentLessonViewerPage() {
       console.error("Failed to load question progress:", err);
     }
   }, [lessonId]);
+
+  // Next lesson in the real learning sequence (curriculum-wide when the
+  // workspace is available; same-topic siblings in the legacy fallback flow).
+  const orderedForFlow: Array<{ id: string }> = workspace ? workspace.flatLessons : siblings;
+  const indexForFlow = workspace
+    ? workspace.lessonIndex
+    : siblings.findIndex((s) => s.id === lessonId);
+  const nextLessonId =
+    indexForFlow >= 0 && indexForFlow < orderedForFlow.length - 1
+      ? orderedForFlow[indexForFlow + 1].id
+      : null;
 
   const handleToggleComplete = async () => {
     const next = !progressData?.completed;
@@ -279,6 +420,36 @@ export default function StudentLessonViewerPage() {
     } catch (err) {
       // CS#23.1 — the completion was NOT saved; tell the student (retry = the
       // same button). Never fake a completed state on failure.
+      console.error("Failed to save progress:", err);
+      setCompletionError("We couldn't save your progress. Please try again.");
+    } finally {
+      setSavingProgress(false);
+    }
+  };
+
+  // Complete the current lesson, then continue to the next one in the real
+  // curriculum sequence. Never navigates if the completion was not persisted.
+  const handleCompleteAndContinue = async () => {
+    if (!nextLessonId) return;
+    if (progressData?.completed) {
+      router.push(`/dashboard/lessons/${nextLessonId}`);
+      return;
+    }
+    setSavingProgress(true);
+    setCompletionError(null);
+    try {
+      await progressApi.setLesson(lessonId, true);
+      setWorkspace((ws) =>
+        ws
+          ? {
+              ...ws,
+              completedLessonIds: Array.from(new Set([...ws.completedLessonIds, lessonId])),
+            }
+          : ws
+      );
+      await fetchProgress();
+      router.push(`/dashboard/lessons/${nextLessonId}`);
+    } catch (err) {
       console.error("Failed to save progress:", err);
       setCompletionError("We couldn't save your progress. Please try again.");
     } finally {
@@ -424,11 +595,23 @@ export default function StudentLessonViewerPage() {
           className={cn(
             "mx-auto",
             workspace
-              ? "max-w-6xl lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8"
+              ? cn(
+                  "max-w-6xl lg:grid lg:gap-8",
+                  outlineCollapsed
+                    ? "lg:grid-cols-[64px_minmax(0,1fr)]"
+                    : "lg:grid-cols-[260px_minmax(0,1fr)]"
+                )
               : "max-w-3xl"
           )}
         >
-          {workspace && <CourseOutline workspace={workspace} currentLessonId={lesson.id} />}
+          {workspace && (
+            <CourseOutline
+              workspace={workspace}
+              currentLessonId={lesson.id}
+              collapsed={outlineCollapsed}
+              onToggleCollapsed={() => setOutlineCollapsed((c) => !c)}
+            />
+          )}
           <div className="min-w-0 max-w-3xl mx-auto w-full">
           {lesson.status !== "PUBLISHED" && (
             <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-2 text-sm text-yellow-700">
@@ -436,29 +619,65 @@ export default function StudentLessonViewerPage() {
             </div>
           )}
 
-          {/* Lesson header */}
-          <div className="mb-6 flex items-start justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Badge className="bg-arc-orange-100 text-arc-orange-700">
-                  {typeLabels[lesson.type] || lesson.type}
-                </Badge>
-                {lesson.durationMinutes ? (
-                  <span className="flex items-center gap-1 text-sm text-arc-slate-500">
-                    <Clock className="h-4 w-4" />
-                    {lesson.durationMinutes} min
-                  </span>
-                ) : null}
+          {/* Lesson header — lightweight context (§2) */}
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-2">
+              <Badge className="bg-arc-orange-100 text-arc-orange-700">
+                {typeLabels[lesson.type] || lesson.type}
+              </Badge>
+              {lesson.durationMinutes ? (
+                <span className="flex items-center gap-1 text-sm text-arc-slate-500">
+                  <Clock className="h-4 w-4" />
+                  {lesson.durationMinutes} min
+                </span>
+              ) : null}
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-arc-navy-900">{lesson.title}</h1>
+            {lesson.description && (
+              <p className="text-arc-slate-600 mt-2">{lesson.description}</p>
+            )}
+
+            {/* Lesson + course progress (§10) — real persisted values only */}
+            <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3">
+              <div className="w-44">
+                <div className="flex justify-between text-[11px] font-medium text-arc-slate-400 mb-1">
+                  <span>Lesson</span>
+                  <span>{Math.round(progressData?.completionPercentage ?? 0)}%</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-arc-slate-100 overflow-hidden">
+                  <div
+                    className="h-full bg-arc-orange-500 transition-all duration-300"
+                    style={{ width: `${Math.round(progressData?.completionPercentage ?? 0)}%` }}
+                  />
+                </div>
               </div>
-              <h1 className="text-3xl font-bold text-arc-navy-900">{lesson.title}</h1>
-              {lesson.description && (
-                <p className="text-arc-slate-600 mt-2">{lesson.description}</p>
+              {workspace && (
+                <div className="w-44">
+                  <div className="flex justify-between text-[11px] font-medium text-arc-slate-400 mb-1">
+                    <span>Course</span>
+                    <span>
+                      {workspace.completedLessonIds.length} of {workspace.flatLessons.length}
+                    </span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-arc-slate-100 overflow-hidden">
+                    <div
+                      className="h-full bg-arc-green-500 transition-all duration-300"
+                      style={{
+                        width: `${
+                          workspace.flatLessons.length > 0
+                            ? Math.round(
+                                (workspace.completedLessonIds.length /
+                                  workspace.flatLessons.length) *
+                                  100
+                              )
+                            : 0
+                        }%`,
+                      }}
+                    />
+                  </div>
+                </div>
               )}
             </div>
-
-            {progressData && (
-              <MasteryBadge mastery={progressData.mastery} />
-            )}
           </div>
 
           {/* Question score card */}
@@ -511,75 +730,32 @@ export default function StudentLessonViewerPage() {
             )}
           </article>
 
-          {/* Complete + navigation */}
-          <div className="mt-6 flex flex-col items-center gap-3">
-            {completionError && (
-              <div
-                role="alert"
-                className="w-full rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700"
-              >
-                {completionError}
-              </div>
-            )}
-            <Button
-              variant={progressData?.completed ? "outline" : "accent"}
-              onClick={handleToggleComplete}
-              disabled={savingProgress}
-              aria-live="polite"
+          {/* Lesson completion — ONE consolidated state (§3/§8) */}
+          {completionError && (
+            <div
+              role="alert"
+              className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700"
             >
-              <CheckCircle2 className="h-4 w-4 mr-2" />
-              {savingProgress ? "Saving..." : progressData?.completed ? "Completed" : "Mark as complete"}
-            </Button>
-          </div>
+              {completionError}
+            </div>
+          )}
 
-          {/* CS#23.1 — post-completion next step (persisted state only) */}
-          {workspace && progressData?.completed && !savingProgress && (
-            <div className="mt-4 rounded-xl border border-green-200 bg-green-50/60 px-5 py-4">
+          {progressData?.completed && (
+            <div className="mt-6 rounded-xl border border-green-200 bg-green-50/60 px-5 py-4">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
-                <span className="text-sm font-semibold text-arc-navy-900">Lesson completed</span>
+                <span className="text-sm font-semibold text-arc-navy-900">Lesson Mastered</span>
               </div>
-              {nextLesson ? (
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-3">
-                  <div className="min-w-0">
-                    <div className="text-xs text-arc-slate-500">Up next</div>
-                    <div className="text-sm font-medium text-arc-navy-900 truncate">
-                      {nextLesson.title}
-                    </div>
-                  </div>
-                  <Link
-                    href={`/dashboard/lessons/${nextLesson.id}`}
-                    className="flex-shrink-0"
-                  >
-                    <Button variant="accent" size="sm">
-                      Continue to Next Lesson
-                      <ChevronRight className="h-4 w-4 ml-1" />
-                    </Button>
-                  </Link>
-                </div>
-              ) : (
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-3">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-arc-navy-900">
-                      🎉 Program complete
-                    </div>
-                    <div className="text-xs text-arc-slate-500">
-                      You&apos;ve completed all lessons in {workspace.program.name}.
-                    </div>
-                  </div>
-                  <Link
-                    href={`/dashboard/programs/${workspace.program.id}`}
-                    className="flex-shrink-0"
-                  >
-                    <Button variant="outline" size="sm">
-                      Back to Program
-                    </Button>
-                  </Link>
-                </div>
+              <p className="text-sm text-arc-slate-600 mt-1">You completed this lesson.</p>
+              {workspace && !nextLesson && (
+                <p className="text-sm font-medium text-arc-navy-900 mt-2">
+                  🎉 You&apos;ve completed all lessons in {workspace.program.name}.
+                </p>
               )}
             </div>
           )}
 
+          {/* Previous / Next navigation (§9) — primary CTA reflects state */}
           <div className="mt-6 flex items-center justify-between gap-4 border-t border-arc-slate-200 pt-6">
             {prevLesson ? (
               <Link href={`/dashboard/lessons/${prevLesson.id}`} className="flex-1 min-w-0">
@@ -598,21 +774,60 @@ export default function StudentLessonViewerPage() {
             )}
 
             {nextLesson ? (
-              <Link href={`/dashboard/lessons/${nextLesson.id}`} className="flex-1 min-w-0">
-                <div className="flex items-center justify-end gap-3 rounded-lg border border-arc-slate-200 bg-white px-4 py-3 hover:border-arc-orange-300 transition-colors text-right">
-                  <div className="min-w-0">
-                    <div className="text-xs text-arc-slate-400">Next</div>
-                    <div className="text-sm font-medium text-arc-navy-900 truncate">
-                      {nextLesson.title}
-                    </div>
-                  </div>
-                  <ChevronRight className="h-5 w-5 text-arc-slate-400 flex-shrink-0" />
-                </div>
-              </Link>
+              progressData?.completed ? (
+                <Link href={`/dashboard/lessons/${nextLesson.id}`} className="flex-shrink-0">
+                  <Button variant="accent" aria-live="polite">
+                    Continue to Next Lesson
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </Link>
+              ) : (
+                <Button
+                  variant="accent"
+                  className="flex-shrink-0"
+                  onClick={handleCompleteAndContinue}
+                  disabled={savingProgress}
+                  aria-live="polite"
+                >
+                  {savingProgress ? "Saving..." : "Complete Lesson & Continue"}
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              )
+            ) : progressData?.completed ? (
+              workspace ? (
+                <Link
+                  href={`/dashboard/programs/${workspace.program.id}`}
+                  className="flex-shrink-0"
+                >
+                  <Button variant="outline">Back to Program</Button>
+                </Link>
+              ) : (
+                <div className="flex-1" />
+              )
             ) : (
-              <div className="flex-1" />
+              <Button
+                variant="accent"
+                className="flex-shrink-0"
+                onClick={handleToggleComplete}
+                disabled={savingProgress}
+                aria-live="polite"
+              >
+                {savingProgress ? "Saving..." : "Mark Lesson Complete"}
+              </Button>
             )}
           </div>
+
+          {/* Up-next context under the primary CTA (§9) */}
+          {nextLesson && (
+            <div className="mt-2.5 text-right min-w-0">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-arc-slate-400">
+                Next lesson
+              </div>
+              <div className="text-sm font-medium text-arc-navy-900 truncate">
+                {nextLesson.title}
+              </div>
+            </div>
+          )}
 
           {/* CS#23.1 — program assessment next-step (real published assessments) */}
           {workspace && workspace.program.assessments.length > 0 && (

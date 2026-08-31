@@ -538,5 +538,36 @@ workspace → completed=8/11, includes current, next = "Functions &
 RESTORE → set back to incomplete (clean demo state)
 ```
 
+## Lesson UX polish (enterprise learning experience)
+- **Course Outline** — collapsible on desktop (260px panel ⇄ 64px icon rail
+  with per-lesson status icons + tooltips); course progress bar with real
+  `done/total` counts inside the outline. All completion states from real
+  Progress rows.
+- **Mobile** — permanent outline replaced by a compact "Lesson Outline"
+  button (with `done/total completed`) opening a slide-in drawer
+  (`role="dialog"`, `aria-modal`, overlay click + Escape + X to close,
+  auto-close on lesson navigation, 200ms transitions).
+- **Lesson header** — de-duplicated (removed the separate "Mastered" badge);
+  now type · duration → title → description → dual progress bars
+  (Lesson % orange, Course `X of Y` green), all from persisted values.
+- **Single completion state (§3)** — removed the "Mastered" badge +
+  standalone "Completed" button + old completion panel trio. Now exactly one:
+  green "Lesson Mastered — You completed this lesson." card appears only when
+  the server has persisted completion (plus program-complete line on the
+  final lesson).
+- **State-aware primary CTA (§9)** — bottom nav:
+  not completed → "Complete Lesson & Continue →" (persists via the existing
+  authoritative endpoint, then client-navigates; never navigates on failure);
+  completed → "Continue to Next Lesson →"; final lesson completed →
+  "Back to Program". "Next lesson" title shown beneath the CTA. Previous
+  lesson kept as secondary card.
+- **Check-for-understanding (§7)** — already provided by the existing
+  `LessonBlockRenderer` → `QuestionRenderer` question blocks (interactive
+  MCQ with correct/incorrect feedback + practice score card); reused, not
+  duplicated.
+- Content width unchanged at `max-w-3xl` (768px, within the 700-820px target);
+  block types already cover worked example, key point, callouts, formula,
+  media (lazy), resources.
+
 ## Next
 - None outstanding for CS#23.1. Owner review + manual UI validation.
