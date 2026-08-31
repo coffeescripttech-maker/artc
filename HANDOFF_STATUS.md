@@ -510,5 +510,33 @@ probes instead.
   assessments (no `matth quiz 1`) — CS#22.7 behavior intact.
 - Lesson page route → 200.
 
+## Completion & next-lesson flow (CS#23.1 final scope)
+- **Error/retry (§19):** completion failure renders a `role="alert"` red banner
+  ("We couldn't save your progress. Please try again."); the completion button
+  itself is the retry. No fake completed state on failure.
+- **Post-completion card (§9/§12):** after persisted completion, a green
+  success card shows "Lesson completed" + "Up next" with a
+  "Continue to Next Lesson →" CTA (real `flatLessons` ordering).
+- **Final lesson (§14):** when the completed lesson is last in the curriculum,
+  the card shows "Program complete" + "Back to Program".
+- **Accessibility (§23):** `aria-live="polite"` on the completion button,
+  `role="alert"` on the error banner, real `<Link>`/`<Button>` elements.
+- Existing free prev/next navigation preserved (pre-existing product rule);
+  the next-step card is additive. Server stays authoritative (§15).
+- Idempotency: the completion upserts the unique progress row — verified live
+  (two consecutive PUTs → exactly one row; count 7→8, never 9).
+- Security verified live: unauthenticated PUT → 401; non-member PUT → 404.
+
+## Live E2E — completion flow (student, org header)
+```text
+BEFORE: completed=7/11, current not completed
+PUT #1  → {completed:true, 100%, MASTERED}
+PUT #2  → identical (idempotent, single row)
+GET     → completed:true 100%  (persisted)
+workspace → completed=8/11, includes current, next = "Functions &
+            Relationships: Inputs, Outputs, and Change"
+RESTORE → set back to incomplete (clean demo state)
+```
+
 ## Next
 - None outstanding for CS#23.1. Owner review + manual UI validation.

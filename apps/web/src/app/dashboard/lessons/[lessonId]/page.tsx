@@ -246,6 +246,7 @@ export default function StudentLessonViewerPage() {
 
   const [progressData, setProgressData] = useState<ProgressWithQuestions | null>(null);
   const [savingProgress, setSavingProgress] = useState(false);
+  const [completionError, setCompletionError] = useState<string | null>(null);
 
   const fetchProgress = useCallback(async () => {
     try {
@@ -260,6 +261,7 @@ export default function StudentLessonViewerPage() {
   const handleToggleComplete = async () => {
     const next = !progressData?.completed;
     setSavingProgress(true);
+    setCompletionError(null);
     try {
       await progressApi.setLesson(lessonId, next);
       // Keep the workspace course-tree in sync without a refetch.
@@ -275,7 +277,10 @@ export default function StudentLessonViewerPage() {
       );
       await fetchProgress();
     } catch (err) {
+      // CS#23.1 — the completion was NOT saved; tell the student (retry = the
+      // same button). Never fake a completed state on failure.
       console.error("Failed to save progress:", err);
+      setCompletionError("We couldn't save your progress. Please try again.");
     } finally {
       setSavingProgress(false);
     }
@@ -489,16 +494,73 @@ export default function StudentLessonViewerPage() {
           </article>
 
           {/* Complete + navigation */}
-          <div className="mt-6 flex items-center justify-center">
+          <div className="mt-6 flex flex-col items-center gap-3">
+            {completionError && (
+              <div
+                role="alert"
+                className="w-full rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700"
+              >
+                {completionError}
+              </div>
+            )}
             <Button
               variant={progressData?.completed ? "outline" : "accent"}
               onClick={handleToggleComplete}
               disabled={savingProgress}
+              aria-live="polite"
             >
               <CheckCircle2 className="h-4 w-4 mr-2" />
               {savingProgress ? "Saving..." : progressData?.completed ? "Completed" : "Mark as complete"}
             </Button>
           </div>
+
+          {/* CS#23.1 — post-completion next step (persisted state only) */}
+          {workspace && progressData?.completed && !savingProgress && (
+            <div className="mt-4 rounded-xl border border-green-200 bg-green-50/60 px-5 py-4">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
+                <span className="text-sm font-semibold text-arc-navy-900">Lesson completed</span>
+              </div>
+              {nextLesson ? (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-3">
+                  <div className="min-w-0">
+                    <div className="text-xs text-arc-slate-500">Up next</div>
+                    <div className="text-sm font-medium text-arc-navy-900 truncate">
+                      {nextLesson.title}
+                    </div>
+                  </div>
+                  <Link
+                    href={`/dashboard/lessons/${nextLesson.id}`}
+                    className="flex-shrink-0"
+                  >
+                    <Button variant="accent" size="sm">
+                      Continue to Next Lesson
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-arc-navy-900">
+                      🎉 Program complete
+                    </div>
+                    <div className="text-xs text-arc-slate-500">
+                      You&apos;ve completed all lessons in {workspace.program.name}.
+                    </div>
+                  </div>
+                  <Link
+                    href={`/dashboard/programs/${workspace.program.id}`}
+                    className="flex-shrink-0"
+                  >
+                    <Button variant="outline" size="sm">
+                      Back to Program
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="mt-6 flex items-center justify-between gap-4 border-t border-arc-slate-200 pt-6">
             {prevLesson ? (
