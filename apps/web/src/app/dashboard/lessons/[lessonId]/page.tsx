@@ -390,11 +390,29 @@ export default function StudentLessonViewerPage() {
       <DashboardHeader
         title={lesson.title}
         subtitle={
-          [subject?.name, parentModule?.name, lesson.topic?.name].filter(Boolean).join(" › ") ||
-          undefined
+          [
+            // CS#23.1 §4 — program context + real position in the sequence
+            workspace
+              ? `Lesson ${workspace.lessonIndex + 1} of ${workspace.flatLessons.length}`
+              : null,
+            subject?.name,
+            parentModule?.name,
+            lesson.topic?.name,
+          ]
+            .filter(Boolean)
+            .join(" › ") || undefined
         }
         breadcrumbs={[
           { label: "Dashboard", href: "/dashboard" },
+          // CS#23.1 §4 — back navigation to the enrolled program
+          ...(workspace
+            ? [
+                {
+                  label: workspace.program.name,
+                  href: `/dashboard/programs/${workspace.program.id}`,
+                },
+              ]
+            : []),
           ...(subject ? [{ label: subject.name }] : []),
           ...(lesson.topic ? [{ label: lesson.topic.name }] : []),
           { label: lesson.title },
