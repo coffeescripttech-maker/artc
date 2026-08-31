@@ -8,6 +8,7 @@ import { LessonBlockRenderer } from "@/components/lesson/block-renderer";
 import { lessonsApi, progressApi } from "@/lib/api/client";
 import { normalizeLessonContent } from "@aratc/shared";
 import { Button, Badge } from "@/components/ui";
+import { cn } from "@aratc/ui";
 import {
   RefreshCw,
   Clock,
@@ -16,9 +17,9 @@ import {
   CheckCircle2,
   BookOpen,
   Trophy,
-  BarChart3,
   CheckCircle,
-  XCircle,
+  GraduationCap,
+  ClipboardList,
 } from "lucide-react";
 
 interface LessonApi {
@@ -43,6 +44,53 @@ interface SiblingLesson {
   title: string;
   orderIndex: number;
   status: string;
+}
+
+// CS#23.1 — student learning workspace payload (GET /lessons/:id/workspace)
+interface WorkspaceAssessment {
+  id: string;
+  name: string;
+  slug: string;
+  type: string;
+  description: string | null;
+  questionCount: number | null;
+  timeLimitMinutes: number | null;
+  passingScore: number | null;
+  _count: { questions: number };
+}
+
+interface WorkspacePayload {
+  lesson: LessonApi;
+  curriculum: { id: string; name: string; stage: string; gradeLevel: string | null; orderIndex: number };
+  program: {
+    id: string;
+    slug: string;
+    name: string;
+    programType: string | null;
+    assessments: WorkspaceAssessment[];
+  };
+  courses: Array<{
+    subjectId: string;
+    subjectName: string;
+    customName: string | null;
+    orderIndex: number;
+    modules: Array<{
+      id: string;
+      name: string;
+      orderIndex: number;
+      topics: Array<{
+        id: string;
+        name: string;
+        orderIndex: number;
+        lessons: Array<{ id: string; title: string; slug: string; durationMinutes: number | null; orderIndex: number }>;
+      }>;
+    }>;
+  }>;
+  flatLessons: Array<{ id: string; title: string; slug: string; orderIndex: number }>;
+  lessonIndex: number;
+  completedLessonIds: string[];
+  progressById: Record<string, { completionPercentage: number; mastery: string }>;
+  questionStats: QuestionStats;
 }
 
 interface QuestionStats {
@@ -96,12 +144,103 @@ function MasteryBadge({ mastery }: { mastery: string }) {
   );
 }
 
+/**
+ * CS#23.1 — compact course-tree sidebar built from the workspace payload:
+ * subject → module → topic → lesson with real completion state. Renders as a
+ * sticky sidebar on desktop and a collapsible outline on mobile.
+ */
+function CourseOutline({
+  workspace,
+  currentLessonId,
+}: {
+  workspace: WorkspacePayload;
+  currentLessonId: string;
+}) {
+  const completed = new Set(workspace.completedLessonIds);
+  const tree = (
+    <>
+      {workspace.courses.map((course) => (
+        <div key={course.subjectId} className="mb-4 last:mb-0">
+          <div className="text-xs font-semibold uppercase tracking-wide text-arc-slate-400 px-2 mb-1.5 truncate">
+            {course.customName || course.subjectName}
+          </div>
+          {course.modules.map((m) => (
+            <div key={m.id} className="mb-2 last:mb-0">
+              <div className="text-xs font-medium text-arc-slate-500 px-2 mb-1 truncate">
+                {m.name}
+              </div>
+              {m.topics.map((t) => (
+                <div key={t.id} className="mb-1.5 last:mb-0">
+                  <div className="text-xs text-arc-slate-400 px-2 mb-0.5 truncate">{t.name}</div>
+                  <ul>
+                    {t.lessons.map((l) => {
+                      const isCurrent = l.id === currentLessonId;
+                      const isDone = completed.has(l.id);
+                      return (
+                        <li key={l.id}>
+                          <Link
+                            href={`/dashboard/lessons/${l.id}`}
+                            className={cn(
+                              "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors border-l-2",
+                              isCurrent
+                                ? "bg-arc-orange-50 text-arc-navy-900 font-medium border-arc-orange-500"
+                                : "text-arc-slate-600 hover:bg-arc-slate-50 border-transparent"
+                            )}
+                          >
+                            {isDone ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+                            ) : (
+                              <BookOpen className="h-4 w-4 text-arc-slate-300 flex-shrink-0" />
+                            )}
+                            <span className="truncate">{l.title}</span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      ))}
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:block">
+        <div className="sticky top-6 rounded-xl border border-arc-slate-200 bg-white p-4 max-h-[calc(100vh-3rem)] overflow-y-auto">
+          <div className="flex items-center gap-2 mb-3">
+            <GraduationCap className="h-4 w-4 text-arc-navy-700 flex-shrink-0" />
+            <span className="text-sm font-semibold text-arc-navy-900 truncate">
+              {workspace.program.name}
+            </span>
+          </div>
+          {tree}
+        </div>
+      </aside>
+
+      {/* Mobile collapsible outline */}
+      <details className="lg:hidden mb-6 rounded-xl border border-arc-slate-200 bg-white px-4 py-3">
+        <summary className="flex items-center gap-2 text-sm font-semibold text-arc-navy-900 cursor-pointer">
+          <GraduationCap className="h-4 w-4 text-arc-navy-700 flex-shrink-0" />
+          Course outline · {workspace.program.name}
+        </summary>
+        <div className="mt-3">{tree}</div>
+      </details>
+    </>
+  );
+}
+
 export default function StudentLessonViewerPage() {
   const params = useParams();
   const lessonId = params.lessonId as string;
 
   const [lesson, setLesson] = useState<LessonApi | null>(null);
   const [siblings, setSiblings] = useState<SiblingLesson[]>([]);
+  const [workspace, setWorkspace] = useState<WorkspacePayload | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -123,6 +262,17 @@ export default function StudentLessonViewerPage() {
     setSavingProgress(true);
     try {
       await progressApi.setLesson(lessonId, next);
+      // Keep the workspace course-tree in sync without a refetch.
+      setWorkspace((ws) =>
+        ws
+          ? {
+              ...ws,
+              completedLessonIds: next
+                ? Array.from(new Set([...ws.completedLessonIds, lessonId]))
+                : ws.completedLessonIds.filter((id) => id !== lessonId),
+            }
+          : ws
+      );
       await fetchProgress();
     } catch (err) {
       console.error("Failed to save progress:", err);
@@ -136,19 +286,37 @@ export default function StudentLessonViewerPage() {
     (async () => {
       setIsLoading(true);
       setError(null);
+      setWorkspace(null);
       try {
-        const data = (await lessonsApi.getById(lessonId)) as LessonApi;
-        if (!active) return;
-        setLesson(data);
+        // CS#23.1 — prefer the single authorized workspace read (enrolled
+        // learners). Falls back to the legacy public flow for contexts where
+        // the workspace is not applicable (e.g. staff previewing content).
+        const ws = (await lessonsApi.getWorkspace(lessonId).catch(() => null)) as WorkspacePayload | null;
+        if (ws && active) {
+          setWorkspace(ws);
+          setLesson(ws.lesson);
+          const self = ws.progressById[lessonId];
+          setProgressData({
+            lessonId,
+            completed: (self?.completionPercentage ?? 0) >= 100,
+            completionPercentage: self?.completionPercentage ?? 0,
+            mastery: self?.mastery ?? "NOT_STARTED",
+            questionStats: ws.questionStats,
+          });
+        } else if (active) {
+          const data = (await lessonsApi.getById(lessonId)) as LessonApi;
+          if (!active) return;
+          setLesson(data);
 
-        if (data.topic?.id) {
-          const list = (await lessonsApi.list(data.topic.id).catch(() => [])) as SiblingLesson[];
-          if (active && Array.isArray(list)) {
-            setSiblings([...list].sort((a, b) => a.orderIndex - b.orderIndex));
+          if (data.topic?.id) {
+            const list = (await lessonsApi.list(data.topic.id).catch(() => [])) as SiblingLesson[];
+            if (active && Array.isArray(list)) {
+              setSiblings([...list].sort((a, b) => a.orderIndex - b.orderIndex));
+            }
           }
-        }
 
-        await fetchProgress();
+          await fetchProgress();
+        }
       } catch (err) {
         console.error("Failed to load lesson:", err);
         if (active) setError("This lesson could not be loaded.");
@@ -161,7 +329,7 @@ export default function StudentLessonViewerPage() {
     };
   }, [lessonId, fetchProgress]);
 
-  const handleQuestionComplete = (correct: boolean, _earnedPoints: number) => {
+  const handleQuestionComplete = (_correct: boolean, _earnedPoints: number) => {
     // Refresh progress so the score card updates live
     fetchProgress();
   };
@@ -195,10 +363,19 @@ export default function StudentLessonViewerPage() {
   const parentModule = lesson.topic?.module;
   const content = normalizeLessonContent(lesson.content);
 
-  const currentIndex = siblings.findIndex((s) => s.id === lesson.id);
-  const prevLesson = currentIndex > 0 ? siblings[currentIndex - 1] : null;
+  // CS#23.1 — real curriculum-wide ordering from the workspace when available;
+  // falls back to same-topic siblings for the legacy (non-enrolled) flow.
+  const orderedLessons: Array<{ id: string; title: string }> = workspace
+    ? workspace.flatLessons
+    : siblings;
+  const currentIndex = workspace
+    ? workspace.lessonIndex
+    : siblings.findIndex((s) => s.id === lesson.id);
+  const prevLesson = currentIndex > 0 ? orderedLessons[currentIndex - 1] : null;
   const nextLesson =
-    currentIndex >= 0 && currentIndex < siblings.length - 1 ? siblings[currentIndex + 1] : null;
+    currentIndex >= 0 && currentIndex < orderedLessons.length - 1
+      ? orderedLessons[currentIndex + 1]
+      : null;
 
   const qs = progressData?.questionStats;
   const hasQuestions = qs && qs.totalBlocks > 0;
@@ -220,7 +397,16 @@ export default function StudentLessonViewerPage() {
       />
 
       <div className="p-6">
-        <div className="max-w-3xl mx-auto">
+        <div
+          className={cn(
+            "mx-auto",
+            workspace
+              ? "max-w-6xl lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8"
+              : "max-w-3xl"
+          )}
+        >
+          {workspace && <CourseOutline workspace={workspace} currentLessonId={lesson.id} />}
+          <div className="min-w-0 max-w-3xl mx-auto w-full">
           {lesson.status !== "PUBLISHED" && (
             <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-2 text-sm text-yellow-700">
               This lesson is <strong>{lesson.status.toLowerCase()}</strong> and not yet visible to students.
@@ -346,6 +532,39 @@ export default function StudentLessonViewerPage() {
             ) : (
               <div className="flex-1" />
             )}
+          </div>
+
+          {/* CS#23.1 — program assessment next-step (real published assessments) */}
+          {workspace && workspace.program.assessments.length > 0 && (
+            <Link
+              href={`/dashboard/assessments/${workspace.program.assessments[0].id}`}
+              className="block mt-6"
+            >
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-arc-purple-200 bg-arc-purple-50/60 px-4 py-3 hover:border-arc-purple-300 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <ClipboardList className="h-5 w-5 text-arc-purple-500 flex-shrink-0" />
+                  <div className="min-w-0">
+                    <div className="text-xs font-medium text-arc-purple-600">
+                      Program assessment
+                    </div>
+                    <div className="text-sm font-medium text-arc-navy-900 truncate">
+                      {workspace.program.assessments[0].name}
+                      {workspace.program.assessments[0].questionCount
+                        ? ` · ${workspace.program.assessments[0].questionCount} questions`
+                        : ""}
+                      {workspace.program.assessments[0].timeLimitMinutes
+                        ? ` · ${workspace.program.assessments[0].timeLimitMinutes} min`
+                        : ""}
+                    </div>
+                  </div>
+                </div>
+                <span className="flex items-center gap-1 text-sm font-medium text-arc-purple-600 flex-shrink-0">
+                  Start
+                  <ChevronRight className="h-4 w-4" />
+                </span>
+              </div>
+            </Link>
+          )}
           </div>
         </div>
       </div>

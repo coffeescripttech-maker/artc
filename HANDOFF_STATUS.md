@@ -479,7 +479,36 @@ probes instead.
   access, orphan subject — no enumeration leaks (tested).
 - No new roles; no frontend authorization; tenant/org isolation untouched.
 
-## Next (frontend, not yet started)
-- Wire the lesson viewer (`/dashboard/lessons/[lessonId]`) to consume the
-  workspace payload for ordered prev/next, course-tree sidebar, and
-  assessment-next CTAs.
+## Frontend integration (DONE)
+- `lessonsApi.getWorkspace(id)` added to the API client.
+- `/dashboard/lessons/[lessonId]` now prefers the workspace read (one call
+  replaces lesson + topic-siblings + progress), with graceful fallback to the
+  legacy public flow when the workspace is not applicable (staff preview /
+  non-enrolled contexts).
+- **Course outline sidebar** (desktop sticky / mobile collapsible `<details>`)
+  built from the real curriculum tree: subject → module → topic → lesson,
+  green check for real completed lessons, orange highlight for the current
+  lesson, every lesson a real `<Link>`.
+- **Curriculum-wide prev/next** navigation from `flatLessons`/`lessonIndex`
+  (previously limited to same-topic siblings).
+- **Program assessment next-step CTA** (purple, domain-correct) from the
+  program's real PUBLISHED assessments with real question counts/time limits.
+- Mark-complete keeps the sidebar in sync locally (no refetch).
+
+## Gates after frontend integration
+- Web typecheck: 0 errors
+- Web lint (lesson page + client.ts): 0 errors, 0 new warnings (3 pre-existing
+  unused-symbol warnings in the page cleaned up)
+- API suite untouched: 182/182
+
+## Live E2E (student, org header as the web client sends)
+- `GET /lessons/{crp-lesson}/workspace` → 200: program "College Readiness
+  Program", 4 courses, 11 flatLessons, lessonIndex 0, 8 completed lessons,
+  program assessments CRP Foundations Practice (12q) + College Readiness
+  Check (8q), real prev/next titles.
+- Scoped assessment list with org header: exactly the 3 ARC PUBLISHED
+  assessments (no `matth quiz 1`) — CS#22.7 behavior intact.
+- Lesson page route → 200.
+
+## Next
+- None outstanding for CS#23.1. Owner review + manual UI validation.

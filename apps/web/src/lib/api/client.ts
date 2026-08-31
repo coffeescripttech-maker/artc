@@ -170,6 +170,9 @@ export const topicsApi = {
 export const lessonsApi = {
   list: (topicId?: string) => apiFetch(topicId ? `/lessons?topicId=${topicId}` : "/lessons"),
   getById: (id: string) => apiFetch(`/lessons/${id}`),
+  // CS#23.1 — one authorized read for the student lesson workspace (ordered
+  // curriculum tree, completion state, prev/next, program assessments).
+  getWorkspace: (id: string) => apiFetch(`/lessons/${id}/workspace`),
   getBySubject: (subjectId: string) => apiFetch(`/lessons/subject/${subjectId}`),
   getStats: (topicId: string) => apiFetch(`/lessons/topic/${topicId}/stats`),
   create: (data: any, token?: string) =>
