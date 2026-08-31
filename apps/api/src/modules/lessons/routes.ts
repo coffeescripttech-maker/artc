@@ -18,6 +18,7 @@ import {
   getProgressWithQuestions,
   saveQuestionResponse,
   getQuestionResponse,
+  getWorkspace,
 } from "./controller";
 import { authenticate, requireRole } from "../../middleware/auth";
 import { resolveOrgContext } from "../../middleware/org-context";
@@ -35,6 +36,10 @@ router.get("/topic/:topicId/stats", stats);
 
 // Filter by subject
 router.get("/subject/:subjectId", bySubject);
+
+// CS#23.1 — authorized student learning workspace (maps the lesson to the
+// enrolled program's ordered curriculum + the learner's completion state).
+router.get("/:id/workspace", authenticate, getWorkspace);
 
 // Learner progress (authenticated)
 router.get("/:id/progress", authenticate, getProgress);

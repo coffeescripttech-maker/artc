@@ -15,6 +15,7 @@ import {
   isVisible,
   publishedOnly,
 } from "../../lib/visibility";
+import { hasLearnerProgramAccess } from "../../lib/program-access";
 import type { CreateLessonInput, UpdateLessonInput } from "./schemas";
 
 export async function listLessons(
@@ -488,12 +489,33 @@ export async function getLessonProgress(userId: string, lessonId: string) {
 }
 
 export async function setLessonProgress(userId: string, lessonId: string, completed: boolean) {
-  const lesson = await prisma.lesson.findUnique({ where: { id: lessonId } });
-  if (!lesson) {
+  // CS#23.1 (§36) — completion is authorized like every other learner action:
+  // the lesson must be PUBLISHED and belong to a program the learner has active
+  // access to (enrollment → program PUBLISHED). 404 (not 403) so the existence
+  // of unrelated/draft content is not revealed. Idempotency is preserved: the
+  // unique (learnerId, … , lessonId) progress row is upserted, never duplicated.
+  const lesson = await prisma.lesson.findUnique({
+    where: { id: lessonId },
+    include: {
+      topic: {
+        select: {
+          id: true,
+          module: { select: { id: true, subject: { select: { id: true } } } },
+        },
+      },
+    },
+  });
+  if (!lesson || lesson.status !== "PUBLISHED") {
     throw new NotFoundError("Lesson not found");
   }
 
   const learner = await getOrCreateLearnerProfile(userId);
+
+  // Resolve the curriculum/program for this lesson's subject and verify access.
+  const scope = await findAccessibleCurriculumForSubject(userId, lesson.topic?.module?.subject?.id);
+  if (!scope) {
+    throw new NotFoundError("Lesson not found");
+  }
 
   const existing = await prisma.progress.findFirst({
     where: { learnerId: learner.id, lessonId },
@@ -513,6 +535,10 @@ export async function setLessonProgress(userId: string, lessonId: string, comple
         learnerId: learner.id,
         lessonId,
         topicId: lesson.topicId,
+        programId: scope.curriculum.programId ?? undefined,
+        curriculumId: scope.curriculum.id,
+        subjectId: lesson.topic?.module?.subject?.id ?? undefined,
+        moduleId: lesson.topic?.module?.id ?? undefined,
         ...data,
       },
     });
@@ -624,5 +650,264 @@ export async function getLessonProgressWithQuestions(userId: string, lessonId: s
     completionPercentage,
     mastery: masteryFromCompletion(completionPercentage),
     questionStats: { totalBlocks, answeredBlocks, correctAnswers, totalPoints, earnedPoints },
+  };
+}
+
+// ============================================================
+// CS#23.1 — Student Learning Workspace
+// ============================================================
+
+/**
+ * Resolve the PUBLISHED, enrolled curriculum for a lesson's subject.
+ *
+ * A subject may belong to several curriculums/programs, so we scan the
+ * lesson's subject → curriculum-item links and return the FIRST curriculum
+ * whose program the learner has ACTIVE access to (enrollment → program
+ * PUBLISHED). Returns null when the lesson's subject is not part of any
+ * accessible program — callers treat that as 404 (no enumeration leak).
+ */
+async function findAccessibleCurriculumForSubject(
+  userId: string,
+  subjectId: string | undefined
+) {
+  if (!subjectId) return null;
+  const items = await prisma.curriculumItem.findMany({
+    where: { subjectId },
+    include: { curriculum: { include: { program: true } } },
+  });
+  for (const item of items) {
+    const { curriculum } = item;
+    if (curriculum.status !== "PUBLISHED" || !curriculum.program) continue;
+    if (await hasLearnerProgramAccess(userId, curriculum.program.id)) {
+      return item;
+    }
+  }
+  return null;
+}
+
+export interface LessonWorkspacePayload {
+  lesson: Awaited<ReturnType<typeof getLessonById>>;
+  curriculum: {
+    id: string;
+    name: string;
+    stage: string;
+    gradeLevel: string | null;
+    orderIndex: number;
+  };
+  program: {
+    id: string;
+    slug: string;
+    name: string;
+    programType: string | null;
+    assessments: Array<{
+      id: string;
+      name: string;
+      slug: string;
+      type: string;
+      description: string | null;
+      questionCount: number | null;
+      timeLimitMinutes: number | null;
+      passingScore: number | null;
+      allowRetake: boolean;
+      maxAttempts: number | null;
+      _count: { questions: number };
+    }>;
+  };
+  courses: Array<{
+    subjectId: string;
+    subjectName: string;
+    customName: string | null;
+    orderIndex: number;
+    modules: Array<{
+      id: string;
+      name: string;
+      orderIndex: number;
+      topics: Array<{
+        id: string;
+        name: string;
+        orderIndex: number;
+        lessons: Array<{
+          id: string;
+          title: string;
+          slug: string;
+          durationMinutes: number | null;
+          orderIndex: number;
+        }>;
+      }>;
+    }>;
+  }>;
+  /** Every lesson in the curriculum, flattened in real ordering (subject → module → topic). */
+  flatLessons: Array<{ id: string; title: string; slug: string; orderIndex: number }>;
+  /** 0-based position of the current lesson within flatLessons (-1 if not found). */
+  lessonIndex: number;
+  /** Lesson ids the learner has completed within this curriculum (real progress rows). */
+  completedLessonIds: string[];
+  progressById: Record<string, { completionPercentage: number; mastery: string }>;
+  questionStats: {
+    totalBlocks: number;
+    answeredBlocks: number;
+    correctAnswers: number;
+    totalPoints: number;
+    earnedPoints: number;
+  };
+}
+
+/**
+ * CS#23.1 — one authorized read for the whole student lesson workspace.
+ *
+ * Returns the current lesson (PUBLISHED, with content + ancestry), the ordered
+ * published curriculum tree for the program the learner is enrolled in, the
+ * learner's completion state, and question-level practice stats — so the
+ * frontend can render a continuous learning workspace without stitching
+ * multiple public endpoints together (and without guessing program/tenant
+ * context client-side).
+ *
+ * Security: only PUBLISHED lessons in a PUBLISHED curriculum of a program the
+ * learner has ACTIVE access to are returned; anything else is 404.
+ */
+export async function getLessonWorkspace(
+  userId: string,
+  lessonId: string
+): Promise<LessonWorkspacePayload> {
+  const learner = await prisma.learnerProfile.findUnique({ where: { userId } });
+  if (!learner) throw new NotFoundError("Lesson not found");
+
+  // PUBLISHED-only read (no visibility opts → isVisible requires PUBLISHED).
+  const lesson = await getLessonById(lessonId);
+  const subjectId = lesson.topic?.module?.subject?.id;
+
+  const scope = await findAccessibleCurriculumForSubject(userId, subjectId);
+  if (!scope) throw new NotFoundError("Lesson not found");
+  const { curriculum } = scope;
+  if (!curriculum.program) throw new NotFoundError("Lesson not found");
+  const program = curriculum.program;
+
+  // Ordered, published course tree for this curriculum.
+  const rawCourses = await prisma.curriculumItem.findMany({
+    where: { curriculumId: curriculum.id },
+    orderBy: { orderIndex: "asc" },
+    include: {
+      subject: {
+        include: {
+          modules: {
+            where: { status: "PUBLISHED" },
+            orderBy: { orderIndex: "asc" },
+            include: {
+              topics: {
+                where: { status: "PUBLISHED" },
+                orderBy: { orderIndex: "asc" },
+                include: {
+                  lessons: {
+                    where: { status: "PUBLISHED" },
+                    orderBy: { orderIndex: "asc" },
+                    select: {
+                      id: true,
+                      title: true,
+                      slug: true,
+                      durationMinutes: true,
+                      orderIndex: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const courses = rawCourses.map((item) => ({
+    subjectId: item.subject.id,
+    subjectName: item.subject.name,
+    customName: item.customName,
+    orderIndex: item.orderIndex,
+    modules: item.subject.modules.map((m) => ({
+      id: m.id,
+      name: m.name,
+      orderIndex: m.orderIndex,
+      topics: m.topics.map((t) => ({
+        id: t.id,
+        name: t.name,
+        orderIndex: t.orderIndex,
+        lessons: t.lessons,
+      })),
+    })),
+  }));
+
+  const flatLessons = courses.flatMap((item) =>
+    item.modules.flatMap((m) => m.topics.flatMap((t) => t.lessons))
+  );
+  const lessonIds = flatLessons.map((l) => l.id);
+  const lessonIndex = lessonIds.indexOf(lesson.id);
+
+  // Learner's real completion within this curriculum (existing Progress rows).
+  const completedLessonIds: string[] = [];
+  const progressById: Record<string, { completionPercentage: number; mastery: string }> = {};
+  if (lessonIds.length > 0) {
+    const rows = await prisma.progress.findMany({
+      where: { learnerId: learner.id, lessonId: { in: lessonIds } },
+      select: { lessonId: true, completionPercentage: true, mastery: true },
+    });
+    for (const row of rows) {
+      if (!row.lessonId) continue;
+      progressById[row.lessonId] = {
+        completionPercentage: row.completionPercentage,
+        mastery: row.mastery,
+      };
+      if (row.completionPercentage >= 100) completedLessonIds.push(row.lessonId);
+    }
+  }
+
+  // Practice-score card data (reuse the existing question-stats logic).
+  const stats = await getLessonProgressWithQuestions(userId, lessonId);
+
+  // Real published assessments for the program — used for "assessment next".
+  const programAssessments = await prisma.assessment.findMany({
+    where: { programId: program.id, status: "PUBLISHED" },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      type: true,
+      description: true,
+      questionCount: true,
+      timeLimitMinutes: true,
+      passingScore: true,
+      allowRetake: true,
+      maxAttempts: true,
+      _count: { select: { questions: true } },
+    },
+  });
+
+  return {
+    lesson,
+    curriculum: {
+      id: curriculum.id,
+      name: curriculum.name,
+      stage: curriculum.stage,
+      gradeLevel: curriculum.gradeLevel,
+      orderIndex: curriculum.orderIndex,
+    },
+    program: {
+      id: program.id,
+      slug: program.slug,
+      name: program.name,
+      programType: program.programType,
+      assessments: programAssessments,
+    },
+    courses,
+    flatLessons,
+    lessonIndex,
+    completedLessonIds,
+    progressById,
+    questionStats: {
+      totalBlocks: stats.questionStats.totalBlocks,
+      answeredBlocks: stats.questionStats.answeredBlocks,
+      correctAnswers: stats.questionStats.correctAnswers,
+      totalPoints: stats.questionStats.totalPoints,
+      earnedPoints: stats.questionStats.earnedPoints,
+    },
   };
 }

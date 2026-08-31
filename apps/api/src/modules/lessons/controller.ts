@@ -20,6 +20,7 @@ import {
   saveLessonQuestionResponse,
   getLessonQuestionResponse,
   getLessonProgressWithQuestions,
+  getLessonWorkspace,
 } from "./service";
 
 export async function list(
@@ -51,6 +52,26 @@ export async function getById(
       res.set("Cache-Control", "no-store");
     }
     res.json(lesson);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * GET /lessons/:id/workspace — CS#23.1.
+ * One authorized read for the student learning workspace: lesson content,
+ * ordered curriculum tree, learner completion, and prev/next context.
+ * Only accessible for PUBLISHED lessons in programs the learner is enrolled in.
+ */
+export async function getWorkspace(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = getAuthUserId(req);
+    const workspace = await getLessonWorkspace(userId, req.params.id);
+    res.json(workspace);
   } catch (error) {
     next(error);
   }

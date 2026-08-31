@@ -352,34 +352,34 @@ probes instead.
 
 ---
 
-# CS#22.9 — Student Portal Final Polish, Resilience & Production Hardening
+# CS#22.9 ï¿½ Student Portal Final Polish, Resilience & Production Hardening
 
-**Commit:** (see git log — `feat(cs22.9): student portal resilience and production hardening`)
+**Commit:** (see git log ï¿½ `feat(cs22.9): student portal resilience and production hardening`)
 **Date:** 2026-08-30
 
 ## What was done
 
 ### 1. Autosave resilience (assessment player, CS#22.8 foundation preserved)
 - Replaced the `forceSaveToken` retry hack with a resilient save engine:
-  - **Mutation sequencing** — every save gets a sequence number; only the
+  - **Mutation sequencing** ï¿½ every save gets a sequence number; only the
     latest request may transition the visible save state (stale in-flight
     responses are ignored, fixing race conditions).
-  - **Bounded automatic retry** — 2 automatic retries with exponential backoff
+  - **Bounded automatic retry** ï¿½ 2 automatic retries with exponential backoff
     (1.6s, 3.2s), then a persistent error state with a manual Retry button.
-  - **No data loss on failure** — a failed save never discards the answer; the
+  - **No data loss on failure** ï¿½ a failed save never discards the answer; the
     answer stays in player state and is included in the final submit payload.
-  - **Pending-save flush before submit** — if an autosave is pending when the
+  - **Pending-save flush before submit** ï¿½ if an autosave is pending when the
     student submits, one final save is attempted (non-fatal on failure; the
     submit payload always carries the full latest answers).
-  - **`beforeunload` guard** — warns only when genuinely unsaved changes exist
+  - **`beforeunload` guard** ï¿½ warns only when genuinely unsaved changes exist
     on an in-progress attempt.
-  - **Submission failure UX** — a failed submit now shows an inline recovery
+  - **Submission failure UX** ï¿½ a failed submit now shows an inline recovery
     banner (`role=alert` + Try again) instead of replacing the player with an
     error page; the attempt and every answer remain intact.
   - Save state model: `idle ? saving ? saved`, with `retrying` and `error`
     states; status is text+icon (never color-only, a11y).
 
-### 2. My Attempts (reused existing route — no dead links)
+### 2. My Attempts (reused existing route ï¿½ no dead links)
 - Added **status filter chips** (All / Completed / In Progress, `aria-pressed`)
   to the existing `/dashboard/assessments/history` page.
 - Added **"My Attempts"** to the student sidebar (ClipboardList icon), pointing
@@ -387,7 +387,7 @@ probes instead.
   **Review / Retry / Study Plan** per existing authorization rules.
 
 ### 3. Fabricated-data elimination (P0 finding from the pre-work audit)
-- **`/dashboard/analytics`** — was 100% hardcoded (fake weekly hours, fake
+- **`/dashboard/analytics`** ï¿½ was 100% hardcoded (fake weekly hours, fake
   subject scores with fake trends, fake weak/strong areas, fake insights like
   "2:00 PM most productive time", fake weekly rank). Rewritten on real data:
   stat cards from `GET /assessments/me/attempts` (taken/completed/avg score),
@@ -395,11 +395,11 @@ probes instead.
   `GET /progression/weak-topics` with real Practice links, Strongest Subjects
   derived from real mastery >= 75%. Skeletons, error+Retry, truthful empty
   states throughout. Removed the fake time-range selector (no server support).
-- **`/dashboard/achievements`** — was 100% hardcoded (fake badges, fake
+- **`/dashboard/achievements`** ï¿½ was 100% hardcoded (fake badges, fake
   leaderboard with invented people, fake streaks). Replaced with **milestones
   derived from real data** (first assessment, 5 assessments, 75%+ score,
   perfect score, subject mastery) with real progress labels. No leaderboard.
-- **`/dashboard/questions`** — removed the hardcoded mock question table;
+- **`/dashboard/questions`** ï¿½ removed the hardcoded mock question table;
   students do not author questions. Truthful empty state with a real link to
   Assessments.
 - Sidebar: removed the decorative "New" badge on Achievements; dashboard stat
@@ -407,7 +407,7 @@ probes instead.
 
 ### 4. Tests (+2, all green)
 - `attempt-autosave.test.ts` (CS#22.9 block):
-  - retried save after a failed transaction is safe — identical composite-key
+  - retried save after a failed transaction is safe ï¿½ identical composite-key
     upserts, no duplicate rows possible (retry idempotency regression);
   - empty answer batch is a no-op (no transaction, no error).
 - Attempted a server-side default-org fallback in `resolveOrgContext` for
@@ -425,7 +425,7 @@ probes instead.
   (327 warnings, improved from 334).
 - Vitest: **172/172** (170 CS#22.8 baseline + 2 new).
 - Live E2E probe (student + external, real header flow as the web client
-  sends): 13/13 PASS — login, org-scoped listing, resume same attempt, CS#19
+  sends): 13/13 PASS ï¿½ login, org-scoped listing, resume same attempt, CS#19
   deterministic served questions, autosave PATCH, retry idempotent, resume
   hydration, completed-attempt immutability (400), student?admin 403,
   external zero ARC exposure.
@@ -435,6 +435,51 @@ probes instead.
   null-org catalog in lists (e.g. legacy `matth quiz 1`). Not reachable via
   the web app; fixing requires changing the tested org-context contract.
 - **P2 (pre-existing):** `next build` fails on two admin dynamic routes
-  (documented in CS#22.8) — separate admin/build CS.
+  (documented in CS#22.8) ï¿½ separate admin/build CS.
 - **P3:** two stray IN_PROGRESS attempts exist on the demo student from E2E
   probing (real records, harmless; they surface as "Resume" rows).
+
+
+
+---
+
+# CS#23.1 â€” Student Learning Workspace (backend foundation)
+
+## What was built
+- **`GET /lessons/:id/workspace`** (authenticated) â€” one authorized read for the
+  whole student lesson workspace: current PUBLISHED lesson, the ordered
+  PUBLISHED curriculum tree of the program the learner is enrolled in, the
+  learner's real completion state (`completedLessonIds`, `progressById`),
+  question-level practice stats, flattened prev/next lesson ordering
+  (`flatLessons`, `lessonIndex`), and the program's PUBLISHED assessments
+  (with real question counts) for "assessment next" CTAs.
+- **Completion authorization hardening (`setLessonProgress`)** â€” marking a
+  lesson complete now requires the lesson to be PUBLISHED *and* belong to a
+  program the learner has ACTIVE access to (enrollment â†’ program PUBLISHED).
+  404 (not 403) so unrelated/draft content existence is never revealed.
+  Progress rows are now scoped with programId/curriculumId/subjectId/moduleId.
+  Idempotency preserved (upsert semantics, never duplicates).
+- Access resolution: subject â†’ curriculum items â†’ FIRST PUBLISHED curriculum
+  whose program the learner can access (`hasLearnerProgramAccess`).
+
+## Files
+- `apps/api/src/modules/lessons/service.ts` â€” `getLessonWorkspace()`,
+  `findAccessibleCurriculumForSubject()`, hardened `setLessonProgress()`
+- `apps/api/src/modules/lessons/controller.ts` â€” `getWorkspace` controller
+- `apps/api/src/modules/lessons/routes.ts` â€” `GET /:id/workspace` route
+- `apps/api/src/__tests__/lesson-workspace.test.ts` â€” 10 tests
+
+## Gates
+- API typecheck: 0 errors
+- API lint: 0 errors (1 pre-existing `JsonInput` warning)
+- Vitest: **182/182** (172 post-CS#22.9 baseline + 10 new)
+
+## Security
+- 404 on: unenrolled learner, DRAFT lesson, DRAFT curriculum, denied program
+  access, orphan subject â€” no enumeration leaks (tested).
+- No new roles; no frontend authorization; tenant/org isolation untouched.
+
+## Next (frontend, not yet started)
+- Wire the lesson viewer (`/dashboard/lessons/[lessonId]`) to consume the
+  workspace payload for ordered prev/next, course-tree sidebar, and
+  assessment-next CTAs.
