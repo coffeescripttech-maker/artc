@@ -1,3 +1,4 @@
+
 # ARATC LMS â€” Final Handoff Status (CS#1â€“15 + Hardening)
 
 > Generated 2026-08-29. All gates verified on the shared dev DB (Neon).
@@ -595,18 +596,18 @@ RESTORE â†’ set back to incomplete (clean demo state)
 - None outstanding for CS#23.1. Owner review + manual UI validation.
 
 ## Post-CS#23.1 fix: superadmin 403 on organ organization pages (org-context + auth-context)
-- **Reported:** superadmin could not browse several pages — API returned 403
+- **Reported:** superadmin could not browse several pages ï¿½ API returned 403
   "You are not an active member of this organization" (seen when opening an
   organization / navigating after org switch).
 - **Root cause (two layers):**
   1. `resolveOrgContext` (globally mounted) required an ACTIVE
-     `organizationMembership` for every caller — including `super_admin`, who
+     `organizationMembership` for every caller ï¿½ including `super_admin`, who
      historically had no membership rows. The web client always sends a
      persisted `x-organization-id`, so a stale org id from a previous session
      could cause the 403 before any platform-admin authorization was considered.
   2. Frontend `login()` in `auth-context.tsx` returned `/admin` for platform
      admins BEFORE the `setActiveOrgId()` block ran, so `super_admin`/`content_admin`/
-     `school_admin` never populated `localStorage.activeOrganizationId` on login —
+     `school_admin` never populated `localStorage.activeOrganizationId` on login ï¿½
      leaving whatever stale org id a prior session/user had written.
 - **Backend fix (`middleware/org-context.ts`):** platform admins operate at the
   Platform layer and may act in ANY organization context without requiring a
@@ -614,15 +615,15 @@ RESTORE â†’ set back to incomplete (clean demo state)
   `req.userRoles` or the signed JWT), and if `hasPlatformAdminRole(roles)` sets
   `req.organizationId` + `req.membership` and skips the membership lookup.
   The header only names a context; authorization comes from the platform role
-  verified via the JWT — never from the client.
+  verified via the JWT ï¿½ never from the client.
 - **Frontend fix (`auth-context.tsx`):** `login()` now populates the active-org
   context (from returned memberships) for ALL roles BEFORE the admin redirect;
   `logout()` clears `activeOrganizationId` so stale org ids never leak across
   sessions/users.
 - **Tests (`org-context.test.ts` +4):** super_admin bypass (OWNER), content_admin
   bypass (ADMIN), bypass via signed JWT on the global-mount path, and non-member
-  non-platform still rejected (403) — tenant isolation preserved.
-- **Verification:** API vitest 187/187 (20 files); full live probe —
+  non-platform still rejected (403) ï¿½ tenant isolation preserved.
+- **Verification:** API vitest 187/187 (20 files); full live probe ï¿½
   superadmin login ? platform org list/detail 200 ? org member list 200 (valid
   AND stale org headers); web typecheck + lint clean.
 
@@ -692,7 +693,7 @@ RESTORE â†’ set back to incomplete (clean demo state)
   was content_admin+super_admin while other deletes are super_admin-only
   (behavior preserved in the default catalog).
 
-## 2026-09-01 — CS#23.2 fix: superadmin 403 deleting org-owned programs
+## 2026-09-01 ï¿½ CS#23.2 fix: superadmin 403 deleting org-owned programs
 
 - **Bug:** `assertCanEditContent` (apps/api/src/lib/tenant-scope.ts) applied
   the platform-admin bypass ONLY to platform-owned (null-org) content. For
@@ -703,45 +704,90 @@ RESTORE â†’ set back to incomplete (clean demo state)
   org-match branch too, mirroring resolveOrgContext's platform-admin bypass
   and canReadContent (CS#23.2 #12/#44: super admin is not restricted by
   organization boundaries). Org-scoped roles (school_admin/teacher/student)
-  remain strictly tenant-isolated — cross-org writes still 403.
+  remain strictly tenant-isolated ï¿½ cross-org writes still 403.
 - **Tests:** 4 new unit cases in tenant-scope.test.ts; tenant-api.test.ts
   cross-org denial actor changed from content_admin (a platform role) to
   school_admin (correctly org-scoped) + new superadmin cross-org 200 case.
   Full suite 192/192 (20 files), tsc clean.
 - **Live E2E (apps/api/cs232-delete-probe.cjs):** superadmin created a
   throwaway program in ARC Review Center and deleted it both WITH the org
-  header and with NO header — 204/204 PASS; self-cleaning. Full cs232-probe
+  header and with NO header ï¿½ 204/204 PASS; self-cleaning. Full cs232-probe
   still 12/12.
 
-## 2026-09-01 — CS#23.2 COMPLETE: Enterprise Global RBAC + Org Role Management (final pass)
+## 2026-09-01 ï¿½ CS#23.2 COMPLETE: Enterprise Global RBAC + Org Role Management (final pass)
 
 Closed the remaining spec gaps on top of the earlier RBAC implementation:
 
-- **§34 Org role-assignment audit:** `organizations/service.ts` now writes
+- **ï¿½34 Org role-assignment audit:** `organizations/service.ts` now writes
   `MEMBERSHIP_GRANTED` (incl. reactivation), `MEMBERSHIP_ROLE_CHANGED`
   (with before/after role+status) and `MEMBERSHIP_REVOKED` audit events under
   the organization tenant. New `MEMBERSHIP_ROLE_CHANGED` type in
   `lib/audit-log.ts`. Best-effort (`.catch`) so logging never breaks the action.
-- **§21/§23/§50/§52 Org Admin Roles & Access:** new read-only
+- **ï¿½21/ï¿½23/ï¿½50/ï¿½52 Org Admin Roles & Access:** new read-only
   `GET /api/admin/access/capabilities` (authenticated; deliberately NOT behind
   the platform guard) returning live platform-role permission keys from the DB
   plus membership-role capability summaries mirroring actual middleware.
   `/admin/members` shows role-distribution cards, capability preview + the
   "Permissions are managed centrally" note in the Add Member dialog.
-- **§34/§35 Superadmin Audit tab:** `/admin/access` has a Permissions/Audit Log
+- **ï¿½34/ï¿½35 Superadmin Audit tab:** `/admin/access` has a Permissions/Audit Log
   tab pair; audit fetch passes `x-tenant-id: platform` (global RBAC events are
   stored under tenant `platform`). `admin-audit/controller.ts` now honors the
-  explicit header **only for super_admin** — other roles stay org-pinned.
-- **§55 Final authorization audit:** zero `requireRole()` call sites remain in
+  explicit header **only for super_admin** ï¿½ other roles stay org-pinned.
+- **ï¿½55 Final authorization audit:** zero `requireRole()` call sites remain in
   routes (definition retained in `middleware/auth.ts` as a utility); deleted
   dead `middleware/platform-admin.ts` (replaced by
   `requirePermission("platform.orgs_manage")`). Remaining role-list checks are
   intentionally retained: `PLATFORM_ADMIN_ROLES`/`PLATFORM_CONTENT_ROLES`
-  bypasses in `tenant-scope.ts`/`content-editor.ts` (§27 resource-level rules)
-  and the `super_admin` hard bypass in `permissions.ts` (§36 lockout protection).
+  bypasses in `tenant-scope.ts`/`content-editor.ts` (ï¿½27 resource-level rules)
+  and the `super_admin` hard bypass in `permissions.ts` (ï¿½36 lockout protection).
 
-**Validation:** API+Web typecheck OK · lint 0 errors (warnings pre-existing) ·
-192/192 API tests (20 files) · live probes: `cs232-probe.cjs` 12/12,
+**Validation:** API+Web typecheck OK ï¿½ lint 0 errors (warnings pre-existing) ï¿½
+192/192 API tests (20 files) ï¿½ live probes: `cs232-probe.cjs` 12/12,
 `cs232-delete-probe.cjs` PASS, new `cs232-capabilities-probe.cjs` 8/8
 (capabilities read-only OK for student, 401 anon, platform-tenant audit for
 superadmin, teacher header ignored, mutation guards intact).
+
+## 2026-09-01 — CS#23.3 COMPLETE: Enterprise Organization Administration & Real Tenant Management
+
+Commit ``ab70fdf`` (pushed to origin/main). Builds **on** the CS#23.2 authorization
+foundation — no new RBAC, no new database models.
+
+**Backend (organizations module extended; all mutations behind ``requirePermission``
++ ``assertCanManageOrg``):**
+- ``GET /:orgId/members`` — server-side search/filters/pagination, real users with
+  membership + system roles; ``GET /:orgId/members/:membershipId`` member detail
+  (profile, membership, system role, enrollments/teaching assignments).
+- **Parents — mock page replaced with real API:** ``GET /:orgId/parents``,
+  ``GET /:orgId/parents/:id``, ``POST /:orgId/parents/:id/links``,
+  ``DELETE /:orgId/parents/:id/links/:linkId`` (reuses existing ``ParentStudent``
+  model; org-scoping enforced via shared org membership).
+- ``GET /:orgId/overview`` — real DB counts (members/teachers/students/parents/
+  programs/enrollments/lessons/assessments).
+- ``GET|PATCH /:orgId/settings`` — contact fields stored in ``Organization.metadata``.
+- ``POST /:orgId/users`` — create org user (bcrypt + role + membership); §25
+  server-enforced: only school_admin/teacher/student/parent assignable.
+- Audit events added to the CS#23.2 infra: ``PARENT_LINKED``, ``PARENT_UNLINKED``,
+  ``ORG_SETTINGS_UPDATED``, ``USER_CREATED``.
+- Permission catalog 77 ? **81 keys** (``users.create``, ``parents.read``,
+  ``parents.manage``, ``organization.update``); seeded idempotently, ``parent`` role
+  granted ``parents.read`` only.
+
+**Frontend:** ``/admin/parents`` rebuilt on the real API (link/unlink, cross-org-safe
+student pickers); ``/admin/organization`` Overview + Settings; ``/admin/teachers``
+real list; ``member-detail-modal.tsx`` drawer; ``lib/permissions.ts`` frontend
+``hasPermission`` helper (UX only) + ``use-manageable-orgs.ts``; sidebar restructured.
+
+**Security validation:** cross-tenant parent access & student linking ? 403;
+student/teacher on parent/settings endpoints ? 403; anonymous ? 401; last-OWNER
+guard and superadmin-only OWNER edits preserved; server resolves org from
+authenticated membership (never trusts browser orgId).
+
+**Regression:** CS#23.1 delete-probe PASS; CS#23.2 ``cs232-probe.cjs`` 12/12
+(count assertion updated 77?81), capabilities 8/8, cache/bypass/audit preserved.
+
+**Validation:** API + Web typecheck OK · lint 0 errors (warnings pre-existing) ·
+**207/207 API tests (21 files, +15 new)** · ``cs233-probe.cjs`` live probe PASS.
+
+**Known limitations:** parent-facing portal (viewing linked children's progress)
+not built — parent role is read-only for now; org branding has no schema fields,
+so that settings section was intentionally omitted (§21).
