@@ -85,6 +85,10 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
   { key: "platform.orgs_manage", resource: "platform", action: "orgs_manage", displayName: "Manage Organizations", description: "Create, update, suspend and delete organizations; invite admins.", enforced: true },
   { key: "orgs.list", resource: "orgs", action: "list", displayName: "List Organizations", description: "List all organizations (admin members UI).", enforced: true },
   { key: "orgs.users_search", resource: "orgs", action: "users_search", displayName: "Search Users", description: "Search the user base for membership pickers.", enforced: true },
+  { key: "orgs.update", resource: "orgs", action: "update", displayName: "Update Organization Settings", description: "Update organization profile/settings (own organization for org admins; all organizations with platform.orgs_manage).", enforced: true },
+  { key: "parents.read", resource: "parents", action: "read", displayName: "View Parents", description: "View the parents of an organization and their linked students.", enforced: true },
+  { key: "parents.manage", resource: "parents", action: "manage", displayName: "Manage Parent Links", description: "Link and unlink parents to students inside an organization.", enforced: true },
+  { key: "users.create", resource: "users", action: "create", displayName: "Create Organization Users", description: "Create user accounts inside an organization and assign existing non-platform roles.", enforced: true },
 
   // --- Teaching -------------------------------------------------------------
   { key: "batches.manage", resource: "batches", action: "manage", displayName: "Manage Batches", description: "Create batches and manage their members and reports.", enforced: true },
@@ -135,6 +139,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "admin.audit_view",
     "orgs.list",
     "orgs.users_search",
+    "orgs.update",
+    "parents.read",
+    "users.create",
     "cet.exams_manage",
     "cet.profiles_manage",
     "cet.programs_link",
@@ -147,6 +154,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "questions.import",
     "batches.manage",
     "orgs.users_search",
+    "orgs.update",
+    "parents.read",
+    "parents.manage",
+    "users.create",
   ],
 
   teacher: ["batches.manage", "questions.import"],

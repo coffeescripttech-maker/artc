@@ -37,6 +37,7 @@ export interface OrgMember {
     email: string;
     firstName: string;
     lastName: string;
+    systemRoles?: string[];
   };
 }
 
@@ -74,8 +75,19 @@ export async function fetchOrganizations(): Promise<OrganizationWithCounts[]> {
   return data.organizations;
 }
 
-export async function fetchOrgMembers(orgId: string): Promise<OrgMember[]> {
-  const data = await apiRequest(`/api/organizations/${orgId}/members`) as {
+export async function fetchOrgMembers(
+  orgId: string,
+  params: { q?: string; role?: string; status?: string; systemRole?: string } = {},
+): Promise<OrgMember[]> {
+  const query = new URLSearchParams();
+  if (params.q) query.set("q", params.q);
+  if (params.role) query.set("role", params.role);
+  if (params.status) query.set("status", params.status);
+  if (params.systemRole) query.set("systemRole", params.systemRole);
+  const qs = query.toString();
+  const data = await apiRequest(
+    `/api/organizations/${orgId}/members${qs ? `?${qs}` : ""}`,
+  ) as {
     members: OrgMember[];
   };
   return data.members;
@@ -117,4 +129,150 @@ export async function removeMembership(
     { method: "DELETE" },
   ) as { removed: string };
   return data.removed;
+}
+
+// ---------------------------------------------------------------------------
+// CS#23.3 — Real tenant administration clients (parents, overview, settings,
+// user creation, member detail). Every call is org-scoped server-side.
+// ---------------------------------------------------------------------------
+
+export interface OrgParentStudent {
+  id: string;
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  status: string;
+}
+
+export interface OrgParent {
+  id: string;
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  status: string;
+  membershipRole: string;
+  linkedStudents: OrgParentStudent[];
+  createdAt: string;
+}
+
+export interface OrgOverview {
+  organization: { id: string; name: string; slug: string; type: string | null; status: string };
+  members: number;
+  teachers: number;
+  students: number;
+  parents: number;
+  programs: number;
+  activeEnrollments: number;
+  publishedLessons: number;
+  assessments: number;
+}
+
+export interface OrgSettings {
+  id: string;
+  name: string;
+  slug: string;
+  type: string | null;
+  status: string;
+  contactEmail: string;
+  contactPhone: string;
+  address: string;
+  description: string;
+}
+
+export interface OrgMemberDetail {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  phoneNumber: string | null;
+  status: string;
+  createdAt: string;
+  systemRoles: string[];
+  membership: { id: string; role: string; status: string; createdAt: string } | null;
+  linkedStudents: Array<{ id: string; userId: string; firstName: string; lastName: string; email: string }>;
+  parents: Array<{ id: string; userId: string; firstName: string; lastName: string; email: string }>;
+  activeEnrollments: number;
+  teachingAssignments: number;
+  recentAuditEvents: number;
+}
+
+export async function fetchOrgParents(orgId: string): Promise<OrgParent[]> {
+  const data = await apiRequest(`/api/organizations/${orgId}/parents`) as { parents: OrgParent[] };
+  return data.parents;
+}
+
+export async function fetchOrgParent(orgId: string, userId: string): Promise<OrgParent> {
+  const data = await apiRequest(`/api/organizations/${orgId}/parents/${userId}`) as { parent: OrgParent };
+  return data.parent;
+}
+
+export async function linkParentStudent(
+  orgId: string,
+  parentUserId: string,
+  studentUserId: string,
+): Promise<{ id: string }> {
+  const data = await apiRequest(
+    `/api/organizations/${orgId}/parents/${parentUserId}/students/${studentUserId}`,
+    { method: "POST" },
+  ) as { link: { id: string } };
+  return data.link;
+}
+
+export async function unlinkParentStudent(
+  orgId: string,
+  parentUserId: string,
+  studentUserId: string,
+): Promise<string> {
+  const data = await apiRequest(
+    `/api/organizations/${orgId}/parents/${parentUserId}/students/${studentUserId}`,
+    { method: "DELETE" },
+  ) as { removed: string };
+  return data.removed;
+}
+
+export async function fetchOrgOverview(orgId: string): Promise<OrgOverview> {
+  const data = await apiRequest(`/api/organizations/${orgId}/overview`) as { overview: OrgOverview };
+  return data.overview;
+}
+
+export async function fetchOrgSettings(orgId: string): Promise<OrgSettings> {
+  const data = await apiRequest(`/api/organizations/${orgId}/settings`) as { settings: OrgSettings };
+  return data.settings;
+}
+
+export async function updateOrgSettings(
+  orgId: string,
+  patch: Partial<Omit<OrgSettings, "id">>,
+): Promise<OrgSettings> {
+  const data = await apiRequest(`/api/organizations/${orgId}/settings`, {
+    method: "PATCH",
+    body: JSON.stringify(patch),
+  }) as { settings: OrgSettings };
+  return data.settings;
+}
+
+export async function createOrgUser(
+  orgId: string,
+  data: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+    membershipRole?: string;
+  },
+): Promise<{ id: string; email: string; firstName: string; lastName: string; role: string }> {
+  const res = await apiRequest(`/api/organizations/${orgId}/users`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  }) as { user: { id: string; email: string; firstName: string; lastName: string; role: string } };
+  return res.user;
+}
+
+export async function fetchOrgMemberDetail(orgId: string, userId: string): Promise<OrgMemberDetail> {
+  const data = await apiRequest(`/api/organizations/${orgId}/members/${userId}`) as { member: OrgMemberDetail };
+  return data.member;
 }

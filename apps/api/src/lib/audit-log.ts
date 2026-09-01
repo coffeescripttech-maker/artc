@@ -35,7 +35,10 @@ export type AuditEventType =
      | "ENROLLMENT_EXPIRED"
   | "VERSION_PUBLISHED"
   | "VERSION_ROLLBACK"
-  | "ROLE_PERMISSIONS_UPDATED";
+  | "ROLE_PERMISSIONS_UPDATED"
+  | "ORG_UPDATED"
+  | "PARENT_LINKED"
+  | "PARENT_UNLINKED";
 
 export interface AuditEntryParams {
   tenantId: string;

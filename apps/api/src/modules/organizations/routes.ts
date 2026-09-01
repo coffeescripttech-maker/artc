@@ -4,14 +4,23 @@ import { requirePermission } from "../../middleware/permissions";
 import { ApiError, ValidationError } from "../../lib/errors";
 import {
   createMembership,
+  createOrgUser,
+  getOrgMemberDetail,
+  getOrgOverview,
+  getOrgParent,
+  getOrgSettings,
+  linkParentStudent,
   listMyMemberships,
   listOrgMembers,
+  listOrgParents,
   listOrganizations,
   parseMembershipStatus,
   parseOrgRole,
   removeMembership,
   searchUsers,
+  unlinkParentStudent,
   updateMembership,
+  updateOrgSettings,
 } from "./service";
 
 const router: IRouter = Router();
@@ -65,9 +74,35 @@ router.get("/:orgId/members", authenticate, async (req, res, next) => {
     const members = await listOrgMembers(
       req.userId as string,
       req.userRoles,
-      req.params.orgId
+      req.params.orgId,
+      {
+        q: typeof req.query.q === "string" ? req.query.q : undefined,
+        role: typeof req.query.role === "string" ? parseOrgRole(req.query.role) : undefined,
+        status: typeof req.query.status === "string" ? parseMembershipStatus(req.query.status) : undefined,
+        systemRole: typeof req.query.systemRole === "string" ? req.query.systemRole : undefined,
+        limit: req.query.limit ? parseInt(req.query.limit as string, 10) : undefined,
+      }
     );
     res.json({ members });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Member detail (§7) — profile, org membership, system roles, linked
+ * students/parents, enrollment + teaching counts, audit trail presence.
+ * Same authorization as member management (platform admin or org OWNER/ADMIN).
+ */
+router.get("/:orgId/members/:userId", authenticate, async (req, res, next) => {
+  try {
+    const detail = await getOrgMemberDetail(
+      req.userId as string,
+      req.userRoles,
+      req.params.orgId,
+      req.params.userId
+    );
+    res.json({ member: detail });
   } catch (error) {
     next(error);
   }
@@ -121,6 +156,140 @@ router.delete("/:orgId/members/:membershipId", authenticate, async (req, res, ne
       membershipId: req.params.membershipId,
     });
     res.json({ removed: result.id });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Organization overview metrics (§22–§23) — real DB counts, org-scoped. */
+router.get("/:orgId/overview", authenticate, requirePermission("admin.stats_view"), async (req, res, next) => {
+  try {
+    const overview = await getOrgOverview(
+      req.userId as string,
+      req.userRoles,
+      req.params.orgId
+    );
+    res.json({ overview });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Parents of an organization (§15) — real parent-role members with linked students. */
+router.get("/:orgId/parents", authenticate, requirePermission("parents.read"), async (req, res, next) => {
+  try {
+    const parents = await listOrgParents(
+      req.userId as string,
+      req.userRoles,
+      req.params.orgId
+    );
+    res.json({ parents });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/** Parent detail (§16). */
+router.get("/:orgId/parents/:userId", authenticate, requirePermission("parents.read"), async (req, res, next) => {
+  try {
+    const parent = await getOrgParent(
+      req.userId as string,
+      req.userRoles,
+      req.params.orgId,
+      req.params.userId
+    );
+    res.json({ parent });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Link a parent → student (§17). Both must be ACTIVE members of the SAME
+ * organization; cross-tenant linking is rejected in the service layer.
+ */
+router.post(
+  "/:orgId/parents/:parentUserId/students/:studentUserId",
+  authenticate,
+  requirePermission("parents.manage"),
+  async (req, res, next) => {
+    try {
+      const link = await linkParentStudent({
+        requesterId: req.userId as string,
+        requesterRoles: req.userRoles,
+        organizationId: req.params.orgId,
+        parentUserId: req.params.parentUserId,
+        studentUserId: req.params.studentUserId,
+      });
+      res.status(201).json({ link });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/** Unlink a parent from a student (§17) — soft-revoke, history preserved. */
+router.delete(
+  "/:orgId/parents/:parentUserId/students/:studentUserId",
+  authenticate,
+  requirePermission("parents.manage"),
+  async (req, res, next) => {
+    try {
+      const result = await unlinkParentStudent({
+        requesterId: req.userId as string,
+        requesterRoles: req.userRoles,
+        organizationId: req.params.orgId,
+        parentUserId: req.params.parentUserId,
+        studentUserId: req.params.studentUserId,
+      });
+      res.json({ removed: result.id });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/** Organization settings (§19–§21) — org-scoped; editing requires orgs.update. */
+router.get("/:orgId/settings", authenticate, requirePermission("orgs.update"), async (req, res, next) => {
+  try {
+    const settings = await getOrgSettings(
+      req.userId as string,
+      req.userRoles,
+      req.params.orgId
+    );
+    res.json({ settings });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch("/:orgId/settings", authenticate, requirePermission("orgs.update"), async (req, res, next) => {
+  try {
+    const settings = await updateOrgSettings({
+      requesterId: req.userId as string,
+      requesterRoles: req.userRoles,
+      organizationId: req.params.orgId,
+      data: req.body ?? {},
+    });
+    res.json({ settings });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * Create a user inside an organization (§24–§25) — org admins may only assign
+ * teacher / student / parent roles; platform roles are rejected server-side.
+ */
+router.post("/:orgId/users", authenticate, requirePermission("users.create"), async (req, res, next) => {
+  try {
+    const created = await createOrgUser({
+      requesterId: req.userId as string,
+      requesterRoles: req.userRoles,
+      organizationId: req.params.orgId,
+      data: req.body ?? {},
+    });
+    res.status(201).json({ user: created });
   } catch (error) {
     next(error);
   }

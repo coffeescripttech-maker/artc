@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { authenticate } from "../../middleware/auth";
-import { requirePermission } from "../../middleware/permissions";
+import { getEffectivePermissions, requirePermission } from "../../middleware/permissions";
 import {
   listCapabilities,
   listRoles,
@@ -38,6 +38,14 @@ router.get("/permissions", ...guard, wrap(async (req, res) => {
 // endpoint is descriptive only — all mutations remain behind `guard`.
 router.get("/capabilities", authenticate, wrap(async (_req, res) => {
   res.json(await listCapabilities());
+}));
+
+// §32 — current user's effective permission keys (frontend UX guards only;
+// the backend remains authoritative). Authenticated, NOT platform-guarded so
+// teachers/students can render role-aware UI with their own grants.
+router.get("/my-permissions", authenticate, wrap(async (req, res) => {
+  const permissions = [...(await getEffectivePermissions(req.userRoles))];
+  res.json({ roles: req.userRoles ?? [], permissions });
 }));
 
 router.get("/roles/:id", ...guard, wrap(async (req, res) => {

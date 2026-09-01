@@ -134,8 +134,11 @@ export const adminNav: NavGroup[] = [
     ],
   },
   {
-    label: "USERS",
+    label: "ORGANIZATION",
     items: [
+      { label: "Overview", href: "/admin/organization", icon: Building },
+      { label: "Members", href: "/admin/members", icon: Users },
+      { label: "Teachers", href: "/admin/teachers", icon: Users },
       { label: "Students", href: "/admin/students", icon: Users },
       { label: "Parents", href: "/admin/parents", icon: Users },
     ],
