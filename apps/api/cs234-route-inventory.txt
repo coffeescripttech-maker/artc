@@ -1,0 +1,165 @@
+﻿routes.ts:27: router.get("/roles", ...guard, wrap(async (req, res) => {
+routes.ts:31: router.get("/permissions", ...guard, wrap(async (req, res) => {
+routes.ts:39: router.get("/capabilities", authenticate, wrap(async (_req, res) => {
+routes.ts:46: router.get("/my-permissions", authenticate, wrap(async (req, res) => {
+routes.ts:51: router.get("/roles/:id", ...guard, wrap(async (req, res) => {
+routes.ts:55: router.put("/roles/:id/permissions", ...guard, wrap(async (req, res) => {
+routes.ts:64: router.post("/simulate", ...guard, wrap(async (req, res) => {
+routes.ts:11: router.get(
+routes.ts:8: router.get(
+routes.ts:29: router.get("/", list);
+routes.ts:30: router.get("/me/attempts", authenticate, myAttempts);
+routes.ts:31: router.get("/slug/:slug", getBySlug);
+routes.ts:32: router.get("/:id/stats", stats);
+routes.ts:33: router.get("/:id/recommendations", authenticate, recommendations);
+routes.ts:34: router.get("/attempts/:attemptId", authenticate, getAttempt);
+routes.ts:35: router.get("/:id", getById);
+routes.ts:38: router.post("/:id/start", authenticate, start);
+routes.ts:41: router.post("/", authenticate, requirePermission("assessments.create"), create);
+routes.ts:42: router.put("/:id", authenticate, requirePermission("assessments.update"), update);
+routes.ts:43: router.patch("/:id/publish", authenticate, requirePermission("assessments.publish"), publish);
+routes.ts:44: router.patch("/:id/archive", authenticate, requirePermission("assessments.archive"), archive);
+routes.ts:45: router.delete("/:id", authenticate, requirePermission("assessments.delete"), remove);
+routes.ts:48: router.post("/:id/questions", authenticate, requirePermission("assessments.questions_manage"), addQ);
+routes.ts:49: router.put("/:id/questions", authenticate, requirePermission("assessments.questions_manage"), reorder);
+routes.ts:50: router.delete("/:id/questions/:questionId", authenticate, requirePermission("assessments.questions_manage"), removeQ);
+routes.ts:51: router.post("/:id/auto-generate", authenticate, requirePermission("assessments.auto_generate"), autoGenerate);
+routes.ts:54: router.post("/attempts/:attemptId/submit", authenticate, submit);
+routes.ts:56: router.patch("/attempts/:attemptId/answers", authenticate, saveAnswers);
+routes.ts:19: router.post("/register", authRateLimit, register);
+routes.ts:20: router.post("/login", authRateLimit, login);
+routes.ts:21: router.get("/me", authenticate, me);
+routes.ts:12: router.get("/my", authenticate, manageBatches, myBatches);
+routes.ts:13: router.post("/", authenticate, manageBatches, create);
+routes.ts:14: router.get("/my/report", authenticate, manageBatches, myReport);
+routes.ts:17: router.get("/:id", authenticate, getById);
+routes.ts:18: router.post("/:id/members", authenticate, manageBatches, addMember);
+routes.ts:19: router.delete("/:id/members/:memberId", authenticate, manageBatches, removeMember);
+routes.ts:31: router.post("/:resourceType/:resourceId/draft", wrap(draftController));
+routes.ts:32: router.post("/:resourceType/:resourceId/publish", wrap(publishController));
+routes.ts:33: router.post("/:resourceType/:resourceId/rollback/:version", wrap(rollbackController));
+routes.ts:34: router.get("/:resourceType/:resourceId/versions", wrap(listController));
+routes.ts:23: router.get("/", list);
+routes.ts:24: router.get("/slug/:slug", getBySlug);
+routes.ts:25: router.get("/:id", getById);
+routes.ts:26: router.get("/:id/stats", stats);
+routes.ts:29: router.post("/", authenticate, requirePermission("curriculum.create"), create);
+routes.ts:30: router.put("/:id", authenticate, requirePermission("curriculum.update"), update);
+routes.ts:31: router.patch("/:id/publish", authenticate, requirePermission("curriculum.publish"), publish);
+routes.ts:32: router.patch("/:id/archive", authenticate, requirePermission("curriculum.archive"), archive);
+routes.ts:33: router.delete("/:id", authenticate, requirePermission("curriculum.delete"), remove);
+routes.ts:36: router.post("/:id/items", authenticate, requirePermission("curriculum.items_manage"), addItem);
+routes.ts:37: router.put("/:id/items", authenticate, requirePermission("curriculum.items_manage"), reorderItems);
+routes.ts:38: router.patch("/:id/items/:itemId", authenticate, requirePermission("curriculum.items_manage"), updateItem);
+routes.ts:39: router.delete("/:id/items/:itemId", authenticate, requirePermission("curriculum.items_manage"), removeItem);
+routes.ts:34: router.get("/", list);
+routes.ts:35: router.get("/:id", getById);
+routes.ts:36: router.get("/topic/:topicId/stats", stats);
+routes.ts:39: router.get("/subject/:subjectId", bySubject);
+routes.ts:43: router.get("/:id/workspace", authenticate, getWorkspace);
+routes.ts:46: router.get("/:id/progress", authenticate, getProgress);
+routes.ts:47: router.get("/:id/progress/questions", authenticate, getProgressWithQuestions);
+routes.ts:48: router.put("/:id/progress", authenticate, setProgress);
+routes.ts:52: router.post("/:id/questions/:questionId/respond", authenticate, requirePermission("lessons.questions_respond"), saveQuestionResponse);
+routes.ts:53: router.get("/:id/questions/:questionId/response", authenticate, getQuestionResponse);
+routes.ts:57: router.post("/", authenticate, resolveOrgContext, requireContentEditor(), create);
+routes.ts:58: router.put("/:id", authenticate, resolveOrgContext, requireContentEditor(), update);
+routes.ts:59: router.patch("/:id/publish", authenticate, resolveOrgContext, requireContentEditor(), publish);
+routes.ts:61: router.patch("/:id/submit-review", authenticate, resolveOrgContext, requireContentEditor(), submitReview);
+routes.ts:62: router.patch("/:id/approve", authenticate, resolveOrgContext, requireContentApprover(), approve);
+routes.ts:63: router.patch("/:id/reject", authenticate, resolveOrgContext, requireContentApprover(), reject);
+routes.ts:64: router.patch("/:id/archive", authenticate, resolveOrgContext, requireContentEditor(), archive);
+routes.ts:65: router.delete("/:id", authenticate, resolveOrgContext, requirePermission("lessons.delete"), remove);
+routes.ts:66: router.put("/topic/:topicId/reorder", authenticate, resolveOrgContext, requirePermission("lessons.reorder"), reorder);
+routes.ts:9: router.post("/", authenticate, requirePermission("media.upload"), uploadMedia);
+routes.ts:18: router.get("/", list);
+routes.ts:19: router.get("/:id", getById);
+routes.ts:22: router.post("/", authenticate, requirePermission("modules.create"), create);
+routes.ts:23: router.put("/:id", authenticate, requirePermission("modules.update"), update);
+routes.ts:24: router.patch("/:id/publish", authenticate, requirePermission("modules.publish"), publish);
+routes.ts:25: router.patch("/:id/archive", authenticate, requirePermission("modules.archive"), archive);
+routes.ts:26: router.delete("/:id", authenticate, requirePermission("modules.delete"), remove);
+routes.ts:27: router.put("/subject/:subjectId/reorder", authenticate, requirePermission("modules.reorder"), reorder);
+routes.ts:32: router.get("/", authenticate, requirePermission("orgs.list"), async (_req, res, next) => {
+routes.ts:45: router.get("/me/memberships", authenticate, async (req, res, next) => {
+routes.ts:62: router.get("/users/search", authenticate, async (req, res, next) => {
+routes.ts:72: router.get("/:orgId/members", authenticate, async (req, res, next) => {
+routes.ts:97: router.get("/:orgId/members/:userId", authenticate, async (req, res, next) => {
+routes.ts:112: router.post("/:orgId/members", authenticate, async (req, res, next) => {
+routes.ts:132: router.patch("/:orgId/members/:membershipId", authenticate, async (req, res, next) => {
+routes.ts:150: router.delete("/:orgId/members/:membershipId", authenticate, async (req, res, next) => {
+routes.ts:165: router.get("/:orgId/overview", authenticate, requirePermission("admin.stats_view"), async (req, res, next) => {
+routes.ts:179: router.get("/:orgId/parents", authenticate, requirePermission("parents.read"), async (req, res, next) => {
+routes.ts:193: router.get("/:orgId/parents/:userId", authenticate, requirePermission("parents.read"), async (req, res, next) => {
+routes.ts:211: router.post(
+routes.ts:232: router.delete(
+routes.ts:253: router.get("/:orgId/settings", authenticate, requirePermission("orgs.update"), async (req, res, next) => {
+routes.ts:266: router.patch("/:orgId/settings", authenticate, requirePermission("orgs.update"), async (req, res, next) => {
+routes.ts:284: router.post("/:orgId/users", authenticate, requirePermission("users.create"), async (req, res, next) => {
+routes.ts:18: router.get("/", list);
+routes.ts:19: router.get("/:id", getById);
+routes.ts:20: router.get("/:id/stats", stats);
+routes.ts:23: router.post("/", authenticate, requirePermission("passages.create"), create);
+routes.ts:24: router.put("/:id", authenticate, requirePermission("passages.update"), update);
+routes.ts:25: router.patch("/:id/publish", authenticate, requirePermission("passages.publish"), publish);
+routes.ts:26: router.patch("/:id/archive", authenticate, requirePermission("passages.archive"), archive);
+routes.ts:27: router.delete("/:id", authenticate, requirePermission("passages.delete"), remove);
+routes.ts:27: router.get("/", list);
+routes.ts:28: router.get("/by-id/:id", getById);
+routes.ts:29: router.get("/:slug", getBySlug);
+routes.ts:34: router.post("/template", authenticate, resolveOrgContext, requirePermission("programs.template"), createFromTemplate);
+routes.ts:35: router.post("/:id/cet-exams", authenticate, resolveOrgContext, requirePermission("programs.cet_generate"), generateCetExams);
+routes.ts:39: router.post("/", authenticate, resolveOrgContext, requireContentEditor(), create);
+routes.ts:40: router.put("/:id", authenticate, resolveOrgContext, requireContentEditor(), update);
+routes.ts:41: router.patch(
+routes.ts:49: router.patch(
+routes.ts:56: router.patch(
+routes.ts:63: router.patch(
+routes.ts:70: router.delete("/:id", authenticate, resolveOrgContext, requirePermission("programs.delete"), remove);
+routes.ts:8: router.get("/", authenticate, progression);
+routes.ts:11: router.get("/weak-topics", authenticate, weakTopics);
+routes.ts:14: router.get("/activity", authenticate, activity);
+routes.ts:17: router.get("/assessments/:id/recommendations", authenticate, assessmentRecommendations);
+routes.ts:47: router.post(
+routes.ts:122: router.post(
+routes.ts:201: router.post("/import/bulk", authenticate, importRoles, async (req, res, next) => {
+routes.ts:237: router.get("/", list);
+routes.ts:238: router.get("/mine", authenticate, mine);
+routes.ts:239: router.get("/subject/:subjectId", bySubject);
+routes.ts:240: router.get("/topic/:topicId", byTopic);
+routes.ts:241: router.get("/exam/:examId", byExam);
+routes.ts:242: router.get("/assessment/:assessmentId", byAssessment);
+routes.ts:243: router.get("/stats", stats);
+routes.ts:249: router.get("/:id", getById);
+routes.ts:252: router.post("/", authenticate, requirePermission("questions.create"), create);
+routes.ts:253: router.put("/:id", authenticate, requirePermission("questions.update"), update);
+routes.ts:254: router.patch("/:id/review", authenticate, requirePermission("questions.review"), review);
+routes.ts:255: router.patch("/:id/publish", authenticate, requirePermission("questions.publish"), publish);
+routes.ts:256: router.patch("/:id/archive", authenticate, requirePermission("questions.archive"), archive);
+routes.ts:257: router.delete("/:id", authenticate, requirePermission("questions.delete"), remove);
+routes.ts:260: router.post("/:id/links", authenticate, requirePermission("questions.links_manage"), createLink);
+routes.ts:261: router.patch(
+routes.ts:267: router.delete(
+routes.ts:9: router.get("/brand", getBrand);
+routes.ts:12: router.get("/general", authenticate, requirePermission("settings.read"), getGeneral);
+routes.ts:13: router.put("/brand", authenticate, requirePermission("settings.brand_update"), updateBrand);
+routes.ts:14: router.put("/general", authenticate, requirePermission("settings.update"), updateGeneral);
+routes.ts:19: router.get("/", list);
+routes.ts:20: router.get("/slug/:slug", getBySlug);
+routes.ts:21: router.get("/:id", getById);
+routes.ts:22: router.get("/:id/stats", stats);
+routes.ts:25: router.post("/", authenticate, requirePermission("subjects.create"), create);
+routes.ts:26: router.put("/:id", authenticate, requirePermission("subjects.update"), update);
+routes.ts:27: router.patch("/:id/publish", authenticate, requirePermission("subjects.publish"), publish);
+routes.ts:28: router.patch("/:id/archive", authenticate, requirePermission("subjects.archive"), archive);
+routes.ts:29: router.delete("/:id", authenticate, requirePermission("subjects.delete"), remove);
+routes.ts:19: router.get("/", list);
+routes.ts:20: router.get("/all", listAll);
+routes.ts:21: router.get("/:id", getById);
+routes.ts:24: router.post("/", authenticate, requirePermission("topics.create"), create);
+routes.ts:25: router.put("/:id", authenticate, requirePermission("topics.update"), update);
+routes.ts:26: router.patch("/:id/publish", authenticate, requirePermission("topics.publish"), publish);
+routes.ts:27: router.patch("/:id/archive", authenticate, requirePermission("topics.archive"), archive);
+routes.ts:28: router.delete("/:id", authenticate, requirePermission("topics.delete"), remove);
+routes.ts:29: router.put("/module/:moduleId/reorder", authenticate, requirePermission("topics.reorder"), reorder);
+app.ts:49: app.get("/health", (_req, res) => {

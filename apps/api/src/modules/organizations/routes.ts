@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { authenticate } from "../../middleware/auth";
-import { requirePermission } from "../../middleware/permissions";
+import { resolveOrgContext } from "../../middleware/org-context";
+import { requirePermission, hasAnyPermission } from "../../middleware/permissions";
 import { ApiError, ValidationError } from "../../lib/errors";
 import {
   createMembership,
@@ -59,9 +60,27 @@ router.get("/me/memberships", authenticate, async (req, res, next) => {
  * manage org members (platform admins, org OWNER/ADMIN members) — prevents
  * plain users from enumerating the user base. Requires at least 2 chars.
  */
-router.get("/users/search", authenticate, async (req, res, next) => {
+router.get("/users/search", authenticate, resolveOrgContext, async (req, res, next) => {
   try {
-    const users = await searchUsers(req.userRoles, req.membership?.role, String(req.query.q ?? ""));
+    // CS#23.4 — layered authorization for `orgs.users_search` (§17/§30): the
+    // DB grant is the primary path but can never bypass tenant scope on its
+    // own — it is honored only for platform admin roles (platform-wide
+    // search) or callers with a VERIFIED org context (resolveOrgContext
+    // above proves an ACTIVE membership server-side; the header alone is
+    // never trusted). Everyone else falls through to searchUsers'
+    // membership-axis check (org OWNER/ADMIN), preserving prior behavior.
+    const roles = req.userRoles ?? [];
+    const hasSearchGrant =
+      roles.length > 0 &&
+      (await hasAnyPermission(req, "orgs.users_search")) &&
+      (roles.some((r) => ["super_admin", "content_admin"].includes(r)) ||
+        Boolean(req.organizationId));
+    const users = await searchUsers(
+      req.userRoles,
+      req.membership?.role,
+      String(req.query.q ?? ""),
+      hasSearchGrant,
+    );
     res.json({ users });
   } catch (error) {
     next(error);

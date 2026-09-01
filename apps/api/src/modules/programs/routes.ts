@@ -19,6 +19,7 @@ import { requirePermission } from "../../middleware/permissions";
 import {
   requireContentEditor,
   requireContentApprover,
+  requireContentPermission,
 } from "../../middleware/content-editor";
 
 const router: IRouter = Router();
@@ -34,15 +35,16 @@ router.get("/:slug", getBySlug);
 router.post("/template", authenticate, resolveOrgContext, requirePermission("programs.template"), createFromTemplate);
 router.post("/:id/cet-exams", authenticate, resolveOrgContext, requirePermission("programs.cet_generate"), generateCetExams);
 
-// Protected content routes — org managers may create/update/publish within
-// their active org; deletes remain platform-only for safety.
-router.post("/", authenticate, resolveOrgContext, requireContentEditor(), create);
-router.put("/:id", authenticate, resolveOrgContext, requireContentEditor(), update);
+// Protected content routes — CS#23.4: global permission key is primary
+// (programs.create/update/publish), org-membership editor rules remain as
+// the fallback layer so existing org workflows are unchanged.
+router.post("/", authenticate, resolveOrgContext, requireContentPermission("programs.create"), create);
+router.put("/:id", authenticate, resolveOrgContext, requireContentPermission("programs.update"), update);
 router.patch(
   "/:id/publish",
   authenticate,
   resolveOrgContext,
-  requireContentEditor(),
+  requireContentPermission("programs.publish"),
   publish
 );
 // Approval workflow (CS#6 — §17): editors submit, org approvers review.

@@ -8,11 +8,8 @@ vi.mock("@aratc/database", () => ({
     organizationMembership: {
       findUnique: vi.fn(),
     },
-    // CS#23.4 — the layered content middleware resolves permission grants
-    // from the DB; default to "no grants" so these tests exercise the
-    // org-membership fallback path (pre-CS#23.4 behavior).
     rolePermission: {
-      findMany: vi.fn().mockResolvedValue([]),
+      findMany: vi.fn(),
     },
     program: {
       findUnique: vi.fn(),
@@ -26,6 +23,7 @@ import { prisma } from "@aratc/database";
 import { programRoutes } from "../modules/programs/routes";
 import { errorHandler } from "../middleware/error-handler";
 import { config } from "../config";
+import { invalidatePermissionCache } from "../middleware/permissions";
 
 const mockedPrisma = vi.mocked(prisma, true);
 
@@ -52,17 +50,40 @@ function buildApp() {
   return app;
 }
 
-describe("requireContentEditor — POST /api/programs create-auth matrix", () => {
+/**
+ * CS#23.4 — layered content authorization matrix for POST /api/programs.
+ * The global permission grant is the primary path; the org-membership
+ * editor rules are the fallback. Both paths are exercised here.
+ */
+describe("requireContentPermission — layered grant + membership authorization", () => {
   let app: express.Express;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    invalidatePermissionCache();
     app = buildApp();
   });
 
   const validBody = { name: "Test", slug: "test-slug", stage: "COLLEGE" };
 
-  it("lets a platform content_admin create WITHOUT an org context", async () => {
+  function grantKeys(keys: string[]) {
+    mockedPrisma.rolePermission.findMany.mockResolvedValue(
+      keys.map((key) => ({ permission: { key } })) as never,
+    );
+  }
+
+  it("super_admin passes via the grant path WITHOUT an org context", async () => {
+    grantKeys([]); // even with zero DB grants — hard system bypass
+    mockedPrisma.program.create.mockResolvedValue({ ...programRow, organizationId: null } as never);
+    const res = await request(app)
+      .post("/api/programs")
+      .set("Authorization", `Bearer ${tokenFor("u", ["super_admin"])}`)
+      .send(validBody);
+    expect(res.status).toBe(201);
+  });
+
+  it("content_admin passes via the grant path (holds programs.create) without org context", async () => {
+    grantKeys(["programs.create"]);
     mockedPrisma.program.create.mockResolvedValue({ ...programRow, organizationId: null } as never);
     const res = await request(app)
       .post("/api/programs")
@@ -71,7 +92,8 @@ describe("requireContentEditor — POST /api/programs create-auth matrix", () =>
     expect(res.status).toBe(201);
   });
 
-  it("lets a school_admin create WITH a verified active org context", async () => {
+  it("a granted non-platform role WITH org context passes via the grant path", async () => {
+    grantKeys(["programs.create"]);
     mockedPrisma.organizationMembership.findUnique.mockResolvedValue(activeMembership as never);
     mockedPrisma.program.create.mockResolvedValue(programRow as never);
     const res = await request(app)
@@ -82,18 +104,18 @@ describe("requireContentEditor — POST /api/programs create-auth matrix", () =>
     expect(res.status).toBe(201);
   });
 
-  it("lets an org OWNER/ADMIN member create (no school_admin platform role) with org context", async () => {
-    mockedPrisma.organizationMembership.findUnique.mockResolvedValue(activeMembership as never);
-    mockedPrisma.program.create.mockResolvedValue(programRow as never);
+  it("a granted non-platform role WITHOUT org context is DENIED (grant path cannot bypass tenant scope)", async () => {
+    grantKeys(["programs.create"]);
+    mockedPrisma.organizationMembership.findUnique.mockResolvedValue(null as never);
     const res = await request(app)
       .post("/api/programs")
-      .set("Authorization", `Bearer ${tokenFor("u", ["teacher"])}`)
-      .set("x-organization-id", "org_1")
+      .set("Authorization", `Bearer ${tokenFor("u", ["school_admin"])}`)
       .send(validBody);
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(403);
   });
 
-  it("lets a TEACHER org member create (draft) with org context — §15 teacher content creation", async () => {
+  it("an org TEACHER member without the grant still creates drafts via the membership fallback", async () => {
+    grantKeys([]); // teacher holds no programs.create grant
     mockedPrisma.organizationMembership.findUnique.mockResolvedValue({
       ...activeMembership,
       role: "TEACHER",
@@ -107,42 +129,17 @@ describe("requireContentEditor — POST /api/programs create-auth matrix", () =>
     expect(res.status).toBe(201);
   });
 
-  it("REJECTS a school_admin with NO org context (403) — cannot create platform content", async () => {
-    const res = await request(app)
-      .post("/api/programs")
-      .set("Authorization", `Bearer ${tokenFor("u", ["school_admin"])}`)
-      .send(validBody);
-    expect(res.status).toBe(403);
-  });
-
-  it("REJECTS a learner even WITH org context (403) — members cannot create", async () => {
-    mockedPrisma.organizationMembership.findUnique.mockResolvedValue({
-      ...activeMembership,
-      role: "LEARNER",
-    } as never);
-    const res = await request(app)
-      .post("/api/programs")
-      .set("Authorization", `Bearer ${tokenFor("u", ["student"])}`)
-      .set("x-organization-id", "org_1")
-      .send(validBody);
-    expect(res.status).toBe(403);
-  });
-
-  it("REJECTS a teacher with NO membership in the active org (403)", async () => {
-    mockedPrisma.organizationMembership.findUnique.mockResolvedValue(null as never);
-    const res = await request(app)
-      .post("/api/programs")
-      .set("Authorization", `Bearer ${tokenFor("u", ["teacher"])}`)
-      .set("x-organization-id", "org_other")
-      .send(validBody);
-    expect(res.status).toBe(403);
-  });
-
-  it("REJECTS a learner (403)", async () => {
+  it("a student with no membership and no grant is DENIED (403)", async () => {
+    grantKeys([]);
     const res = await request(app)
       .post("/api/programs")
       .set("Authorization", `Bearer ${tokenFor("u", ["student"])}`)
       .send(validBody);
     expect(res.status).toBe(403);
+  });
+
+  it("an unauthenticated request is DENIED (401)", async () => {
+    const res = await request(app).post("/api/programs").send(validBody);
+    expect(res.status).toBe(401);
   });
 });

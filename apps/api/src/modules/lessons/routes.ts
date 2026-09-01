@@ -26,6 +26,7 @@ import { requirePermission } from "../../middleware/permissions";
 import {
   requireContentEditor,
   requireContentApprover,
+  requireContentPermission,
 } from "../../middleware/content-editor";
 
 const router: IRouter = Router();
@@ -52,16 +53,17 @@ router.put("/:id/progress", authenticate, setProgress);
 router.post("/:id/questions/:questionId/respond", authenticate, requirePermission("lessons.questions_respond"), saveQuestionResponse);
 router.get("/:id/questions/:questionId/response", authenticate, getQuestionResponse);
 
-// Protected content routes — org managers may create/update/publish within
-// their active org; deletes remain super_admin-only for safety.
-router.post("/", authenticate, resolveOrgContext, requireContentEditor(), create);
-router.put("/:id", authenticate, resolveOrgContext, requireContentEditor(), update);
-router.patch("/:id/publish", authenticate, resolveOrgContext, requireContentEditor(), publish);
+// Protected content routes — CS#23.4: global permission key is primary
+// (lessons.create/update/publish/archive), org-membership editor rules
+// remain as the fallback layer so existing org workflows are unchanged.
+router.post("/", authenticate, resolveOrgContext, requireContentPermission("lessons.create"), create);
+router.put("/:id", authenticate, resolveOrgContext, requireContentPermission("lessons.update"), update);
+router.patch("/:id/publish", authenticate, resolveOrgContext, requireContentPermission("lessons.publish"), publish);
 // Approval workflow (CS#6 — §17): editors submit, org approvers review.
 router.patch("/:id/submit-review", authenticate, resolveOrgContext, requireContentEditor(), submitReview);
 router.patch("/:id/approve", authenticate, resolveOrgContext, requireContentApprover(), approve);
 router.patch("/:id/reject", authenticate, resolveOrgContext, requireContentApprover(), reject);
-router.patch("/:id/archive", authenticate, resolveOrgContext, requireContentEditor(), archive);
+router.patch("/:id/archive", authenticate, resolveOrgContext, requireContentPermission("lessons.archive"), archive);
 router.delete("/:id", authenticate, resolveOrgContext, requirePermission("lessons.delete"), remove);
 router.put("/topic/:topicId/reorder", authenticate, resolveOrgContext, requirePermission("lessons.reorder"), reorder);
 

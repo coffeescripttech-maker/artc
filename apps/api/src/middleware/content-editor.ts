@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { config } from "../config";
 import { ForbiddenError } from "../lib/errors";
+import { hasAnyPermission } from "./permissions";
 
 const PLATFORM_CONTENT_ROLES = ["content_admin", "super_admin"];
 const ORG_MANAGER_MEMBERSHIP_ROLES = ["OWNER", "ADMIN"];
@@ -86,5 +87,44 @@ export function requireContentEditor() {
           : "An organization context is required to create content",
       ),
     );
+  };
+}
+
+/**
+ * CS#23.4 — layered content authorization. The global permission key
+ * (programs.create, lessons.publish, …) is the PRIMARY mechanism; the
+ * org-membership editor/approver rules above remain as a fallback so every
+ * existing organization content workflow keeps working unchanged.
+ *
+ * Grant path scope guard: holding the permission key alone must never bypass
+ * tenant scoping. A caller passes via the grant path only if it is a platform
+ * content role (may manage platform-level, orgless content) OR carries an
+ * active organization context (service-level assertCanEditContent then
+ * enforces resource ownership). Otherwise the request falls through to the
+ * membership check, preserving prior behavior exactly.
+ *
+ * Note: revoking one of these keys from a role takes effect for that role;
+ * the platform content roles (super_admin / content_admin) remain system-level
+ * content managers by design — mirroring the super_admin hard-bypass policy.
+ */
+export function requireContentPermission(
+  permissionKey: string,
+  kind: "editor" | "approver" = "editor",
+) {
+  const membershipCheck =
+    kind === "approver" ? requireContentApprover() : requireContentEditor();
+  return (req: Request, res: Response, next: NextFunction): void => {
+    void (async () => {
+      const roles = req.userRoles;
+      if (roles && roles.length > 0 && (await hasAnyPermission(req, permissionKey))) {
+        const scopeOk =
+          PLATFORM_CONTENT_ROLES.some((r) => roles.includes(r)) ||
+          Boolean(req.organizationId);
+        if (scopeOk) {
+          return next();
+        }
+      }
+      membershipCheck(req, res, next);
+    })().catch(next);
   };
 }

@@ -8,6 +8,12 @@ vi.mock("@aratc/database", () => ({
     organizationMembership: {
       findUnique: vi.fn(),
     },
+    // CS#23.4 — the layered content middleware consults the permission grant
+    // table first. Empty grants here keep these tests on the membership
+    // fallback path (the grant path has its own dedicated test file).
+    rolePermission: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     lesson: {
       findUnique: vi.fn(),
       findMany: vi.fn(),

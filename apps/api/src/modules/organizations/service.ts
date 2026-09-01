@@ -48,14 +48,18 @@ export function canManageOrgMembers(
 }
 
 /**
- * User search backing the membership pickers. Authorization mirrors member
- * management: platform admins (any org) or org OWNER/ADMIN members. Returns
- * at most 10 matches; requires a 2+ char query to avoid full-enumeration.
+ * User search backing the membership pickers. Authorization is layered
+ * (CS#23.4 §7/§17): a DB grant of `orgs.users_search` is the primary path
+ * (computed by the route with a tenant-scope guard — platform admin roles or
+ * a verified org context), while org OWNER/ADMIN membership remains the
+ * fallback so org managers without the grant keep working. Returns at most
+ * 10 matches; requires a 2+ char query to avoid full-enumeration.
  */
 export async function searchUsers(
   requesterRoles: string[] | undefined,
   membershipRole: string | undefined,
-  query: string
+  query: string,
+  hasSearchGrant = false,
 ): Promise<
   Array<{
     id: string;
@@ -65,7 +69,7 @@ export async function searchUsers(
     roles: string[];
   }>
 > {
-  if (!canManageOrgMembers(requesterRoles, membershipRole)) {
+  if (!hasSearchGrant && !canManageOrgMembers(requesterRoles, membershipRole)) {
     throw new ForbiddenError("You are not allowed to search users");
   }
   const q = query.trim();
