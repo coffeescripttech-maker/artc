@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "@aratc/database";
 import { ForbiddenError } from "../lib/errors";
+import { hasPlatformAdminRole } from "../lib/tenant-scope";
 import jwt from "jsonwebtoken";
 import { config } from "../config";
 
@@ -39,17 +40,22 @@ export async function resolveOrgContext(
       return next();
     }
 
-    // Resolve an authenticated userId: prefer req.userId (from authenticate()),
-    // otherwise opportunistically decode the Bearer token for public routes.
+    // Resolve an authenticated userId + roles: prefer req.userId/req.userRoles
+    // (set by authenticate on route-mounted requests), otherwise opportunistically
+    // decode the Bearer token for global/public routes. The JWT payload carries
+    // both (auth/service.ts → generateToken) — mirroring lib/visibility.ts.
     let userId: string | undefined = req.userId;
-    if (!userId) {
+    let roles: string[] | undefined = req.userRoles;
+    if (!userId || !roles) {
       const authHeader = req.headers.authorization;
       if (authHeader?.startsWith("Bearer ")) {
         try {
           const decoded = jwt.verify(authHeader.slice(7), config.jwtSecret) as {
             userId?: string;
+            roles?: string[];
           };
-          userId = decoded.userId;
+          userId ??= decoded.userId;
+          roles ??= Array.isArray(decoded.roles) ? decoded.roles : undefined;
         } catch {
           // Invalid/expired token → anonymous; no org context attached.
           return next();
@@ -58,6 +64,25 @@ export async function resolveOrgContext(
     }
 
     if (!userId) {
+      return next();
+    }
+
+    req.userId = userId;
+    req.userRoles ??= roles ?? [];
+
+    // Platform-admin bypass (CS#23.1 fix): super_admin / content_admin operate
+    // at the Platform layer and may act in ANY organization context without
+    // requiring a local membership row (the demo seed intentionally grants them
+    // none — "platform-level, no org membership required"). The header only
+    // names a context; authorization comes from the platform role verified via
+    // the signed JWT above — never from the client. Mirrors the existing
+    // requireContentEditor / requireContentApprover / assessment scoping, which
+    // all treat platform admins as authorized across all organizations.
+    if (hasPlatformAdminRole(roles)) {
+      req.organizationId = orgId;
+      req.membership = {
+        role: roles?.includes("super_admin") ? "OWNER" : "ADMIN",
+      };
       return next();
     }
 
@@ -76,10 +101,8 @@ export async function resolveOrgContext(
       return next(new ForbiddenError("You are not an active member of this organization"));
     }
 
-    req.userId = userId;
     req.organizationId = membership.organizationId;
     req.membership = { role: membership.role };
-    req.userRoles ??= [];
     return next();
   } catch (error) {
     return next(error);

@@ -22,6 +22,10 @@ vi.mock("@aratc/database", () => ({
     learnerProfile: { findUnique: vi.fn() },
     program: { findUnique: vi.fn(), findMany: vi.fn() },
     user: { findUnique: vi.fn() },
+    // CS#23.2 — RBAC middleware resolves effective permissions from the DB.
+    // No test role carries DB grants here, so an empty grant set yields the
+    // correct 403s; super_admin still bypasses without touching the DB.
+    rolePermission: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));
 

@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { Request, Response, NextFunction } from "express";
+import jwt from "jsonwebtoken";
+import { config } from "../config";
 
 vi.mock("@aratc/database", () => ({
   prisma: {
@@ -14,10 +16,15 @@ import { resolveOrgContext } from "../middleware/org-context";
 
 const mockedFindUnique = vi.mocked(prisma.organizationMembership.findUnique);
 
-function makeReq(headers: Record<string, string> = {}, userId?: string) {
+function makeReq(
+  headers: Record<string, string> = {},
+  userId?: string,
+  userRoles?: string[],
+) {
   return {
     headers,
     userId,
+    userRoles,
     organizationId: undefined,
     membership: undefined,
   } as unknown as Request;
@@ -111,5 +118,51 @@ describe("resolveOrgContext middleware (tenant isolation)", () => {
     expect(result.error).toBeUndefined();
     expect(req.organizationId).toBeUndefined();
     expect(mockedFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("attaches org context for a super_admin without any membership row (platform-level role bypass)", async () => {
+    const req = makeReq({ "x-organization-id": "org_1" }, "user-1", ["super_admin"]);
+    const result = await run(req);
+
+    expect(result.error).toBeUndefined();
+    expect(req.organizationId).toBe("org_1");
+    expect(req.membership).toEqual({ role: "OWNER" });
+    // No membership lookup — the platform role is authoritative.
+    expect(mockedFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("attaches org context for a content_admin without any membership row", async () => {
+    const req = makeReq({ "x-organization-id": "org_1" }, "user-1", ["content_admin"]);
+    const result = await run(req);
+
+    expect(result.error).toBeUndefined();
+    expect(req.organizationId).toBe("org_1");
+    expect(req.membership).toEqual({ role: "ADMIN" });
+    expect(mockedFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("bypasses via the signed JWT when roles are not pre-populated (global mount path)", async () => {
+    const token = jwt.sign({ userId: "user-9", roles: ["super_admin"] }, config.jwtSecret, {
+      expiresIn: "1h",
+    });
+    const req = makeReq({
+      "x-organization-id": "org_9",
+      authorization: `Bearer ${token}`,
+    });
+    const result = await run(req);
+
+    expect(result.error).toBeUndefined();
+    expect(req.organizationId).toBe("org_9");
+    expect(req.membership).toEqual({ role: "OWNER" });
+    expect(mockedFindUnique).not.toHaveBeenCalled();
+  });
+
+  it("still rejects a non-platform non-member (no platform role, no membership row)", async () => {
+    mockedFindUnique.mockResolvedValue(null as never);
+    const req = makeReq({ "x-organization-id": "org_b" }, "user-1", ["student"]);
+    const result = await run(req);
+
+    expect(result.error).toBeInstanceOf(Error);
+    expect((result.error as Error).message).toContain("not an active member");
   });
 });

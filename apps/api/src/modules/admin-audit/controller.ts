@@ -10,6 +10,15 @@ import { ForbiddenError } from "../../lib/errors";
 import { adminGetAuditLog, AuditFilters } from "../../lib/audit-log";
 
 function getTenantId(req: Request): string {
+  // CS#23.2 §34/§35 — super_admin may explicitly target the platform-wide
+  // tenant (global RBAC events are written under tenantId "platform"). The
+  // explicit header wins over the active-org context so the superadmin audit
+  // view can see platform-level events even with an org selected. All other
+  // callers stay pinned to their own organization (§35 cross-org boundary).
+  if (req.userRoles?.includes("super_admin")) {
+    const requested = req.headers["x-tenant-id"] as string | undefined;
+    if (requested) return requested;
+  }
   if (req.organizationId) return req.organizationId;
   // super_admin can query the platform (whole-DB) tenant via x-tenant-id
   const platformTenant = req.headers["x-tenant-id"] as string | undefined;

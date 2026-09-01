@@ -2,10 +2,7 @@ import { prisma } from "@aratc/database";
 import { createProgramSchema } from "@aratc/shared";
 import { z } from "zod";
 import { NotFoundError, ValidationError } from "../../lib/errors";
-import {
-  type ContentVisibilityOptions,
-  isVisible,
-} from "../../lib/visibility";
+import { type ContentVisibilityOptions, isVisible } from "../../lib/visibility";
 import {
   orgReadScope,
   assertCanEditContent,
@@ -38,10 +35,7 @@ export async function listPrograms(
   });
 }
 
-export async function getProgramById(
-  id: string,
-  opts?: ContentVisibilityOptions
-) {
+export async function getProgramById(id: string, opts?: ContentVisibilityOptions) {
   const program = await prisma.program.findUnique({
     where: { id },
     include: {
@@ -172,11 +166,7 @@ export async function updateProgram(
   }
 
   // §44 ownership check — caller must manage this program's org.
-  assertCanEditContent(
-    requester?.organizationId,
-    requester?.roles,
-    existing.organizationId
-  );
+  assertCanEditContent(requester?.organizationId, requester?.roles, existing.organizationId);
 
   // Validate slug uniqueness if slug is being changed
   if (input.slug && input.slug !== existing.slug) {
@@ -210,11 +200,7 @@ export async function publishProgram(
     throw new NotFoundError("Program not found");
   }
 
-  assertCanEditContent(
-    requester?.organizationId,
-    requester?.roles,
-    existing.organizationId
-  );
+  assertCanEditContent(requester?.organizationId, requester?.roles, existing.organizationId);
 
   // §17 approval workflow — orgs with review mode require APPROVED first.
   assertCanPublish(
@@ -243,11 +229,7 @@ export async function submitProgramForReview(
     throw new NotFoundError("Program not found");
   }
 
-  assertCanEditContent(
-    requester?.organizationId,
-    requester?.roles,
-    existing.organizationId
-  );
+  assertCanEditContent(requester?.organizationId, requester?.roles, existing.organizationId);
   assertTransition(existing.status, "SUBMIT_REVIEW");
 
   return prisma.program.update({
@@ -265,11 +247,7 @@ export async function approveProgram(
     throw new NotFoundError("Program not found");
   }
 
-  assertCanEditContent(
-    requester?.organizationId,
-    requester?.roles,
-    existing.organizationId
-  );
+  assertCanEditContent(requester?.organizationId, requester?.roles, existing.organizationId);
   assertTransition(existing.status, "APPROVE");
 
   return prisma.program.update({
@@ -287,11 +265,7 @@ export async function rejectProgram(
     throw new NotFoundError("Program not found");
   }
 
-  assertCanEditContent(
-    requester?.organizationId,
-    requester?.roles,
-    existing.organizationId
-  );
+  assertCanEditContent(requester?.organizationId, requester?.roles, existing.organizationId);
   assertTransition(existing.status, "REJECT");
 
   return prisma.program.update({
@@ -309,11 +283,7 @@ export async function deleteProgram(
     throw new NotFoundError("Program not found");
   }
 
-  assertCanEditContent(
-    requester?.organizationId,
-    requester?.roles,
-    existing.organizationId
-  );
+  assertCanEditContent(requester?.organizationId, requester?.roles, existing.organizationId);
 
   // Delete associated records first to avoid FK constraint errors,
   // since Curriculum.programId and Assessment.programId are optional
@@ -342,218 +312,217 @@ function makeSlug(str: string): string {
  * Creates program -> curriculums (per grade) -> subjects -> modules -> topics -> questions.
  * Idempotent: if program slug exists, auto-generates a unique slug (e.g., "aratc-shs-curriculum-copy-abc1").
  */
-export async function createProgramFromTemplate(
-  template: CurriculumTemplate,
-  authorId: string
-) {
+export async function createProgramFromTemplate(template: CurriculumTemplate, authorId: string) {
   // Large batch: extend timeout to 60s
   return prisma.$transaction(
     async (tx) => {
-    // Generate unique program slug if base slug already exists
-    let programSlug = template.program.slug;
-    let programName = template.program.name;
-    let counter = 1;
-    while (true) {
-      const existing = await tx.program.findUnique({ where: { slug: programSlug } });
-      if (!existing) break;
-      programSlug = `${template.program.slug}-copy-${counter}`;
-      programName = `${template.program.name} (Copy ${counter})`;
-      counter++;
-    }
+      // Generate unique program slug if base slug already exists
+      let programSlug = template.program.slug;
+      let programName = template.program.name;
+      let counter = 1;
+      while (true) {
+        const existing = await tx.program.findUnique({ where: { slug: programSlug } });
+        if (!existing) break;
+        programSlug = `${template.program.slug}-copy-${counter}`;
+        programName = `${template.program.name} (Copy ${counter})`;
+        counter++;
+      }
 
-    // 1. Create the Program
-    // Note: Prisma Program model has programType (string), not stage enum.
-    // We store the stage value as programType for reference.
-    const program = await tx.program.create({
-      data: {
-        name: programName,
-        slug: programSlug,
-        description: template.program.description,
-        programType: template.program.stage,
-        status: "DRAFT",
-      },
-    });
-
-    // Map to collect all topic slugs -> IDs for CET exam reference
-    const allTopicMap: Map<string, string> = new Map();
-
-    // 2. For each grade, create a Curriculum with linked Subjects (upsert)
-    for (const grade of template.grades) {
-      const gradeLabel = grade.gradeLevel.replace("GRADE_", "Grade ");
-      // Use program.slug (not template.program.slug) so each program gets
-      // its own curriculums — running the template twice no longer steals
-      // curriculums from a previously created program.
-      const curriculumSlug = `${program.slug}-${grade.gradeLevel.toLowerCase()}`;
-
-      const curriculum = await tx.curriculum.upsert({
-        where: { slug: curriculumSlug },
-        update: {
-          name: `${template.program.name} - ${gradeLabel}`,
-          description: `Curriculum for ${gradeLabel}`,
-          stage: template.program.stage,
-          gradeLevel: grade.gradeLevel,
-          programId: program.id,
-          orderIndex: parseInt(grade.gradeLevel.replace("GRADE_", ""), 10),
-          status: "DRAFT",
-        },
-        create: {
-          name: `${template.program.name} - ${gradeLabel}`,
-          slug: curriculumSlug,
-          description: `Curriculum for ${gradeLabel}`,
-          stage: template.program.stage,
-          gradeLevel: grade.gradeLevel,
-          programId: program.id,
-          orderIndex: parseInt(grade.gradeLevel.replace("GRADE_", ""), 10),
+      // 1. Create the Program
+      // Note: Prisma Program model has programType (string), not stage enum.
+      // We store the stage value as programType for reference.
+      const program = await tx.program.create({
+        data: {
+          name: programName,
+          slug: programSlug,
+          description: template.program.description,
+          programType: template.program.stage,
           status: "DRAFT",
         },
       });
 
-      // 3. Create Subjects for this grade
-      for (let subjIdx = 0; subjIdx < grade.subjects.length; subjIdx++) {
-        const subj = grade.subjects[subjIdx];
+      // Map to collect all topic slugs -> IDs for CET exam reference
+      const allTopicMap: Map<string, string> = new Map();
 
-        // Check if subject already exists by slug
-        const existingSubject = await tx.subject.findUnique({
-          where: { slug: subj.slug },
-        });
+      // 2. For each grade, create a Curriculum with linked Subjects (upsert)
+      for (const grade of template.grades) {
+        const gradeLabel = grade.gradeLevel.replace("GRADE_", "Grade ");
+        // Use program.slug (not template.program.slug) so each program gets
+        // its own curriculums — running the template twice no longer steals
+        // curriculums from a previously created program.
+        const curriculumSlug = `${program.slug}-${grade.gradeLevel.toLowerCase()}`;
 
-        let subject = existingSubject;
-
-        if (!subject) {
-          subject = await tx.subject.create({
-            data: {
-              name: subj.name,
-              slug: subj.slug,
-              code: subj.code,
-              description: subj.description,
-              color: subj.color,
-              status: "DRAFT",
-            },
-          });
-        }
-
-        // 4. Link Subject to Curriculum via CurriculumItem (upsert)
-        await tx.curriculumItem.upsert({
-          where: { curriculumId_subjectId: { curriculumId: curriculum.id, subjectId: subject.id } },
-          update: { orderIndex: subjIdx, isRequired: true },
+        const curriculum = await tx.curriculum.upsert({
+          where: { slug: curriculumSlug },
+          update: {
+            name: `${template.program.name} - ${gradeLabel}`,
+            description: `Curriculum for ${gradeLabel}`,
+            stage: template.program.stage,
+            gradeLevel: grade.gradeLevel,
+            programId: program.id,
+            orderIndex: parseInt(grade.gradeLevel.replace("GRADE_", ""), 10),
+            status: "DRAFT",
+          },
           create: {
-            curriculumId: curriculum.id,
-            subjectId: subject.id,
-            orderIndex: subjIdx,
-            isRequired: true,
+            name: `${template.program.name} - ${gradeLabel}`,
+            slug: curriculumSlug,
+            description: `Curriculum for ${gradeLabel}`,
+            stage: template.program.stage,
+            gradeLevel: grade.gradeLevel,
+            programId: program.id,
+            orderIndex: parseInt(grade.gradeLevel.replace("GRADE_", ""), 10),
+            status: "DRAFT",
           },
         });
 
-        // 5. Create Modules for this Subject (upsert by slug)
-        for (let modIdx = 0; modIdx < subj.modules.length; modIdx++) {
-          const mod = subj.modules[modIdx];
+        // 3. Create Subjects for this grade
+        for (let subjIdx = 0; subjIdx < grade.subjects.length; subjIdx++) {
+          const subj = grade.subjects[subjIdx];
 
-          const moduleRecord = await tx.module.upsert({
-            where: { slug: mod.slug },
-            update: {
-              subjectId: subject.id,
-              name: mod.name,
-              description: mod.description,
-              orderIndex: modIdx,
-              status: "DRAFT",
+          // Check if subject already exists by slug
+          const existingSubject = await tx.subject.findUnique({
+            where: { slug: subj.slug },
+          });
+
+          let subject = existingSubject;
+
+          if (!subject) {
+            subject = await tx.subject.create({
+              data: {
+                name: subj.name,
+                slug: subj.slug,
+                code: subj.code,
+                description: subj.description,
+                color: subj.color,
+                status: "DRAFT",
+              },
+            });
+          }
+
+          // 4. Link Subject to Curriculum via CurriculumItem (upsert)
+          await tx.curriculumItem.upsert({
+            where: {
+              curriculumId_subjectId: { curriculumId: curriculum.id, subjectId: subject.id },
             },
+            update: { orderIndex: subjIdx, isRequired: true },
             create: {
+              curriculumId: curriculum.id,
               subjectId: subject.id,
-              name: mod.name,
-              slug: mod.slug,
-              description: mod.description,
-              orderIndex: modIdx,
-              status: "DRAFT",
+              orderIndex: subjIdx,
+              isRequired: true,
             },
           });
 
-          // 6. Create Topics for this Module (upsert by slug)
-          for (let topicIdx = 0; topicIdx < mod.topics.length; topicIdx++) {
-            const topic = mod.topics[topicIdx];
+          // 5. Create Modules for this Subject (upsert by slug)
+          for (let modIdx = 0; modIdx < subj.modules.length; modIdx++) {
+            const mod = subj.modules[modIdx];
 
-            const topicRecord = await tx.topic.upsert({
-              where: { slug: topic.slug },
+            const moduleRecord = await tx.module.upsert({
+              where: { slug: mod.slug },
               update: {
-                moduleId: moduleRecord.id,
-                name: topic.name,
-                description: topic.description,
-                orderIndex: topicIdx,
+                subjectId: subject.id,
+                name: mod.name,
+                description: mod.description,
+                orderIndex: modIdx,
                 status: "DRAFT",
               },
               create: {
-                moduleId: moduleRecord.id,
-                name: topic.name,
-                slug: topic.slug,
-                description: topic.description,
-                orderIndex: topicIdx,
+                subjectId: subject.id,
+                name: mod.name,
+                slug: mod.slug,
+                description: mod.description,
+                orderIndex: modIdx,
                 status: "DRAFT",
               },
             });
 
-            allTopicMap.set(topic.slug, topicRecord.id);
+            // 6. Create Topics for this Module (upsert by slug)
+            for (let topicIdx = 0; topicIdx < mod.topics.length; topicIdx++) {
+              const topic = mod.topics[topicIdx];
 
-            // 7. Create sample Questions for this Topic (upsert by stem+topic)
-            if (topic.questions && topic.questions.length > 0) {
-              for (const q of topic.questions) {
-                // Create a deterministic ID from stem + topic for idempotency
-                const questionId = `q-${topicRecord.id}-${q.stem.slice(0, 30).replace(/[^a-z0-9]/gi, '-')}`;
+              const topicRecord = await tx.topic.upsert({
+                where: { slug: topic.slug },
+                update: {
+                  moduleId: moduleRecord.id,
+                  name: topic.name,
+                  description: topic.description,
+                  orderIndex: topicIdx,
+                  status: "DRAFT",
+                },
+                create: {
+                  moduleId: moduleRecord.id,
+                  name: topic.name,
+                  slug: topic.slug,
+                  description: topic.description,
+                  orderIndex: topicIdx,
+                  status: "DRAFT",
+                },
+              });
 
-                const question = await tx.question.upsert({
-                  where: { id: questionId },
-                  update: {
-                    type: q.type,
-                    difficulty: q.difficulty,
-                    stem: q.stem,
-                    options: q.options ?? undefined,
-                    correctAnswer: q.correctAnswer,
-                    explanation: q.explanation,
-                    tags: q.tags,
-                    authorId,
-                    status: "PUBLISHED",
-                  },
-                  create: {
-                    id: questionId,
-                    type: q.type,
-                    difficulty: q.difficulty,
-                    stem: q.stem,
-                    options: q.options ?? undefined,
-                    correctAnswer: q.correctAnswer,
-                    explanation: q.explanation,
-                    tags: q.tags,
-                    authorId,
-                    status: "PUBLISHED",
-                  },
-                });
+              allTopicMap.set(topic.slug, topicRecord.id);
 
-                // Link question to topic via QuestionBankLink (skip if exists)
-                const existingLink = await tx.questionBankLink.findFirst({
-                  where: { questionId: question.id, topicId: topicRecord.id },
-                });
-                if (!existingLink) {
-                  await tx.questionBankLink.create({
-                    data: {
-                      questionId: question.id,
-                      topicId: topicRecord.id,
-                      weight: 1,
+              // 7. Create sample Questions for this Topic (upsert by stem+topic)
+              if (topic.questions && topic.questions.length > 0) {
+                for (const q of topic.questions) {
+                  // Create a deterministic ID from stem + topic for idempotency
+                  const questionId = `q-${topicRecord.id}-${q.stem.slice(0, 30).replace(/[^a-z0-9]/gi, "-")}`;
+
+                  const question = await tx.question.upsert({
+                    where: { id: questionId },
+                    update: {
+                      type: q.type,
+                      difficulty: q.difficulty,
+                      stem: q.stem,
+                      options: q.options ?? undefined,
+                      correctAnswer: q.correctAnswer,
+                      explanation: q.explanation,
+                      tags: q.tags,
+                      authorId,
+                      status: "PUBLISHED",
+                    },
+                    create: {
+                      id: questionId,
+                      type: q.type,
+                      difficulty: q.difficulty,
+                      stem: q.stem,
+                      options: q.options ?? undefined,
+                      correctAnswer: q.correctAnswer,
+                      explanation: q.explanation,
+                      tags: q.tags,
+                      authorId,
+                      status: "PUBLISHED",
                     },
                   });
+
+                  // Link question to topic via QuestionBankLink (skip if exists)
+                  const existingLink = await tx.questionBankLink.findFirst({
+                    where: { questionId: question.id, topicId: topicRecord.id },
+                  });
+                  if (!existingLink) {
+                    await tx.questionBankLink.create({
+                      data: {
+                        questionId: question.id,
+                        topicId: topicRecord.id,
+                        weight: 1,
+                      },
+                    });
+                  }
                 }
               }
             }
           }
         }
       }
-    }
 
-    return {
-      programId: program.id,
-      programName: program.name,
-      curriculaCount: template.grades.length,
-      topicMap: allTopicMap,
-    };
-  },
-  { timeout: 60000 }
-);
+      return {
+        programId: program.id,
+        programName: program.name,
+        curriculaCount: template.grades.length,
+        topicMap: allTopicMap,
+      };
+    },
+    { timeout: 60000 }
+  );
 }
 
 /**

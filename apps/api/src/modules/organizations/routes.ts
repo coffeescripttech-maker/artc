@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
-import { authenticate, requireRole } from "../../middleware/auth";
+import { authenticate } from "../../middleware/auth";
+import { requirePermission } from "../../middleware/permissions";
 import { ApiError, ValidationError } from "../../lib/errors";
 import {
   createMembership,
@@ -19,7 +20,7 @@ const router: IRouter = Router();
  * All organizations — platform administration only. Used by the admin
  * members-management UI to pick an organization to manage.
  */
-router.get("/", authenticate, requireRole("super_admin", "content_admin"), async (_req, res, next) => {
+router.get("/", authenticate, requirePermission("orgs.list"), async (_req, res, next) => {
   try {
     const organizations = await listOrganizations();
     res.json({ organizations });

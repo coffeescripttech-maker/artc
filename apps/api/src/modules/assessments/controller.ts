@@ -86,7 +86,11 @@ export async function getById(
     const assessment = await getAssessmentById(req.params.id);
     // Same read scope as programs (§44) — org-owned assessments stay in their
     // organization. Platform content (organizationId null) stays public.
-    if (!canReadContent(req.organizationId, req.userRoles, assessment.organizationId)) {
+    // getRequestRoles: public routes have no `authenticate`, and callers without
+    // an x-organization-id header never pass through resolveOrgContext's role
+    // assignment — so roles must be resolved from the Bearer token here
+    // (super_admin has no memberships, hence never sends the header).
+    if (!canReadContent(req.organizationId, getRequestRoles(req), assessment.organizationId)) {
       next(new NotFoundError("Assessment not found"));
       return;
     }
@@ -104,7 +108,7 @@ export async function getBySlug(
   try {
     const assessment = await getAssessmentBySlug(req.params.slug);
     // Same read scope as by-id (§44) — org-owned assessments stay in their org.
-    if (!canReadContent(req.organizationId, req.userRoles, assessment.organizationId)) {
+    if (!canReadContent(req.organizationId, getRequestRoles(req), assessment.organizationId)) {
       next(new NotFoundError("Assessment not found"));
       return;
     }

@@ -14,6 +14,7 @@
     "db:migrate": "dotenv -e ../../.env -- prisma migrate dev --schema=./prisma/schema.prisma",
     "db:deploy": "dotenv -e ../../.env -- prisma migrate deploy --schema=./prisma/schema.prisma",
     "db:seed": "npx dotenv-cli tsx src/seed.ts",
+    "db:seed-rbac": "npx dotenv-cli tsx src/seed-rbac.ts",
     "demo:seed": "npx dotenv-cli tsx src/seed-demo.ts",
     "demo:verify": "npx dotenv-cli tsx src/verify-demo.ts",
     "db:reset-passwords": "npx dotenv-cli tsx src/reset-passwords.ts",

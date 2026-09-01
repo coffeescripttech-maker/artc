@@ -28,6 +28,25 @@ import {
 } from "@/lib/org-api";
 import { Search, UserPlus, Trash2, X, Users, ShieldCheck } from "lucide-react";
 import { UserSearchPicker, type SearchedUser } from "@/components/admin/user-search-picker";
+import { apiFetch } from "@/lib/api/client";
+
+// CS#23.2 §21/§50 — the Organization Admin "Roles & Access" experience.
+// Role assignment happens here; role capabilities are read-only and come
+// from the platform (/admin/access/capabilities), never from local mock data.
+interface MembershipRoleCapabilities {
+  role: string;
+  capabilities: string[];
+}
+
+interface CapabilitiesResponse {
+  roles: Array<{
+    name: string;
+    displayName: string;
+    description: string | null;
+    permissionKeys: string[];
+  }>;
+  membershipRoles: MembershipRoleCapabilities[];
+}
 
 const ROLE_OPTIONS: OrgRole[] = ["OWNER", "ADMIN", "TEACHER", "LEARNER"];
 
@@ -73,6 +92,17 @@ export default function AdminMembersPage() {
   const [grantError, setGrantError] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<OrgMember | null>(null);
   const [roleBusyId, setRoleBusyId] = useState<string | null>(null);
+  const [membershipCapabilities, setMembershipCapabilities] = useState<
+    MembershipRoleCapabilities[]
+  >([]);
+
+  // §52 — read-only capability summaries for the assignment dialog. Descriptive
+  // only; a failure here degrades the modal, it never blocks member management.
+  useEffect(() => {
+    apiFetch<CapabilitiesResponse>("/admin/access/capabilities")
+      .then((res) => setMembershipCapabilities(res.membershipRoles ?? []))
+      .catch(() => setMembershipCapabilities([]));
+  }, []);
 
   // Discover which organizations this admin can manage. Platform admins get
   // the full list; org admins fall back to their OWNER/ADMIN memberships.
@@ -305,6 +335,32 @@ export default function AdminMembersPage() {
           )}
         </div>
 
+        {/* §21 — role-assignment summary: who holds which org role. */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {ROLE_OPTIONS.map((r) => {
+            const count = members.filter((m) => m.role === r && m.status === "ACTIVE").length;
+            return (
+              <Card key={r}>
+                <CardContent className="px-4 py-3 flex items-center justify-between">
+                  <div>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-arc-slate-500">
+                      {r}
+                    </div>
+                    <div className="text-lg font-bold text-arc-navy-900">{count}</div>
+                    <div className="text-xs text-arc-slate-400">users</div>
+                  </div>
+                  <Badge
+                    className={`${roleBadgeClass[r] ?? "bg-arc-slate-100 text-arc-slate-700"} border-transparent`}
+                  >
+                    {r[0]}
+                    {r.slice(1).toLowerCase()}
+                  </Badge>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
         {/* Members list */}
         <Card>
           <CardContent className="p-0">
@@ -428,6 +484,27 @@ export default function AdminMembersPage() {
                     </option>
                   ))}
                 </select>
+                {/* §52 — informational capabilities for the selected role.
+                    Read-only; the Organization Admin does not edit them. */}
+                {(() => {
+                  const caps = membershipCapabilities.find((c) => c.role === grantRole);
+                  if (!caps || caps.capabilities.length === 0) return null;
+                  return (
+                    <div className="mt-3 rounded-lg border border-arc-slate-200 bg-arc-slate-50 p-3">
+                      <p className="text-xs font-semibold text-arc-navy-900 mb-1">
+                        {caps.role} capabilities
+                      </p>
+                      <ul className="text-xs text-arc-slate-600 space-y-0.5">
+                        {caps.capabilities.map((c) => (
+                          <li key={c}>✓ {c}</li>
+                        ))}
+                      </ul>
+                      <p className="text-[11px] text-arc-slate-400 mt-2 italic">
+                        Permissions are managed centrally by your platform administrator.
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
               {grantError && <p className="text-sm text-red-600">{grantError}</p>}
             </div>

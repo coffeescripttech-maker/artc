@@ -3,6 +3,7 @@ import { prisma, Prisma } from "@aratc/database";
 import { NotFoundError, ForbiddenError, BadRequestError } from "../../lib/errors";
 import { auditLog, AuditEventType } from "../../lib/audit-log";
 import { EntityType } from "../../lib/content-versions";
+import { hasAnyPermission } from "../../middleware/permissions";
 
 /**
  * Content versioning API (CS#10b — architecture §18).
@@ -24,11 +25,11 @@ import { EntityType } from "../../lib/content-versions";
  *  - listVersions: newest-first, cursor-paginated history.
  */
 
-const VERSION_ROLES = ["school_admin", "content_admin", "super_admin"];
-
-function requireVersionRole(req: Request) {
+// CS#23.2 — versioning is gated by the configurable "content.versions"
+// permission (defaults: school_admin, content_admin, super_admin via bypass).
+async function requireVersionRole(req: Request) {
   if (!req.userId) throw new ForbiddenError("Authentication required");
-  if (!req.userRoles?.some((r) => VERSION_ROLES.includes(r))) {
+  if (!(await hasAnyPermission(req, "content.versions"))) {
     throw new ForbiddenError("Insufficient permissions for versioning");
   }
 }
@@ -254,21 +255,21 @@ export async function listVersions(
 // --- Controllers (wired to routes) ------------------------------------------
 
 export async function draftController(req: Request, res: Response) {
-  requireVersionRole(req);
+  await requireVersionRole(req);
   const { resourceType, resourceId } = req.params as { resourceType: string; resourceId: string };
   const result = await createDraftVersion(resourceType, resourceId, req.userId!);
   res.status(201).json({ ok: true, ...result });
 }
 
 export async function publishController(req: Request, res: Response) {
-  requireVersionRole(req);
+  await requireVersionRole(req);
   const { resourceType, resourceId } = req.params as { resourceType: string; resourceId: string };
   const result = await publishVersion(resourceType, resourceId, req.userId!, resolveTenantId(req));
   res.json({ ok: true, ...result });
 }
 
 export async function rollbackController(req: Request, res: Response) {
-  requireVersionRole(req);
+  await requireVersionRole(req);
   const { resourceType, resourceId } = req.params as {
     resourceType: string;
     resourceId: string;
@@ -289,7 +290,7 @@ export async function rollbackController(req: Request, res: Response) {
 }
 
 export async function listController(req: Request, res: Response) {
-  requireVersionRole(req);
+  await requireVersionRole(req);
   const { resourceType, resourceId } = req.params as { resourceType: string; resourceId: string };
   const limit = Math.min(Number(req.query.limit) || 20, 50);
   const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;

@@ -13,8 +13,9 @@ import {
   createFromTemplate,
   generateCetExams,
 } from "./controller";
-import { authenticate, requireRole } from "../../middleware/auth";
+import { authenticate } from "../../middleware/auth";
 import { resolveOrgContext } from "../../middleware/org-context";
+import { requirePermission } from "../../middleware/permissions";
 import {
   requireContentEditor,
   requireContentApprover,
@@ -30,8 +31,8 @@ router.get("/:slug", getBySlug);
 // Template trigger routes — platform admins (org-wide bulk creation stays
 // platform-level to avoid a school admin generating a full platform template
 // into an org they don't own).
-router.post("/template", authenticate, resolveOrgContext, requireRole("content_admin", "super_admin"), createFromTemplate);
-router.post("/:id/cet-exams", authenticate, resolveOrgContext, requireRole("content_admin", "super_admin"), generateCetExams);
+router.post("/template", authenticate, resolveOrgContext, requirePermission("programs.template"), createFromTemplate);
+router.post("/:id/cet-exams", authenticate, resolveOrgContext, requirePermission("programs.cet_generate"), generateCetExams);
 
 // Protected content routes — org managers may create/update/publish within
 // their active org; deletes remain platform-only for safety.
@@ -66,6 +67,6 @@ router.patch(
   requireContentApprover(),
   reject
 );
-router.delete("/:id", authenticate, resolveOrgContext, requireRole("content_admin", "super_admin"), remove);
+router.delete("/:id", authenticate, resolveOrgContext, requirePermission("programs.delete"), remove);
 
 export { router as programRoutes };

@@ -26,6 +26,7 @@ import {
   Building,
   Target,
   ShieldCheck,
+  KeyRound,
   ClipboardList,
 } from "lucide-react";
 import { cn } from "@aratc/ui";
@@ -257,8 +258,18 @@ export function Sidebar({ role = "student", children }: SidebarProps) {
       { label: "Organizations", href: "/platform/organizations", icon: ShieldCheck },
     ],
   };
+  // CS#23.2 — Enterprise RBAC: configurable Access Control console
+  // (superadmin-managed by default; the API enforces platform.orgs_manage).
+  const administrationGroup: NavGroup = {
+    label: "ADMINISTRATION",
+    items: [
+      { label: "Access Control", href: "/admin/access", icon: KeyRound },
+    ],
+  };
   const nav =
-    isSuperAdmin && role === "admin" ? [platformGroup, ...baseNav] : baseNav;
+    isSuperAdmin && role === "admin"
+      ? [platformGroup, administrationGroup, ...baseNav]
+      : baseNav;
 
   // Get user initials for avatar
   const getInitials = () => {

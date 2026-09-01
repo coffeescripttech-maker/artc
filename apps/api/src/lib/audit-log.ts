@@ -25,6 +25,7 @@ export type AuditEventType =
   | "ROLE_REVOKED"
   | "MEMBERSHIP_GRANTED"
   | "MEMBERSHIP_REVOKED"
+  | "MEMBERSHIP_ROLE_CHANGED"
   | "PROGRAM_PUBLISHED"
   | "PROGRAM_DELETED"
   | "LESSON_PUBLISHED"
@@ -33,7 +34,8 @@ export type AuditEventType =
   | "ENROLLMENT_REVOKED"
      | "ENROLLMENT_EXPIRED"
   | "VERSION_PUBLISHED"
-  | "VERSION_ROLLBACK";
+  | "VERSION_ROLLBACK"
+  | "ROLE_PERMISSIONS_UPDATED";
 
 export interface AuditEntryParams {
   tenantId: string;

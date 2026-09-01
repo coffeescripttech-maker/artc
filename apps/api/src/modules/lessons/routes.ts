@@ -20,8 +20,9 @@ import {
   getQuestionResponse,
   getWorkspace,
 } from "./controller";
-import { authenticate, requireRole } from "../../middleware/auth";
+import { authenticate } from "../../middleware/auth";
 import { resolveOrgContext } from "../../middleware/org-context";
+import { requirePermission } from "../../middleware/permissions";
 import {
   requireContentEditor,
   requireContentApprover,
@@ -48,7 +49,7 @@ router.put("/:id/progress", authenticate, setProgress);
 
 // Lesson question responses (authenticated learners) — must be registered
 // before any "/:id"-level catch-all that could swallow ":id" = "questions".
-router.post("/:id/questions/:questionId/respond", authenticate, requireRole("student", "content_admin", "super_admin"), saveQuestionResponse);
+router.post("/:id/questions/:questionId/respond", authenticate, requirePermission("lessons.questions_respond"), saveQuestionResponse);
 router.get("/:id/questions/:questionId/response", authenticate, getQuestionResponse);
 
 // Protected content routes — org managers may create/update/publish within
@@ -61,7 +62,7 @@ router.patch("/:id/submit-review", authenticate, resolveOrgContext, requireConte
 router.patch("/:id/approve", authenticate, resolveOrgContext, requireContentApprover(), approve);
 router.patch("/:id/reject", authenticate, resolveOrgContext, requireContentApprover(), reject);
 router.patch("/:id/archive", authenticate, resolveOrgContext, requireContentEditor(), archive);
-router.delete("/:id", authenticate, resolveOrgContext, requireRole("super_admin"), remove);
-router.put("/topic/:topicId/reorder", authenticate, resolveOrgContext, requireRole("content_admin", "super_admin"), reorder);
+router.delete("/:id", authenticate, resolveOrgContext, requirePermission("lessons.delete"), remove);
+router.put("/topic/:topicId/reorder", authenticate, resolveOrgContext, requirePermission("lessons.reorder"), reorder);
 
 export { router as lessonRoutes };

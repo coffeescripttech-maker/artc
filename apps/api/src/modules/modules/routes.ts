@@ -9,7 +9,8 @@ import {
   remove,
   reorder,
 } from "./controller";
-import { authenticate, requireRole } from "../../middleware/auth";
+import { authenticate } from "../../middleware/auth";
+import { requirePermission } from "../../middleware/permissions";
 
 const router: IRouter = Router();
 
@@ -17,12 +18,12 @@ const router: IRouter = Router();
 router.get("/", list);
 router.get("/:id", getById);
 
-// Protected admin routes
-router.post("/", authenticate, requireRole("content_admin", "super_admin"), create);
-router.put("/:id", authenticate, requireRole("content_admin", "super_admin"), update);
-router.patch("/:id/publish", authenticate, requireRole("content_admin", "super_admin"), publish);
-router.patch("/:id/archive", authenticate, requireRole("content_admin", "super_admin"), archive);
-router.delete("/:id", authenticate, requireRole("super_admin"), remove);
-router.put("/subject/:subjectId/reorder", authenticate, requireRole("content_admin", "super_admin"), reorder);
+// Protected admin routes (CS#23.2 — permission-based RBAC)
+router.post("/", authenticate, requirePermission("modules.create"), create);
+router.put("/:id", authenticate, requirePermission("modules.update"), update);
+router.patch("/:id/publish", authenticate, requirePermission("modules.publish"), publish);
+router.patch("/:id/archive", authenticate, requirePermission("modules.archive"), archive);
+router.delete("/:id", authenticate, requirePermission("modules.delete"), remove);
+router.put("/subject/:subjectId/reorder", authenticate, requirePermission("modules.reorder"), reorder);
 
 export { router as moduleRoutes };

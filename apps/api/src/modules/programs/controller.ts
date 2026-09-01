@@ -3,7 +3,7 @@ import { prisma } from "@aratc/database";
 import { createProgramSchema } from "@aratc/shared";
 import { validateRequest } from "../../lib/validate";
 import { NotFoundError } from "../../lib/errors";
-import { canViewUnpublishedContent } from "../../lib/visibility";
+import { canViewUnpublishedContent, getRequestRoles } from "../../lib/visibility";
 import { canReadContent } from "../../lib/tenant-scope";
 import {
   listPrograms,
@@ -50,7 +50,10 @@ export async function getById(
     // §44 read scope: org-owned content is only visible to members of the
     // owning org (platform admins read everything). 404 — never 403 — so the
     // existence of other orgs' content is not revealed.
-    if (!canReadContent(req.organizationId, req.userRoles, program.organizationId)) {
+    // getRequestRoles: this route is public (no authenticate) and super_admin
+    // has no memberships, so no x-organization-id header is ever sent and
+    // resolveOrgContext never assigns req.userRoles — resolve from the JWT.
+    if (!canReadContent(req.organizationId, getRequestRoles(req), program.organizationId)) {
       throw new NotFoundError("Program not found");
     }
     res.json(program);
@@ -67,7 +70,7 @@ export async function getBySlug(
   try {
     const program = await getProgramBySlug(req.params.slug);
     // Same read scope as by-id (§44) — org-owned content stays in its org.
-    if (!canReadContent(req.organizationId, req.userRoles, program.organizationId)) {
+    if (!canReadContent(req.organizationId, getRequestRoles(req), program.organizationId)) {
       throw new NotFoundError("Program not found");
     }
     res.json(program);

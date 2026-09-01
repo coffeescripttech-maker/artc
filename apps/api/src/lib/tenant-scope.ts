@@ -119,8 +119,11 @@ export function orgReadScope(
  * - Platform-owned content (organizationId IS NULL) may only be managed by
  *   platform admins (super_admin / content_admin).
  * - Organization content may only be managed by an active member of that
- *   organization (the caller's org context is resolved+verified by the
- *   resolveOrgContext middleware before this runs).
+ *   organization, OR by a platform admin (super_admin / content_admin), who
+ *   operate at the Platform layer (§12: "Super Admin is not restricted by
+ *   organization boundaries") and are therefore authorized across ALL
+ *   organizations. This mirrors resolveOrgContext (platform-admin bypass) and
+ *   canReadContent (platform admins read every org's content).
  * - Anything else is forbidden.
  */
 export function assertCanEditContent(
@@ -140,6 +143,11 @@ export function assertCanEditContent(
     }
     return;
   }
+
+  // Platform admins (super_admin / content_admin) manage content in any
+  // organization — same bypass resolveOrgContext applies when attaching org
+  // context. Non-platform-admin callers remain strictly tenant-isolated.
+  if (isPlatformAdmin) return;
 
   if (requesterOrganizationId !== resourceOrganizationId) {
     throw new ForbiddenError(

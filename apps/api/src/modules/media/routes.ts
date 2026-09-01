@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
 import { uploadMedia } from "./controller";
-import { authenticate, requireRole } from "../../middleware/auth";
+import { authenticate } from "../../middleware/auth";
+import { requirePermission } from "../../middleware/permissions";
 
 const router: IRouter = Router();
 
-// Admin-only media upload
-router.post("/", authenticate, requireRole("content_admin", "super_admin"), uploadMedia);
+// Admin-only media upload (CS#23.2 — permission-based RBAC)
+router.post("/", authenticate, requirePermission("media.upload"), uploadMedia);
 
 export { router as mediaRoutes };

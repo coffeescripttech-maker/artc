@@ -50,6 +50,35 @@ describe("assertCanEditContent (tenant isolation)", () => {
       assertCanEditContent(undefined, ["teacher"], "org_1"),
     ).toThrow(ForbiddenError);
   });
+
+  // CS#23.2 regression (§12/§44): platform admins operate at the Platform
+  // layer and are authorized across ALL organizations. The superadmin
+  // program-delete 403 ("You do not have access to content in this
+  // organization") was caused by the bypass existing only for platform-owned
+  // (null-org) content.
+  it("lets a super_admin manage another org's content (platform-wide scope)", () => {
+    expect(() =>
+      assertCanEditContent("org_A", ["super_admin"], "org_B"),
+    ).not.toThrow();
+  });
+
+  it("lets a super_admin with no org context manage org-owned content", () => {
+    expect(() =>
+      assertCanEditContent(undefined, ["super_admin"], "org_1"),
+    ).not.toThrow();
+  });
+
+  it("lets a content_admin manage another org's content (platform-wide scope)", () => {
+    expect(() =>
+      assertCanEditContent(undefined, ["content_admin"], "org_2"),
+    ).not.toThrow();
+  });
+
+  it("still forbids a school_admin (org role) from editing another org's content", () => {
+    expect(() =>
+      assertCanEditContent("org_A", ["school_admin"], "org_B"),
+    ).toThrow("do not have access");
+  });
 });
 
 describe("canCreateInOrg", () => {

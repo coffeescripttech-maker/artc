@@ -1,13 +1,14 @@
 import { Router, type IRouter } from "express";
 import { overview } from "./controller";
-import { authenticate, requireRole } from "../../middleware/auth";
+import { authenticate } from "../../middleware/auth";
+import { requirePermission } from "../../middleware/permissions";
 
 const router: IRouter = Router();
 
 router.get(
   "/overview",
   authenticate,
-  requireRole("super_admin", "school_admin", "content_admin"),
+  requirePermission("admin.stats_view"),
   overview
 );
 

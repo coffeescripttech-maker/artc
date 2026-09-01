@@ -83,7 +83,7 @@ describe("content tenant scoping (real routers + org context, mocked DB)", () =>
   });
 
   describe("PUT /api/programs/:id (write tenant isolation)", () => {
-    it("forbids editing a program owned by another organization (403)", async () => {
+    it("forbids an org-scoped role from editing a program owned by another organization (403)", async () => {
       mockedPrisma.organizationMembership.findUnique.mockResolvedValue(
         activeMembership as never, // caller is a valid org_1 member
       );
@@ -93,13 +93,41 @@ describe("content tenant scoping (real routers + org context, mocked DB)", () =>
         organizationId: "org_2",
       } as never);
 
+      // school_admin passes the editor gate (ADMIN membership) but is NOT a
+      // platform role — tenant isolation must still deny the cross-org write.
       const res = await request(app)
         .put("/api/programs/p_1")
-        .set("Authorization", `Bearer ${tokenFor("user-1", ["content_admin"])}`)
+        .set("Authorization", `Bearer ${tokenFor("user-1", ["school_admin"])}`)
         .set("x-organization-id", "org_1")
         .send({ name: "Hijack" });
 
       expect(res.status).toBe(403);
+    });
+
+    // CS#23.2 regression (§12): platform admins operate at the Platform layer
+    // and may manage content in ANY organization. This previously 403'd and
+    // blocked superadmin program deletes on org-owned programs.
+    it("allows a super_admin to edit a program owned by another organization (platform-wide)", async () => {
+      mockedPrisma.organizationMembership.findUnique.mockResolvedValue(
+        activeMembership as never,
+      );
+      mockedPrisma.program.findUnique.mockResolvedValue({
+        ...programRow,
+        organizationId: "org_2",
+      } as never);
+      mockedPrisma.program.update.mockResolvedValue({
+        ...programRow,
+        organizationId: "org_2",
+        name: "Hijack",
+      } as never);
+
+      const res = await request(app)
+        .put("/api/programs/p_1")
+        .set("Authorization", `Bearer ${tokenFor("user-1", ["super_admin"])}`)
+        .set("x-organization-id", "org_1")
+        .send({ name: "Hijack" });
+
+      expect(res.status).toBe(200);
     });
 
     it("allows editing a program owned by the caller's org", async () => {

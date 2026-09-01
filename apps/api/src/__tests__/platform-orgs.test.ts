@@ -17,6 +17,8 @@ vi.mock('@aratc/database', () => ({
       findUnique: vi.fn(),
       upsert: vi.fn(),
     },
+    // CS#23.2 — RBAC middleware: no DB grants in this mock (super_admin bypasses).
+    rolePermission: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }));
 

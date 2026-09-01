@@ -21,6 +21,7 @@ import { platformOrganizationsRoutes } from "./modules/platform/organizations/ro
 import { enrollmentRoutes } from "./modules/enrollments/routes";
 import { adminAuditRoutes } from "./modules/admin-audit/routes";
 import contentVersionRoutes from "./modules/content-versions/routes";
+import { accessControlRoutes } from "./modules/access-control/routes";
 import { errorHandler } from "./middleware/error-handler";
 import { resolveOrgContext } from "./middleware/org-context";
 
@@ -92,6 +93,9 @@ export function buildApp(): express.Express {
 
     // CS#14 — admin audit log (read-only query surface over append-only events).
   app.use("/api/admin/audit", adminAuditRoutes);
+
+  // CS#23.2 — Enterprise RBAC: role/permission matrix management + simulator.
+  app.use("/api/admin/access", accessControlRoutes);
 
   // CS#10b — content versioning: draft / publish / rollback / history
   app.use("/api/versions", contentVersionRoutes);

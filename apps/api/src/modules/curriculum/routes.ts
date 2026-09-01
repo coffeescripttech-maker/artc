@@ -14,7 +14,8 @@ import {
   removeItem,
   stats,
 } from "./controller";
-import { authenticate, requireRole } from "../../middleware/auth";
+import { authenticate } from "../../middleware/auth";
+import { requirePermission } from "../../middleware/permissions";
 
 const router: IRouter = Router();
 
@@ -24,17 +25,17 @@ router.get("/slug/:slug", getBySlug);
 router.get("/:id", getById);
 router.get("/:id/stats", stats);
 
-// Protected admin routes
-router.post("/", authenticate, requireRole("content_admin", "super_admin"), create);
-router.put("/:id", authenticate, requireRole("content_admin", "super_admin"), update);
-router.patch("/:id/publish", authenticate, requireRole("content_admin", "super_admin"), publish);
-router.patch("/:id/archive", authenticate, requireRole("content_admin", "super_admin"), archive);
-router.delete("/:id", authenticate, requireRole("super_admin"), remove);
+// Protected admin routes (CS#23.2 — permission-based RBAC)
+router.post("/", authenticate, requirePermission("curriculum.create"), create);
+router.put("/:id", authenticate, requirePermission("curriculum.update"), update);
+router.patch("/:id/publish", authenticate, requirePermission("curriculum.publish"), publish);
+router.patch("/:id/archive", authenticate, requirePermission("curriculum.archive"), archive);
+router.delete("/:id", authenticate, requirePermission("curriculum.delete"), remove);
 
 // Curriculum items
-router.post("/:id/items", authenticate, requireRole("content_admin", "super_admin"), addItem);
-router.put("/:id/items", authenticate, requireRole("content_admin", "super_admin"), reorderItems);
-router.patch("/:id/items/:itemId", authenticate, requireRole("content_admin", "super_admin"), updateItem);
-router.delete("/:id/items/:itemId", authenticate, requireRole("content_admin", "super_admin"), removeItem);
+router.post("/:id/items", authenticate, requirePermission("curriculum.items_manage"), addItem);
+router.put("/:id/items", authenticate, requirePermission("curriculum.items_manage"), reorderItems);
+router.patch("/:id/items/:itemId", authenticate, requirePermission("curriculum.items_manage"), updateItem);
+router.delete("/:id/items/:itemId", authenticate, requirePermission("curriculum.items_manage"), removeItem);
 
 export { router as curriculumRoutes };

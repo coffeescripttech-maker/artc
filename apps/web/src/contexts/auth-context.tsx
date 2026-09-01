@@ -120,7 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       memberships?: Array<{ role: string; organization: { id: string } }>;
     };
 
-    localStorage.setItem("token", data.token);
+        localStorage.setItem("token", data.token);
     setState({
       user: data.user,
       learnerProfile: data.learnerProfile || null,
@@ -128,16 +128,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: true,
     });
 
-    // Return redirect route based on user roles
-    const roles = data.user.roles;
-    if (
-      roles.includes("super_admin") ||
-      roles.includes("content_admin") ||
-      roles.includes("school_admin")
-    ) {
-      return "/admin";
-    }
     // Populate the active-org context for org-scoped content creation (CS#5).
+    // This runs for ALL user types — including platform admins — so that the
+    // x-organization-id header is valid and the org-context middleware bypass
+    // (for super_admin/content_admin) can work. Without this, a stale org ID
+    // from a previous session would cause resolveOrgContext to reject the
+    // request before the platform-admin bypass is reached.
     const memberships = data.memberships || [];
     if (memberships.length > 0) {
       const activeOrg = getActiveOrgId();
@@ -149,6 +145,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!stillMember) {
         setActiveOrgId(memberships[0].organization.id);
       }
+    }
+
+    // Return redirect route based on user roles
+    if (
+      data.user.roles.includes("super_admin") ||
+      data.user.roles.includes("content_admin") ||
+      data.user.roles.includes("school_admin")
+    ) {
+      return "/admin";
     }
     return "/dashboard";
   };
@@ -198,6 +203,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     localStorage.removeItem("token");
+    // Clear the persisted org context so a stale organization ID from a prior
+    // session/user can never be sent as x-organization-id after logout.
+    setActiveOrgId(null);
     setState({
       user: null,
       learnerProfile: null,

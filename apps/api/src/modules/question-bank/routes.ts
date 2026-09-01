@@ -18,7 +18,8 @@ import {
   stats,
   mine,
 } from "./controller";
-import { authenticate, requireRole } from "../../middleware/auth";
+import { authenticate } from "../../middleware/auth";
+import { requirePermission } from "../../middleware/permissions";
 import { upload } from "../../middleware/upload";
 import {
   previewExtraction,
@@ -36,8 +37,8 @@ const router: IRouter = Router();
 // (Express matches /import before /:id="import")
 // ============================================================
 
-/** Roles allowed to import questions from PDF */
-const importRoles = requireRole("super_admin", "school_admin", "content_admin", "teacher");
+/** Permission required to import questions from PDF (CS#23.2). */
+const importRoles = requirePermission("questions.import");
 
 /**
  * POST /questions/import/extract-text
@@ -247,26 +248,26 @@ router.get("/stats", stats);
 
 router.get("/:id", getById);
 
-// Protected admin routes
-router.post("/", authenticate, requireRole("content_admin", "super_admin"), create);
-router.put("/:id", authenticate, requireRole("content_admin", "super_admin"), update);
-router.patch("/:id/review", authenticate, requireRole("content_admin", "super_admin"), review);
-router.patch("/:id/publish", authenticate, requireRole("content_admin", "super_admin"), publish);
-router.patch("/:id/archive", authenticate, requireRole("content_admin", "super_admin"), archive);
-router.delete("/:id", authenticate, requireRole("super_admin"), remove);
+// Protected admin routes (CS#23.2 — permission-based RBAC)
+router.post("/", authenticate, requirePermission("questions.create"), create);
+router.put("/:id", authenticate, requirePermission("questions.update"), update);
+router.patch("/:id/review", authenticate, requirePermission("questions.review"), review);
+router.patch("/:id/publish", authenticate, requirePermission("questions.publish"), publish);
+router.patch("/:id/archive", authenticate, requirePermission("questions.archive"), archive);
+router.delete("/:id", authenticate, requirePermission("questions.delete"), remove);
 
 // Question links
-router.post("/:id/links", authenticate, requireRole("content_admin", "super_admin"), createLink);
+router.post("/:id/links", authenticate, requirePermission("questions.links_manage"), createLink);
 router.patch(
   "/links/:linkId",
   authenticate,
-  requireRole("content_admin", "super_admin"),
+  requirePermission("questions.links_manage"),
   updateLink
 );
 router.delete(
   "/links/:linkId",
   authenticate,
-  requireRole("content_admin", "super_admin"),
+  requirePermission("questions.links_manage"),
   removeLink
 );
 

@@ -46,6 +46,7 @@ model Role {
   displayName String     @map("display_name")
   description String?
   users       UserRole[]
+  permissions RolePermission[]
 
   @@map("roles")
 }
@@ -60,6 +61,36 @@ model UserRole {
 
   @@unique([userId, roleId])
   @@map("user_roles")
+}
+
+// CS#23.2 — Enterprise RBAC. Permission keys follow `resource.action` and are
+// seeded from packages/database/src/permission-catalog.ts. `isEnforced` marks
+// keys actually checked by route middleware today (learner/parent flows are
+// catalogued for visibility but remain authenticate-gated).
+model Permission {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  resource    String
+  action      String
+  displayName String   @map("display_name")
+  description String?
+  isEnforced  Boolean  @default(true) @map("is_enforced")
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  roleId       String     @map("role_id")
+  permissionId String     @map("permission_id")
+  grantedBy    String?    @map("granted_by")
+  grantedAt    DateTime   @default(now()) @map("granted_at")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
 }
 
 model Session {

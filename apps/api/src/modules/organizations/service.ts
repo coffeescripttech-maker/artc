@@ -1,5 +1,6 @@
 import { prisma } from "@aratc/database";
 import { ApiError, ForbiddenError, NotFoundError, ValidationError } from "../../lib/errors";
+import { auditLog } from "../../lib/audit-log";
 
 const PLATFORM_ADMIN_ROLES = ["super_admin", "content_admin"];
 const ORG_MANAGER_ROLES = ["OWNER", "ADMIN"];
@@ -275,6 +276,16 @@ export async function createMembership(input: {
         user: { select: { id: true, email: true, firstName: true, lastName: true } },
       },
     });
+    // §34 — organization role assignment is audited (grant via re-activation).
+    await auditLog({
+      tenantId: input.organizationId,
+      actorId: input.requesterId,
+      eventType: "MEMBERSHIP_GRANTED",
+      targetUserId: input.userId,
+      targetResourceId: revived.id,
+      actedOn: revived.user?.email ?? input.userId,
+      after: { role: input.role, status: "ACTIVE", reactivated: true },
+    }).catch(() => {});
     return revived as MembershipDTO;
   }
 
@@ -289,6 +300,16 @@ export async function createMembership(input: {
       user: { select: { id: true, email: true, firstName: true, lastName: true } },
     },
   });
+  // §34 — organization role assignment is audited (new grant).
+  await auditLog({
+    tenantId: input.organizationId,
+    actorId: input.requesterId,
+    eventType: "MEMBERSHIP_GRANTED",
+    targetUserId: input.userId,
+    targetResourceId: created.id,
+    actedOn: created.user?.email ?? input.userId,
+    after: { role: input.role, status: "ACTIVE" },
+  }).catch(() => {});
   return created as MembershipDTO;
 }
 
@@ -329,6 +350,18 @@ export async function updateMembership(input: {
       user: { select: { id: true, email: true, firstName: true, lastName: true } },
     },
   });
+  // §34 — role/status changes on an existing member are audited with the
+  // before/after values (e.g. TEACHER → ADMIN) for the organization audit log.
+  await auditLog({
+    tenantId: input.organizationId,
+    actorId: input.requesterId,
+    eventType: "MEMBERSHIP_ROLE_CHANGED",
+    targetUserId: membership.userId,
+    targetResourceId: membership.id,
+    actedOn: updated.user?.email ?? membership.userId,
+    before: { role: membership.role, status: membership.status },
+    after: { role: updated.role, status: updated.status },
+  }).catch(() => {});
   return updated as MembershipDTO;
 }
 
@@ -359,9 +392,20 @@ export async function removeMembership(input: {
   }
 
   // Soft-remove: CANCELLED preserves history; the row is never deleted.
-  await prisma.organizationMembership.update({
+  const removed = await prisma.organizationMembership.update({
     where: { id: membership.id },
     data: { status: "CANCELLED" },
   });
+  // §34 — membership revocation is audited.
+  await auditLog({
+    tenantId: input.organizationId,
+    actorId: input.requesterId,
+    eventType: "MEMBERSHIP_REVOKED",
+    targetUserId: membership.userId,
+    targetResourceId: membership.id,
+    actedOn: membership.userId,
+    before: { role: membership.role, status: membership.status },
+    after: { status: removed.status },
+  }).catch(() => {});
   return { id: membership.id };
 }

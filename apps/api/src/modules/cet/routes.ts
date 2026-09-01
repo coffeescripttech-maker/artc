@@ -33,7 +33,8 @@ import {
   unlinkProgramHandler,
   getProgramExamsHandler,
 } from "./controller";
-import { authenticate, requireRole } from "../../middleware/auth";
+import { authenticate } from "../../middleware/auth";
+import { requirePermission } from "../../middleware/permissions";
 
 const router: IRouter = Router();
 
@@ -43,9 +44,9 @@ const router: IRouter = Router();
 const universities = Router();
 universities.get("/", listUniversitiesHandler);
 universities.get("/:id", getUniversity);
-universities.post("/", authenticate, requireRole("super_admin"), createUniversityHandler);
-universities.put("/:id", authenticate, requireRole("super_admin"), updateUniversityHandler);
-universities.delete("/:id", authenticate, requireRole("super_admin"), deleteUniversityHandler);
+universities.post("/", authenticate, requirePermission("cet.universities_manage"), createUniversityHandler);
+universities.put("/:id", authenticate, requirePermission("cet.universities_manage"), updateUniversityHandler);
+universities.delete("/:id", authenticate, requirePermission("cet.universities_manage"), deleteUniversityHandler);
 
 // ============================================================
 // Exams
@@ -54,11 +55,11 @@ const exams = Router();
 exams.get("/", listExamsHandler);
 exams.get("/:id", getExam);
 exams.get("/:id/stats", examStats);
-exams.post("/", authenticate, requireRole("content_admin", "super_admin"), createExamHandler);
-exams.put("/:id", authenticate, requireRole("content_admin", "super_admin"), updateExamHandler);
-exams.patch("/:id/publish", authenticate, requireRole("content_admin", "super_admin"), publishExamHandler);
-exams.patch("/:id/archive", authenticate, requireRole("content_admin", "super_admin"), archiveExamHandler);
-exams.delete("/:id", authenticate, requireRole("super_admin"), deleteExamHandler);
+exams.post("/", authenticate, requirePermission("cet.exams_manage"), createExamHandler);
+exams.put("/:id", authenticate, requirePermission("cet.exams_manage"), updateExamHandler);
+exams.patch("/:id/publish", authenticate, requirePermission("cet.exams_manage"), publishExamHandler);
+exams.patch("/:id/archive", authenticate, requirePermission("cet.exams_manage"), archiveExamHandler);
+exams.delete("/:id", authenticate, requirePermission("cet.exams_manage"), deleteExamHandler);
 
 // ============================================================
 // Profiles
@@ -67,24 +68,24 @@ const profiles = Router();
 profiles.get("/", listProfilesHandler);
 profiles.get("/:id", getProfile);
 profiles.get("/:id/stats", profileStats);
-profiles.post("/", authenticate, requireRole("content_admin", "super_admin"), createProfileHandler);
-profiles.put("/:id", authenticate, requireRole("content_admin", "super_admin"), updateProfileHandler);
-profiles.patch("/:id/publish", authenticate, requireRole("content_admin", "super_admin"), publishProfileHandler);
-profiles.patch("/:id/archive", authenticate, requireRole("content_admin", "super_admin"), archiveProfileHandler);
-profiles.delete("/:id", authenticate, requireRole("super_admin"), deleteProfileHandler);
+profiles.post("/", authenticate, requirePermission("cet.profiles_manage"), createProfileHandler);
+profiles.put("/:id", authenticate, requirePermission("cet.profiles_manage"), updateProfileHandler);
+profiles.patch("/:id/publish", authenticate, requirePermission("cet.profiles_manage"), publishProfileHandler);
+profiles.patch("/:id/archive", authenticate, requirePermission("cet.profiles_manage"), archiveProfileHandler);
+profiles.delete("/:id", authenticate, requirePermission("cet.profiles_manage"), deleteProfileHandler);
 
 // Coverage routes (nested under profiles)
-profiles.post("/:id/coverage", authenticate, requireRole("content_admin", "super_admin"), addCoverageHandler);
-profiles.patch("/coverage/:coverageId", authenticate, requireRole("content_admin", "super_admin"), updateCoverageHandler);
-profiles.delete("/coverage/:coverageId", authenticate, requireRole("content_admin", "super_admin"), removeCoverageHandler);
+profiles.post("/:id/coverage", authenticate, requirePermission("cet.profiles_manage"), addCoverageHandler);
+profiles.patch("/coverage/:coverageId", authenticate, requirePermission("cet.profiles_manage"), updateCoverageHandler);
+profiles.delete("/coverage/:coverageId", authenticate, requirePermission("cet.profiles_manage"), removeCoverageHandler);
 
 // ============================================================
 // Program-CET links
 // ============================================================
 const programLinks = Router();
 programLinks.get("/:programId/exams", getProgramExamsHandler);
-programLinks.post("/:programId/exams", authenticate, requireRole("content_admin", "super_admin"), linkProgramHandler);
-programLinks.delete("/:programId/exams/:examId", authenticate, requireRole("content_admin", "super_admin"), unlinkProgramHandler);
+programLinks.post("/:programId/exams", authenticate, requirePermission("cet.programs_link"), linkProgramHandler);
+programLinks.delete("/:programId/exams/:examId", authenticate, requirePermission("cet.programs_link"), unlinkProgramHandler);
 
 // Mount routers
 router.use("/universities", universities);

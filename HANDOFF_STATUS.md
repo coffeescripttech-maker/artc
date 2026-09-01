@@ -593,3 +593,155 @@ RESTORE â†’ set back to incomplete (clean demo state)
 
 ## Next
 - None outstanding for CS#23.1. Owner review + manual UI validation.
+
+## Post-CS#23.1 fix: superadmin 403 on organ organization pages (org-context + auth-context)
+- **Reported:** superadmin could not browse several pages — API returned 403
+  "You are not an active member of this organization" (seen when opening an
+  organization / navigating after org switch).
+- **Root cause (two layers):**
+  1. `resolveOrgContext` (globally mounted) required an ACTIVE
+     `organizationMembership` for every caller — including `super_admin`, who
+     historically had no membership rows. The web client always sends a
+     persisted `x-organization-id`, so a stale org id from a previous session
+     could cause the 403 before any platform-admin authorization was considered.
+  2. Frontend `login()` in `auth-context.tsx` returned `/admin` for platform
+     admins BEFORE the `setActiveOrgId()` block ran, so `super_admin`/`content_admin`/
+     `school_admin` never populated `localStorage.activeOrganizationId` on login —
+     leaving whatever stale org id a prior session/user had written.
+- **Backend fix (`middleware/org-context.ts`):** platform admins operate at the
+  Platform layer and may act in ANY organization context without requiring a
+  local membership row. `resolveOrgContext` now resolves roles (from
+  `req.userRoles` or the signed JWT), and if `hasPlatformAdminRole(roles)` sets
+  `req.organizationId` + `req.membership` and skips the membership lookup.
+  The header only names a context; authorization comes from the platform role
+  verified via the JWT — never from the client.
+- **Frontend fix (`auth-context.tsx`):** `login()` now populates the active-org
+  context (from returned memberships) for ALL roles BEFORE the admin redirect;
+  `logout()` clears `activeOrganizationId` so stale org ids never leak across
+  sessions/users.
+- **Tests (`org-context.test.ts` +4):** super_admin bypass (OWNER), content_admin
+  bypass (ADMIN), bypass via signed JWT on the global-mount path, and non-member
+  non-platform still rejected (403) — tenant isolation preserved.
+- **Verification:** API vitest 187/187 (20 files); full live probe —
+  superadmin login ? platform org list/detail 200 ? org member list 200 (valid
+  AND stale org headers); web typecheck + lint clean.
+
+---
+
+# CS#23.1/23.2 - Public-read superadmin 404 fix + Enterprise RBAC (2026-09-01)
+
+## Part 1 - CS#23.1 bug: superadmin 404 on public read routes
+- **Root cause:** public routes (GET /by-id/:id, /by-slug/:slug) lack
+  `authenticate`, so `req.userRoles` was never set when no `x-organization-id`
+  header was sent (super_admin has no memberships). The visibility layer then
+  treated the superadmin as anonymous -> 404.
+- **Fix:** replaced `req.userRoles` with `getRequestRoles(req)` at 4 call sites
+  (programs/controller.ts, assessments/controller.ts); `getRequestRoles`
+  opportunistically decodes the Bearer JWT on public routes. Removed a stray
+  console.log from programs/service.ts.
+- **Verified live:** superadmin GET /api/programs/by-id/:id without org header
+  -> 200 (regression probe kept in apps/api/cs232-probe.cjs).
+
+## Part 2 - CS#23.2 Enterprise RBAC (all system roles, configurable UI)
+- **Phase 1 audit (RBAC_AUDIT_CS232.md):** full role inventory before any code.
+  6 platform roles in DB (super_admin 2, content_admin 1, school_admin 2,
+  teacher 7, student 25, parent 7) + separate org-membership axis
+  (OWNER/ADMIN/TEACHER/LEARNER) + every hard-coded role set and route gate.
+- **Schema (migration 20260901020907_cs232_rbac):** new `Permission`
+  (resource.action key, display metadata, isEnforced) and `RolePermission`
+  (roleId+permissionId unique, grantedBy/grantedAt) models.
+- **Catalog + seed (packages/database/src/permission-catalog.ts, seed-rbac.ts,
+  `npm run db:seed-rbac [-- --reset]`):** 77 permissions, 151 default grants
+  seeded idempotently. Defaults preserve today's behavior exactly (content_admin:
+  CRUD minus deletes; school_admin: stats/audit/versions/import/batches;
+  teacher: batches/import; student: learner set; parent: children.view advisory
+  placeholder). Learner/parent permissions are catalogued as isEnforced=false
+  (advisory) - their flows stay authenticate-gated.
+- **Middleware (apps/api/src/middleware/permissions.ts):** `requirePermission` /
+  `hasAnyPermission` resolve effective grants from the DB by JWT role NAMES
+  (roles live in the token, grants live in the DB -> permission edits apply
+  without re-login), 30s in-memory cache + invalidatePermissionCache().
+  super_admin hard-bypasses (system role - can never lock itself out).
+- **All role-gated routes migrated** from requireRole(...) to
+  requirePermission("<resource>.<action>") across assessments, subjects,
+  modules, topics, curriculum, questions, passages, cet, media, settings,
+  admin-stats, admin-audit, batches, lessons, programs, organizations,
+  platform/organizations (replaces requirePlatformAdmin guard), question
+  import, and content versioning (content.versions).
+- **Access Control API (/api/admin/access, mounted in app.ts):** GET /roles,
+  GET /permissions, GET /roles/:id, PUT /roles/:id/permissions (transactional
+  replace, refuses system-locked roles, audit-logged ROLE_PERMISSIONS_UPDATED,
+  cache-invalidating), and POST /simulate (grants/denied + org-membership axis).
+  Guarded by platform.orgs_manage (default: super_admin only). New audit event
+  type in lib/audit-log.ts.
+- **Frontend (apps/web/src/app/admin/access/page.tsx + sidebar ADMINISTRATION
+  section, superadmin-only):** role cards, resource-grouped permission matrix
+  with save (system roles locked), grant simulator, advisory badges.
+  Server-side enforcement is authoritative; the UI only renders it.
+- **Tests:** added rolePermission.findMany mock to admin-audit, org-members,
+  platform-orgs test DB mocks (RBAC middleware now reads the DB; super_admin
+  bypasses untouched). API vitest 187/187 (20 files).
+- **Live end-to-end probe (apps/api/cs232-probe.cjs, 12/12 PASS):** CS#23.1
+  regression, access-control reads/writes, teacher 403 on access console,
+  permission PUT + revert, super_admin lock refusal, simulator, real-token
+  enforcement (teacher passes questions.import guard -> 400 handler; student
+  403 on import + settings), audit event written.
+- **Known pre-existing gaps surfaced by the audit (not fixed here):**
+  batchRoutes is defined but never mounted in app.ts (web client calls would
+  404); the parent role has 7 real users but zero enforcement; program delete
+  was content_admin+super_admin while other deletes are super_admin-only
+  (behavior preserved in the default catalog).
+
+## 2026-09-01 — CS#23.2 fix: superadmin 403 deleting org-owned programs
+
+- **Bug:** `assertCanEditContent` (apps/api/src/lib/tenant-scope.ts) applied
+  the platform-admin bypass ONLY to platform-owned (null-org) content. For
+  org-owned programs the superadmin fell through to the strict org-match
+  check and got 403 "You do not have access to content in this organization"
+  whenever the active org header did not match the owning org (or was absent).
+- **Fix:** platform admins (super_admin / content_admin) now bypass the
+  org-match branch too, mirroring resolveOrgContext's platform-admin bypass
+  and canReadContent (CS#23.2 #12/#44: super admin is not restricted by
+  organization boundaries). Org-scoped roles (school_admin/teacher/student)
+  remain strictly tenant-isolated — cross-org writes still 403.
+- **Tests:** 4 new unit cases in tenant-scope.test.ts; tenant-api.test.ts
+  cross-org denial actor changed from content_admin (a platform role) to
+  school_admin (correctly org-scoped) + new superadmin cross-org 200 case.
+  Full suite 192/192 (20 files), tsc clean.
+- **Live E2E (apps/api/cs232-delete-probe.cjs):** superadmin created a
+  throwaway program in ARC Review Center and deleted it both WITH the org
+  header and with NO header — 204/204 PASS; self-cleaning. Full cs232-probe
+  still 12/12.
+
+## 2026-09-01 — CS#23.2 COMPLETE: Enterprise Global RBAC + Org Role Management (final pass)
+
+Closed the remaining spec gaps on top of the earlier RBAC implementation:
+
+- **§34 Org role-assignment audit:** `organizations/service.ts` now writes
+  `MEMBERSHIP_GRANTED` (incl. reactivation), `MEMBERSHIP_ROLE_CHANGED`
+  (with before/after role+status) and `MEMBERSHIP_REVOKED` audit events under
+  the organization tenant. New `MEMBERSHIP_ROLE_CHANGED` type in
+  `lib/audit-log.ts`. Best-effort (`.catch`) so logging never breaks the action.
+- **§21/§23/§50/§52 Org Admin Roles & Access:** new read-only
+  `GET /api/admin/access/capabilities` (authenticated; deliberately NOT behind
+  the platform guard) returning live platform-role permission keys from the DB
+  plus membership-role capability summaries mirroring actual middleware.
+  `/admin/members` shows role-distribution cards, capability preview + the
+  "Permissions are managed centrally" note in the Add Member dialog.
+- **§34/§35 Superadmin Audit tab:** `/admin/access` has a Permissions/Audit Log
+  tab pair; audit fetch passes `x-tenant-id: platform` (global RBAC events are
+  stored under tenant `platform`). `admin-audit/controller.ts` now honors the
+  explicit header **only for super_admin** — other roles stay org-pinned.
+- **§55 Final authorization audit:** zero `requireRole()` call sites remain in
+  routes (definition retained in `middleware/auth.ts` as a utility); deleted
+  dead `middleware/platform-admin.ts` (replaced by
+  `requirePermission("platform.orgs_manage")`). Remaining role-list checks are
+  intentionally retained: `PLATFORM_ADMIN_ROLES`/`PLATFORM_CONTENT_ROLES`
+  bypasses in `tenant-scope.ts`/`content-editor.ts` (§27 resource-level rules)
+  and the `super_admin` hard bypass in `permissions.ts` (§36 lockout protection).
+
+**Validation:** API+Web typecheck OK · lint 0 errors (warnings pre-existing) ·
+192/192 API tests (20 files) · live probes: `cs232-probe.cjs` 12/12,
+`cs232-delete-probe.cjs` PASS, new `cs232-capabilities-probe.cjs` 8/8
+(capabilities read-only OK for student, 401 anon, platform-tenant audit for
+superadmin, teacher header ignored, mutation guards intact).
