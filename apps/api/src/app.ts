@@ -23,6 +23,7 @@ import { enrollmentRoutes } from "./modules/enrollments/routes";
 import { adminAuditRoutes } from "./modules/admin-audit/routes";
 import contentVersionRoutes from "./modules/content-versions/routes";
 import { accessControlRoutes } from "./modules/access-control/routes";
+import { adminResetRoutes } from "./modules/platform/admin-reset/routes";
 import { errorHandler } from "./middleware/error-handler";
 import { resolveOrgContext } from "./middleware/org-context";
 
@@ -89,6 +90,9 @@ export function buildApp(): express.Express {
   app.use("/api", enrollmentRoutes);
 
     // Superadmin platform-management endpoints (§3 — superadmin-only, separate from /admin/*)  app.use("/api/platform/organizations", platformOrganizationsRoutes);
+
+  // CS#26 — superadmin data resets (full-platform + per-organization; clean-slate testing/recovery tool)
+  app.use("/api/platform/admin/reset", adminResetRoutes);
 
     // CS#14 — admin audit log (read-only query surface over append-only events).  app.use("/api/admin/audit", adminAuditRoutes);
 

@@ -818,3 +818,37 @@ Date: 2026-09-03
 ## Notes
 - CSP intentionally deferred (Next App Router + inline styles makes a safe CSP a follow-up with testing; other header coverage is complete).
 - `JWT_REFRESH_SECRET` dropped -- was only referenced inside a dead function;ever used by auth.
+
+---
+
+# CS#26 - Platform Admin Data Reset (Superadmin Clean-Slate Tool)
+
+Status: COMPLETE
+
+## Purpose
+Lets a superadmin wipe tenant/academic data from the UI to test from a clean state.
+
+## Backend
+- `GET /api/platform/admin/reset/preview[?orgId=]` - live counts, zero mutation
+- `POST /api/platform/admin/reset/reset` (body `{ confirm: "RESET" }`) - FULL wipe:
+  orgs, memberships, programs, curriculum chain, lessons, questions, assessments,
+  attempts, enrollments, batches, tests, progress, parent links, non-superadmin users.
+  PRESERVED: super_admin accounts, RBAC definitions (Role/Permission/RolePermission), SiteSettings.
+- `POST /api/platform/admin/reset/orgs/:orgId/reset` - per-organization wipe only.
+- Auth: `authenticate` + `platform.admin_reset` permission + in-service super_admin role assert.
+- Audit: `PLATFORM_RESET` / `ORG_RESET` events (union extended in audit-log.ts).
+- Validation: `validateRequest(resetSchema)` - wrong/missing confirm = 400 (never 500).
+
+## Frontend
+- `/platform/settings` - superadmin-only Platform Settings page: live preview counts,
+  full reset + per-org reset with typed "RESET" confirmation dialogs.
+- Sidebar: PLATFORM > Settings (super_admin only).
+
+## Validation
+- API tests 226/226; API typecheck 0; Web typecheck 0; lint 0 errors on changed files.
+- Live E2E: superadmin preview 200 (full + org-scoped), teacher 403, anon 401,
+  wrong/missing confirm 400. Destructive resets left to the owner via the UI.
+
+## Known Limitations
+- Full reset also clears audit history (a fresh PLATFORM_RESET event is written after).
+- Legacy Test/TestAttempt tables wiped in full reset; not org-scoped in org reset.

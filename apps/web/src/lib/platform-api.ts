@@ -107,3 +107,36 @@ export async function invitePlatformOrgAdmin(id: string, userId: string): Promis
     body: JSON.stringify({ userId }),
   });
 }
+
+// ---------------------------------------------------------------------------
+// CS#26 — Superadmin data reset (full-platform + per-organization)
+// ---------------------------------------------------------------------------
+
+export interface ResetCounts {
+  [key: string]: number;
+}
+
+export interface ResetPreview {
+  scope: "full" | "organization";
+  organizationId?: string;
+  counts: ResetCounts;
+}
+
+export async function fetchResetPreview(orgId?: string): Promise<ResetPreview> {
+  const qs = orgId ? `?orgId=${encodeURIComponent(orgId)}` : "";
+  return (await apiRequest(`/api/platform/admin/reset/preview${qs}`)) as ResetPreview;
+}
+
+export async function performFullReset(): Promise<{ ok: boolean; counts: ResetCounts }> {
+  return (await apiRequest("/api/platform/admin/reset/reset", {
+    method: "POST",
+    body: JSON.stringify({ confirm: "RESET" }),
+  })) as { ok: boolean; counts: ResetCounts };
+}
+
+export async function performOrgReset(orgId: string): Promise<{ ok: boolean; counts: ResetCounts }> {
+  return (await apiRequest(`/api/platform/admin/reset/orgs/${orgId}/reset`, {
+    method: "POST",
+    body: JSON.stringify({ confirm: "RESET" }),
+  })) as { ok: boolean; counts: ResetCounts };
+}

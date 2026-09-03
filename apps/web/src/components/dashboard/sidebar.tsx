@@ -259,6 +259,7 @@ export function Sidebar({ role = "student", children }: SidebarProps) {
     label: "PLATFORM",
     items: [
       { label: "Organizations", href: "/platform/organizations", icon: ShieldCheck },
+      { label: "Settings", href: "/platform/settings", icon: Settings },
     ],
   };
   // CS#23.2 — Enterprise RBAC: configurable Access Control console

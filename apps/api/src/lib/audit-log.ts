@@ -19,6 +19,8 @@
 import { prisma, Prisma } from "@aratc/database";
 
 export type AuditEventType =
+  | "PLATFORM_RESET"
+  | "ORG_RESET"
   | "USER_CREATED"
   | "USER_DELETED"
   | "ROLE_GRANTED"

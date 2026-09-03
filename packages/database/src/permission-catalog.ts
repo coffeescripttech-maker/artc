@@ -83,6 +83,7 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
   { key: "admin.stats_view", resource: "admin", action: "stats_view", displayName: "View Admin Statistics", description: "See the admin dashboard overview metrics.", enforced: true },
   { key: "admin.audit_view", resource: "admin", action: "audit_view", displayName: "View Audit Log", description: "Query the append-only audit event log.", enforced: true },
   { key: "platform.orgs_manage", resource: "platform", action: "orgs_manage", displayName: "Manage Organizations", description: "Create, update, suspend and delete organizations; invite admins.", enforced: true },
+  { key: "platform.admin_reset", resource: "platform", action: "admin_reset", displayName: "Admin Data Reset", description: "Preview and execute full-platform or per-organization data resets (superadmin-only clean-slate / recovery tool).", enforced: true },
   { key: "orgs.list", resource: "orgs", action: "list", displayName: "List Organizations", description: "List all organizations (admin members UI).", enforced: true },
   { key: "orgs.users_search", resource: "orgs", action: "users_search", displayName: "Search Users", description: "Search the user base for membership pickers.", enforced: true },
   { key: "orgs.update", resource: "orgs", action: "update", displayName: "Update Organization Settings", description: "Update organization profile/settings (own organization for org admins; all organizations with platform.orgs_manage).", enforced: true },
