@@ -46,7 +46,7 @@ export default function PlatformSettingsPage() {
     setBusy("full");
     try {
       await performFullReset();
-      toast.success("Platform data reset complete — clean slate ready");
+      toast.success("Platform data reset complete ??? clean slate ready");
       setConfirmText("");
       await load();
     } catch (e: unknown) {
@@ -77,7 +77,7 @@ export default function PlatformSettingsPage() {
     <div className="min-h-screen bg-arc-slate-50">
       <DashboardHeader
         title="Platform Settings"
-        subtitle="Superadmin data management — reset previews and clean-slate tooling"
+        subtitle="Superadmin data management ??? reset previews and clean-slate tooling"
       />
       <div className="p-6 space-y-6 max-w-5xl">
         {/* Live counts preview */}
@@ -85,12 +85,12 @@ export default function PlatformSettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Database className="h-4 w-4 text-arc-navy-900" />
-              Current data ({preview?.scope ?? "…"})
+              Current data ({preview?.scope ?? "???"})
             </CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
-              <p className="text-sm text-muted-foreground">Loading counts…</p>
+              <p className="text-sm text-muted-foreground">Loading counts???</p>
             ) : countEntries.length === 0 ? (
               <p className="text-sm text-muted-foreground">No counts to display.</p>
             ) : (
@@ -111,18 +111,18 @@ export default function PlatformSettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base text-red-600">
               <Trash2 className="h-4 w-4" />
-              Danger Zone — Data Reset
+              Danger Zone ??? Data Reset
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-sm text-red-700 space-y-2">
               <p>
-                <strong>Full platform reset</strong> — deletes all organizations, memberships,
+                <strong>Full platform reset</strong> ??? deletes all organizations, memberships,
                 content, enrollments, attempts, learning events and non-superadmin users.
 
               </p>
               <p>
-                <strong>Organization reset</strong> — deletes one organization and everything scoped
+                <strong>Organization reset</strong> ??? deletes one organization and everything scoped
                 to it (programs,, lessons,, questions,, assessments,, learner profiles,, memberships).
               </p>
               <p className="text-red-600 font-medium">
@@ -154,7 +154,7 @@ export default function PlatformSettingsPage() {
                   onChange={(e) => setSelectedOrgId(e.target.value)}
                   className="flex h-10 w-full max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <option value="">Select an organization�</option>
+                  <option value="">Select an organization?</option>
                   {orgs.map((o) => (
                     <option key={o.id} value={o.id}>{o.name} ({o.slug})</option>
                   ))}
@@ -168,7 +168,7 @@ export default function PlatformSettingsPage() {
                 disabled={!canFull || busy === "full"}
                 onClick={handleFullReset}
               >
-                {busy === "full" ? "Resetting�" : "Reset platform data"}
+                {busy === "full" ? "Resetting?" : "Reset platform data"}
               </Button>
               <Button
                 variant="outline"
@@ -177,7 +177,7 @@ export default function PlatformSettingsPage() {
                 onClick={handleOrgReset}
               >
                 <Building2 className="mr-2 h-4 w-4" />
-                {busy === "org" ? "Resetting�" : "Reset organization"}
+                {busy === "org" ? "Resetting?" : "Reset organization"}
               </Button>
             </div>
           </CardContent>
