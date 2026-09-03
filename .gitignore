@@ -53,3 +53,6 @@ output/
 
 # Local test fixtures / scratch files
 test_*.pdf
+
+*.err
+
