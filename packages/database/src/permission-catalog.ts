@@ -99,6 +99,10 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
   { key: "cet.profiles_manage", resource: "cet", action: "profiles_manage", displayName: "Manage CET Profiles", description: "Create, edit, publish, archive CET profiles and coverage.", enforced: true },
   { key: "cet.programs_link", resource: "cet", action: "programs_link", displayName: "Link CET Exams to Programs", description: "Create and remove CET exam ↔ program links.", enforced: true },
 
+  // --- Enrollment administration (CS#23.5) ----------------------------------
+  { key: "enrollments.read", resource: "enrollments", action: "read", displayName: "View Enrollments", description: "List and view enrollments for programs within authorized scope.", enforced: true },
+  { key: "enrollments.manage", resource: "enrollments", action: "manage", displayName: "Manage Enrollments", description: "Grant, update and revoke learner enrollments.", enforced: true },
+
   // --- Learner (advisory — flows remain authenticate-gated) ------------------
   { key: "assessments.take", resource: "assessments", action: "take", displayName: "Take Assessments", description: "Start and submit assessment attempts.", enforced: false },
   { key: "lessons.progress", resource: "lessons", action: "progress", displayName: "Track Lesson Progress", description: "Read and save personal lesson progress.", enforced: false },
@@ -142,6 +146,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "orgs.update",
     "parents.read",
     "users.create",
+    "enrollments.read",
+    "enrollments.manage",
     "cet.exams_manage",
     "cet.profiles_manage",
     "cet.programs_link",
@@ -158,9 +164,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "parents.read",
     "parents.manage",
     "users.create",
+    "enrollments.read",
+    "enrollments.manage",
   ],
 
-  teacher: ["batches.manage", "questions.import"],
+  teacher: ["batches.manage", "questions.import", "enrollments.read"],
 
   student: [
     "assessments.take",

@@ -1,11 +1,14 @@
 import { Router, type IRouter } from "express";
-import { progression, weakTopics, assessmentRecommendations, activity } from "./controller";
+import { progression, weakTopics, assessmentRecommendations, activity, programCompletion } from "./controller";
 import { authenticate } from "../../middleware/auth";
 
 const router: IRouter = Router();
 
 // Learner's College Readiness ladder (mastery + unlock state)
 router.get("/", authenticate, progression);
+
+// CS#23.5 — deterministic program completion (enrollment-gated)
+router.get("/programs/:id/completion", authenticate, programCompletion);
 
 // Weak topics endpoint
 router.get("/weak-topics", authenticate, weakTopics);

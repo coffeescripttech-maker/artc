@@ -22,6 +22,9 @@ vi.mock("@aratc/database", () => ({
     learnerProfile: { findUnique: vi.fn() },
     program: { findUnique: vi.fn(), findMany: vi.fn() },
     user: { findUnique: vi.fn() },
+    // CS#23.5 — resolveOrgContext verifies ACTIVE membership server-side for
+    // every x-organization-id header (never trusts the client org id).
+    organizationMembership: { findUnique: vi.fn() },
     // CS#23.2 — RBAC middleware resolves effective permissions from the DB.
     // No test role carries DB grants here, so an empty grant set yields the
     // correct 403s; super_admin still bypasses without touching the DB.
@@ -50,6 +53,33 @@ const studentToken = tokenFor(STUDENT_ID, ["student"]);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // CS#23.5 — enrollment endpoints now sit behind requirePermission. Grant
+  // school_admin read+manage so the enrollment audit-flow tests exercise the
+  // service; super_admin bypasses and student stays grant-less (403). Dynamic
+  // mock matches the route lookup; `as never` satisfies the Prisma-promise type.
+  mockedPrisma.rolePermission.findMany.mockImplementation(
+    (async (args: unknown) => {
+      const where = (args as { where?: { role?: { name?: { in?: string[] } } } }).where;
+      const roles = where?.role?.name?.in ?? [];
+      const keys = new Set<string>(["enrollments.read"]);
+      if (
+        roles.includes("school_admin") ||
+        roles.includes("super_admin") ||
+        roles.includes("content_admin")
+      ) {
+        keys.add("enrollments.manage");
+      }
+      return Array.from(keys).map((key) => ({ permission: { key } }));
+    }) as never
+  );
+  // CS#23.5 — the org-context middleware verifies ACTIVE membership for the
+  // header org; the enrollment audit-flow tests run inside an org context.
+  mockedPrisma.organizationMembership.findUnique.mockResolvedValue({
+    organizationId: ORG_ID,
+    userId: ADMIN_ID,
+    status: "ACTIVE",
+    role: "ADMIN",
+  } as never);
 });
 
 describe("Admin audit log (CS#14)", () => {
@@ -104,9 +134,11 @@ describe("Audit instrumentation from enrollment ops (CS#9 → CS#14)", () => {
   it("granting an enrollment produces an ENROLLMENT_GRANTED audit event", async () => {
     mockedPrisma.learnerProfile.findUnique = vi
       .fn()
-      .mockResolvedValueOnce({ id: LP_ID, userId: STUDENT_ID } as never)
-      .mockResolvedValueOnce({ id: LP_ID, userId: STUDENT_ID } as never);
-    mockedPrisma.program.findUnique = vi.fn().mockResolvedValue({ id: PROGRAM_ID } as never);
+      .mockResolvedValueOnce({ id: LP_ID, userId: STUDENT_ID, organizationId: ORG_ID } as never)
+      .mockResolvedValueOnce({ id: LP_ID, userId: STUDENT_ID, organizationId: ORG_ID } as never);
+    mockedPrisma.program.findUnique = vi
+      .fn()
+      .mockResolvedValue({ id: PROGRAM_ID, organizationId: null } as never);
     mockedPrisma.auditEvent.create = vi.fn().mockResolvedValue({} as never);
     mockedPrisma.enrollment.upsert = vi.fn().mockResolvedValue({
       id: ENROLLMENT_ID,
@@ -124,6 +156,7 @@ describe("Audit instrumentation from enrollment ops (CS#9 → CS#14)", () => {
     const res = await request(app)
       .post(`/api/programs/${PROGRAM_ID}/enrollments`)
       .set("Authorization", `Bearer ${adminToken}`)
+      .set("x-organization-id", ORG_ID)
       .send({ userId: STUDENT_ID });
 
     expect(res.status).toBe(201);
@@ -143,7 +176,9 @@ describe("Audit instrumentation from enrollment ops (CS#9 → CS#14)", () => {
       status: "ACTIVE",
       endedAt: null,
       expiresAt: null,
-      learner: { id: LP_ID, userId: STUDENT_ID, user: { firstName: "Ana", lastName: "Reyes", email: "s@x.com" } },
+      // CS#23.5 — the scope assertion reads the enrollment's program + learner orgs.
+      learner: { id: LP_ID, userId: STUDENT_ID, organizationId: ORG_ID, user: { firstName: "Ana", lastName: "Reyes", email: "s@x.com" } },
+      program: { organizationId: null },
     } as never);
     mockedPrisma.auditEvent.create = vi.fn().mockResolvedValue({} as never);
     mockedPrisma.enrollment.update = vi.fn().mockResolvedValue({
@@ -157,6 +192,7 @@ describe("Audit instrumentation from enrollment ops (CS#9 → CS#14)", () => {
     const res = await request(app)
       .patch(`/api/enrollments/${ENROLLMENT_ID}`)
       .set("Authorization", `Bearer ${adminToken}`)
+      .set("x-organization-id", ORG_ID)
       .send({ status: "CANCELLED" });
 
     expect(res.status).toBe(200);

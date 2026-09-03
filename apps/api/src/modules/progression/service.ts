@@ -1,6 +1,7 @@
 import { prisma } from "@aratc/database";
-import { ForbiddenError } from "../../lib/errors";
+import { ForbiddenError, NotFoundError } from "../../lib/errors";
 import { findActiveEnrollment } from "../../lib/program-access";
+import { masteryFromCompletion } from "../lessons/service";
 
 // Default mastery gate - used when not configured per program/curriculum
 export const DEFAULT_GATE = 95;
@@ -140,6 +141,113 @@ export async function getProgression(userId: string, programId?: string) {
   });
 
   return { program: { id: program.id, name: program.name }, gate, grades };
+}
+
+/**
+ * CS#23.5 — deterministic program completion for a learner.
+ *
+ * Lesson-weighted rollup computed directly from real rows (no fabricated
+ * percentages — see docs/analysis-cs235-progression-rollup.md):
+ *   1. Published scope: PUBLISHED curriculum → items → subjects → modules →
+ *      topics → lessons for the program.
+ *   2. completedLessons = learner's Progress rows for those lesson ids with
+ *      completionPercentage = 100.
+ *   3. completionPercentage = round(completed / total * 100) → mastery band.
+ *
+ * Enrollment-gated (same scope as every learner read): non-enrolled,
+ * expired-enrollment, and unpublished-program callers get 404 (resource hiding).
+ */
+export async function getProgramCompletion(userId: string, programId: string) {
+  const learner = await prisma.learnerProfile.findUnique({ where: { userId } });
+  if (!learner) throw new NotFoundError("Program not found");
+
+  const enrollment = await findActiveEnrollment(learner.id, programId);
+  if (!enrollment) throw new NotFoundError("Program not found");
+
+  const program = await prisma.program.findUnique({
+    where: { id: programId },
+    include: {
+      curriculums: {
+        where: { status: "PUBLISHED" },
+        include: {
+          items: {
+            include: {
+              subject: {
+                include: {
+                  modules: {
+                    where: { status: "PUBLISHED" },
+                    include: {
+                      topics: {
+                        where: { status: "PUBLISHED" },
+                        include: {
+                          lessons: {
+                            where: { status: "PUBLISHED" },
+                            select: { id: true },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!program || program.status !== "PUBLISHED") throw new NotFoundError("Program not found");
+
+  // Flatten to per-subject lesson id lists (subjectName = customName || name).
+  const subjects = program.curriculums.flatMap((cur) =>
+    cur.items.map((item) => ({
+      subjectId: item.subject.id,
+      name: item.customName || item.subject.name,
+      lessonIds: item.subject.modules.flatMap((mod) =>
+        mod.topics.flatMap((topic) => topic.lessons.map((l) => l.id))
+      ),
+    }))
+  );
+  const totalLessons = subjects.reduce((sum, s) => sum + s.lessonIds.length, 0);
+  const allLessonIds = subjects.flatMap((s) => s.lessonIds);
+
+  let completedSet = new Set<string>();
+  if (allLessonIds.length > 0) {
+    const rows = await prisma.progress.findMany({
+      where: {
+        learnerId: learner.id,
+        lessonId: { in: allLessonIds },
+        completionPercentage: 100,
+      },
+      select: { lessonId: true },
+    });
+    completedSet = new Set(rows.map((r) => r.lessonId as string));
+  }
+
+  const completedLessons = completedSet.size;
+  const completionPercentage =
+    totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+
+  const subjectStats = subjects.map((s) => {
+    const done = s.lessonIds.filter((id) => completedSet.has(id)).length;
+    return {
+      subjectId: s.subjectId,
+      name: s.name,
+      totalLessons: s.lessonIds.length,
+      completedLessons: done,
+      completionPercentage:
+        s.lessonIds.length > 0 ? Math.round((done / s.lessonIds.length) * 100) : 0,
+    };
+  });
+
+  return {
+    program: { id: program.id, name: program.name },
+    totalLessons,
+    completedLessons,
+    completionPercentage,
+    mastery: masteryFromCompletion(completionPercentage),
+    subjects: subjectStats,
+  };
 }
 
 /** Map of curriculumId -> unlocked, for the learner's ladder in a program. */

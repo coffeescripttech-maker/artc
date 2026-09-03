@@ -63,7 +63,13 @@ interface WorkspaceAssessment {
 
 interface WorkspacePayload {
   lesson: LessonApi;
-  curriculum: { id: string; name: string; stage: string; gradeLevel: string | null; orderIndex: number };
+  curriculum: {
+    id: string;
+    name: string;
+    stage: string;
+    gradeLevel: string | null;
+    orderIndex: number;
+  };
   program: {
     id: string;
     slug: string;
@@ -84,7 +90,13 @@ interface WorkspacePayload {
         id: string;
         name: string;
         orderIndex: number;
-        lessons: Array<{ id: string; title: string; slug: string; durationMinutes: number | null; orderIndex: number }>;
+        lessons: Array<{
+          id: string;
+          title: string;
+          slug: string;
+          durationMinutes: number | null;
+          orderIndex: number;
+        }>;
       }>;
     }>;
   }>;
@@ -280,8 +292,8 @@ function CourseOutline({
                       isCurrent
                         ? "bg-arc-orange-50 text-arc-orange-600 ring-1 ring-arc-orange-300"
                         : isDone
-                        ? "text-green-500 hover:bg-arc-slate-100"
-                        : "text-arc-slate-300 hover:bg-arc-slate-100"
+                          ? "text-green-500 hover:bg-arc-slate-100"
+                          : "text-arc-slate-300 hover:bg-arc-slate-100"
                     )}
                   >
                     {isDone ? (
@@ -467,7 +479,9 @@ export default function StudentLessonViewerPage() {
         // CS#23.1 — prefer the single authorized workspace read (enrolled
         // learners). Falls back to the legacy public flow for contexts where
         // the workspace is not applicable (e.g. staff previewing content).
-        const ws = (await lessonsApi.getWorkspace(lessonId).catch(() => null)) as WorkspacePayload | null;
+        const ws = (await lessonsApi
+          .getWorkspace(lessonId)
+          .catch(() => null)) as WorkspacePayload | null;
         if (ws && active) {
           setWorkspace(ws);
           setLesson(ws.lesson);
@@ -596,7 +610,7 @@ export default function StudentLessonViewerPage() {
             "mx-auto",
             workspace
               ? cn(
-                  "max-w-6xl lg:grid lg:gap-8",
+                  "max-w-12xl lg:grid lg:gap-8",
                   outlineCollapsed
                     ? "lg:grid-cols-[64px_minmax(0,1fr)]"
                     : "lg:grid-cols-[260px_minmax(0,1fr)]"
@@ -613,253 +627,254 @@ export default function StudentLessonViewerPage() {
             />
           )}
           <div className="min-w-0 max-w-3xl mx-auto w-full">
-          {lesson.status !== "PUBLISHED" && (
-            <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-2 text-sm text-yellow-700">
-              This lesson is <strong>{lesson.status.toLowerCase()}</strong> and not yet visible to students.
-            </div>
-          )}
-
-          {/* Lesson header — lightweight context (§2) */}
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              <Badge className="bg-arc-orange-100 text-arc-orange-700">
-                {typeLabels[lesson.type] || lesson.type}
-              </Badge>
-              {lesson.durationMinutes ? (
-                <span className="flex items-center gap-1 text-sm text-arc-slate-500">
-                  <Clock className="h-4 w-4" />
-                  {lesson.durationMinutes} min
-                </span>
-              ) : null}
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-arc-navy-900">{lesson.title}</h1>
-            {lesson.description && (
-              <p className="text-arc-slate-600 mt-2">{lesson.description}</p>
+            {lesson.status !== "PUBLISHED" && (
+              <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-2 text-sm text-yellow-700">
+                This lesson is <strong>{lesson.status.toLowerCase()}</strong> and not yet visible to
+                students.
+              </div>
             )}
 
-            {/* Lesson + course progress (§10) — real persisted values only */}
-            <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3">
-              <div className="w-44">
-                <div className="flex justify-between text-[11px] font-medium text-arc-slate-400 mb-1">
-                  <span>Lesson</span>
-                  <span>{Math.round(progressData?.completionPercentage ?? 0)}%</span>
-                </div>
-                <div className="h-1.5 rounded-full bg-arc-slate-100 overflow-hidden">
-                  <div
-                    className="h-full bg-arc-orange-500 transition-all duration-300"
-                    style={{ width: `${Math.round(progressData?.completionPercentage ?? 0)}%` }}
-                  />
-                </div>
+            {/* Lesson header — lightweight context (§2) */}
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <Badge className="bg-arc-orange-100 text-arc-orange-700">
+                  {typeLabels[lesson.type] || lesson.type}
+                </Badge>
+                {lesson.durationMinutes ? (
+                  <span className="flex items-center gap-1 text-sm text-arc-slate-500">
+                    <Clock className="h-4 w-4" />
+                    {lesson.durationMinutes} min
+                  </span>
+                ) : null}
               </div>
-              {workspace && (
+              <h1 className="text-2xl sm:text-3xl font-bold text-arc-navy-900">{lesson.title}</h1>
+              {lesson.description && (
+                <p className="text-arc-slate-600 mt-2">{lesson.description}</p>
+              )}
+
+              {/* Lesson + course progress (§10) — real persisted values only */}
+              <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3">
                 <div className="w-44">
                   <div className="flex justify-between text-[11px] font-medium text-arc-slate-400 mb-1">
-                    <span>Course</span>
-                    <span>
-                      {workspace.completedLessonIds.length} of {workspace.flatLessons.length}
-                    </span>
+                    <span>Lesson</span>
+                    <span>{Math.round(progressData?.completionPercentage ?? 0)}%</span>
                   </div>
                   <div className="h-1.5 rounded-full bg-arc-slate-100 overflow-hidden">
                     <div
-                      className="h-full bg-arc-green-500 transition-all duration-300"
-                      style={{
-                        width: `${
-                          workspace.flatLessons.length > 0
-                            ? Math.round(
-                                (workspace.completedLessonIds.length /
-                                  workspace.flatLessons.length) *
-                                  100
-                              )
-                            : 0
-                        }%`,
-                      }}
+                      className="h-full bg-arc-orange-500 transition-all duration-300"
+                      style={{ width: `${Math.round(progressData?.completionPercentage ?? 0)}%` }}
                     />
                   </div>
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* Question score card */}
-          {hasQuestions && qs && (
-            <div className="mb-6 rounded-xl border border-arc-orange-200 bg-arc-orange-50/50 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Trophy className="h-5 w-5 text-arc-orange-500" />
-                <span className="font-semibold text-arc-navy-900">Practice Score</span>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-arc-navy-900 font-medium">
-                    {qs.earnedPoints} / {qs.totalPoints} points
-                  </span>
-                  <span className="text-arc-navy-900 font-medium">
-                    {qs.correctAnswers} / {qs.totalBlocks} correct
-                  </span>
-                </div>
-
-                <div className="w-full h-2 bg-arc-slate-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-arc-orange-500 transition-all"
-                    style={{ width: `${(qs.earnedPoints / qs.totalPoints) * 100}%` }}
-                  />
-                </div>
-
-                <div className="text-xs text-arc-slate-500">
-                  {qs.answeredBlocks === qs.totalBlocks
-                    ? "All questions answered!"
-                    : `${qs.totalBlocks - qs.answeredBlocks} questions remaining`}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Lesson content */}
-          <article className="bg-white rounded-2xl border border-arc-slate-200 p-6 sm:p-8">
-            {content.blocks.length === 0 ? (
-              <div className="text-center py-12 text-arc-slate-400">
-                <BookOpen className="h-10 w-10 mx-auto mb-3 text-arc-slate-300" />
-                <p>This lesson has no content yet.</p>
-              </div>
-            ) : (
-              <LessonBlockRenderer
-                content={content}
-                lessonId={lesson.id}
-                onQuestionComplete={handleQuestionComplete}
-              />
-            )}
-          </article>
-
-          {/* Lesson completion — ONE consolidated state (§3/§8) */}
-          {completionError && (
-            <div
-              role="alert"
-              className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700"
-            >
-              {completionError}
-            </div>
-          )}
-
-          {progressData?.completed && (
-            <div className="mt-6 rounded-xl border border-green-200 bg-green-50/60 px-5 py-4">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
-                <span className="text-sm font-semibold text-arc-navy-900">Lesson Mastered</span>
-              </div>
-              <p className="text-sm text-arc-slate-600 mt-1">You completed this lesson.</p>
-              {workspace && !nextLesson && (
-                <p className="text-sm font-medium text-arc-navy-900 mt-2">
-                  🎉 You&apos;ve completed all lessons in {workspace.program.name}.
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Previous / Next navigation (§9) — primary CTA reflects state */}
-          <div className="mt-6 flex items-center justify-between gap-4 border-t border-arc-slate-200 pt-6">
-            {prevLesson ? (
-              <Link href={`/dashboard/lessons/${prevLesson.id}`} className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 rounded-lg border border-arc-slate-200 bg-white px-4 py-3 hover:border-arc-orange-300 transition-colors">
-                  <ChevronLeft className="h-5 w-5 text-arc-slate-400 flex-shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-xs text-arc-slate-400">Previous</div>
-                    <div className="text-sm font-medium text-arc-navy-900 truncate">
-                      {prevLesson.title}
+                {workspace && (
+                  <div className="w-44">
+                    <div className="flex justify-between text-[11px] font-medium text-arc-slate-400 mb-1">
+                      <span>Course</span>
+                      <span>
+                        {workspace.completedLessonIds.length} of {workspace.flatLessons.length}
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-arc-slate-100 overflow-hidden">
+                      <div
+                        className="h-full bg-arc-green-500 transition-all duration-300"
+                        style={{
+                          width: `${
+                            workspace.flatLessons.length > 0
+                              ? Math.round(
+                                  (workspace.completedLessonIds.length /
+                                    workspace.flatLessons.length) *
+                                    100
+                                )
+                              : 0
+                          }%`,
+                        }}
+                      />
                     </div>
                   </div>
+                )}
+              </div>
+            </div>
+
+            {/* Question score card */}
+            {hasQuestions && qs && (
+              <div className="mb-6 rounded-xl border border-arc-orange-200 bg-arc-orange-50/50 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Trophy className="h-5 w-5 text-arc-orange-500" />
+                  <span className="font-semibold text-arc-navy-900">Practice Score</span>
                 </div>
-              </Link>
-            ) : (
-              <div className="flex-1" />
+
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-arc-navy-900 font-medium">
+                      {qs.earnedPoints} / {qs.totalPoints} points
+                    </span>
+                    <span className="text-arc-navy-900 font-medium">
+                      {qs.correctAnswers} / {qs.totalBlocks} correct
+                    </span>
+                  </div>
+
+                  <div className="w-full h-2 bg-arc-slate-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-arc-orange-500 transition-all"
+                      style={{ width: `${(qs.earnedPoints / qs.totalPoints) * 100}%` }}
+                    />
+                  </div>
+
+                  <div className="text-xs text-arc-slate-500">
+                    {qs.answeredBlocks === qs.totalBlocks
+                      ? "All questions answered!"
+                      : `${qs.totalBlocks - qs.answeredBlocks} questions remaining`}
+                  </div>
+                </div>
+              </div>
             )}
 
-            {nextLesson ? (
-              progressData?.completed ? (
-                <Link href={`/dashboard/lessons/${nextLesson.id}`} className="flex-shrink-0">
-                  <Button variant="accent" aria-live="polite">
-                    Continue to Next Lesson
+            {/* Lesson content */}
+            <article className="bg-white rounded-2xl border border-arc-slate-200 p-6 sm:p-8">
+              {content.blocks.length === 0 ? (
+                <div className="text-center py-12 text-arc-slate-400">
+                  <BookOpen className="h-10 w-10 mx-auto mb-3 text-arc-slate-300" />
+                  <p>This lesson has no content yet.</p>
+                </div>
+              ) : (
+                <LessonBlockRenderer
+                  content={content}
+                  lessonId={lesson.id}
+                  onQuestionComplete={handleQuestionComplete}
+                />
+              )}
+            </article>
+
+            {/* Lesson completion — ONE consolidated state (§3/§8) */}
+            {completionError && (
+              <div
+                role="alert"
+                className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-700"
+              >
+                {completionError}
+              </div>
+            )}
+
+            {progressData?.completed && (
+              <div className="mt-6 rounded-xl border border-green-200 bg-green-50/60 px-5 py-4">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
+                  <span className="text-sm font-semibold text-arc-navy-900">Lesson Mastered</span>
+                </div>
+                <p className="text-sm text-arc-slate-600 mt-1">You completed this lesson.</p>
+                {workspace && !nextLesson && (
+                  <p className="text-sm font-medium text-arc-navy-900 mt-2">
+                    🎉 You&apos;ve completed all lessons in {workspace.program.name}.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Previous / Next navigation (§9) — primary CTA reflects state */}
+            <div className="mt-6 flex items-center justify-between gap-4 border-t border-arc-slate-200 pt-6">
+              {prevLesson ? (
+                <Link href={`/dashboard/lessons/${prevLesson.id}`} className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 rounded-lg border border-arc-slate-200 bg-white px-4 py-3 hover:border-arc-orange-300 transition-colors">
+                    <ChevronLeft className="h-5 w-5 text-arc-slate-400 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs text-arc-slate-400">Previous</div>
+                      <div className="text-sm font-medium text-arc-navy-900 truncate">
+                        {prevLesson.title}
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ) : (
+                <div className="flex-1" />
+              )}
+
+              {nextLesson ? (
+                progressData?.completed ? (
+                  <Link href={`/dashboard/lessons/${nextLesson.id}`} className="flex-shrink-0">
+                    <Button variant="accent" aria-live="polite">
+                      Continue to Next Lesson
+                      <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button
+                    variant="accent"
+                    className="flex-shrink-0"
+                    onClick={handleCompleteAndContinue}
+                    disabled={savingProgress}
+                    aria-live="polite"
+                  >
+                    {savingProgress ? "Saving..." : "Complete Lesson & Continue"}
                     <ChevronRight className="h-4 w-4 ml-1" />
                   </Button>
-                </Link>
+                )
+              ) : progressData?.completed ? (
+                workspace ? (
+                  <Link
+                    href={`/dashboard/programs/${workspace.program.id}`}
+                    className="flex-shrink-0"
+                  >
+                    <Button variant="outline">Back to Program</Button>
+                  </Link>
+                ) : (
+                  <div className="flex-1" />
+                )
               ) : (
                 <Button
                   variant="accent"
                   className="flex-shrink-0"
-                  onClick={handleCompleteAndContinue}
+                  onClick={handleToggleComplete}
                   disabled={savingProgress}
                   aria-live="polite"
                 >
-                  {savingProgress ? "Saving..." : "Complete Lesson & Continue"}
-                  <ChevronRight className="h-4 w-4 ml-1" />
+                  {savingProgress ? "Saving..." : "Mark Lesson Complete"}
                 </Button>
-              )
-            ) : progressData?.completed ? (
-              workspace ? (
-                <Link
-                  href={`/dashboard/programs/${workspace.program.id}`}
-                  className="flex-shrink-0"
-                >
-                  <Button variant="outline">Back to Program</Button>
-                </Link>
-              ) : (
-                <div className="flex-1" />
-              )
-            ) : (
-              <Button
-                variant="accent"
-                className="flex-shrink-0"
-                onClick={handleToggleComplete}
-                disabled={savingProgress}
-                aria-live="polite"
-              >
-                {savingProgress ? "Saving..." : "Mark Lesson Complete"}
-              </Button>
-            )}
-          </div>
-
-          {/* Up-next context under the primary CTA (§9) */}
-          {nextLesson && (
-            <div className="mt-2.5 text-right min-w-0">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-arc-slate-400">
-                Next lesson
-              </div>
-              <div className="text-sm font-medium text-arc-navy-900 truncate">
-                {nextLesson.title}
-              </div>
+              )}
             </div>
-          )}
 
-          {/* CS#23.1 — program assessment next-step (real published assessments) */}
-          {workspace && workspace.program.assessments.length > 0 && (
-            <Link
-              href={`/dashboard/assessments/${workspace.program.assessments[0].id}`}
-              className="block mt-6"
-            >
-              <div className="flex items-center justify-between gap-4 rounded-xl border border-arc-purple-200 bg-arc-purple-50/60 px-4 py-3 hover:border-arc-purple-300 transition-colors">
-                <div className="flex items-center gap-3 min-w-0">
-                  <ClipboardList className="h-5 w-5 text-arc-purple-500 flex-shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-xs font-medium text-arc-purple-600">
-                      Program assessment
-                    </div>
-                    <div className="text-sm font-medium text-arc-navy-900 truncate">
-                      {workspace.program.assessments[0].name}
-                      {workspace.program.assessments[0].questionCount
-                        ? ` · ${workspace.program.assessments[0].questionCount} questions`
-                        : ""}
-                      {workspace.program.assessments[0].timeLimitMinutes
-                        ? ` · ${workspace.program.assessments[0].timeLimitMinutes} min`
-                        : ""}
+            {/* Up-next context under the primary CTA (§9) */}
+            {nextLesson && (
+              <div className="mt-2.5 text-right min-w-0">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-arc-slate-400">
+                  Next lesson
+                </div>
+                <div className="text-sm font-medium text-arc-navy-900 truncate">
+                  {nextLesson.title}
+                </div>
+              </div>
+            )}
+
+            {/* CS#23.1 — program assessment next-step (real published assessments) */}
+            {workspace && workspace.program.assessments.length > 0 && (
+              <Link
+                href={`/dashboard/assessments/${workspace.program.assessments[0].id}`}
+                className="block mt-6"
+              >
+                <div className="flex items-center justify-between gap-4 rounded-xl border border-arc-purple-200 bg-arc-purple-50/60 px-4 py-3 hover:border-arc-purple-300 transition-colors">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <ClipboardList className="h-5 w-5 text-arc-purple-500 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs font-medium text-arc-purple-600">
+                        Program assessment
+                      </div>
+                      <div className="text-sm font-medium text-arc-navy-900 truncate">
+                        {workspace.program.assessments[0].name}
+                        {workspace.program.assessments[0].questionCount
+                          ? ` · ${workspace.program.assessments[0].questionCount} questions`
+                          : ""}
+                        {workspace.program.assessments[0].timeLimitMinutes
+                          ? ` · ${workspace.program.assessments[0].timeLimitMinutes} min`
+                          : ""}
+                      </div>
                     </div>
                   </div>
+                  <span className="flex items-center gap-1 text-sm font-medium text-arc-purple-600 flex-shrink-0">
+                    Start
+                    <ChevronRight className="h-4 w-4" />
+                  </span>
                 </div>
-                <span className="flex items-center gap-1 text-sm font-medium text-arc-purple-600 flex-shrink-0">
-                  Start
-                  <ChevronRight className="h-4 w-4" />
-                </span>
-              </div>
-            </Link>
-          )}
+              </Link>
+            )}
           </div>
         </div>
       </div>

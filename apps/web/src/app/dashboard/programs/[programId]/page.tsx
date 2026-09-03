@@ -114,6 +114,22 @@ interface ProgressionResult {
   grades: ProgGrade[];
 }
 
+// CS#23.5 — deterministic lesson-weighted program completion (GET /progression/programs/:id/completion)
+interface ProgramCompletion {
+  program: { id: string; name: string };
+  totalLessons: number;
+  completedLessons: number;
+  completionPercentage: number;
+  mastery: string;
+  subjects: {
+    subjectId: string;
+    name: string;
+    totalLessons: number;
+    completedLessons: number;
+    completionPercentage: number;
+  }[];
+}
+
 const stageLabel: Record<string, string> = {
   BASIC_EDUCATION: "Basic Education",
   ENTRANCE_EXAM: "College Entrance Exam",
@@ -149,6 +165,7 @@ export default function StudentProgramOverviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [hierarchy, setHierarchy] = useState<ProgramHierarchy | null>(null);
   const [progression, setProgression] = useState<ProgressionResult | null>(null);
+  const [completion, setCompletion] = useState<ProgramCompletion | null>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -175,6 +192,26 @@ export default function StudentProgramOverviewPage() {
         );
       } finally {
         if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [programId]);
+
+  // CS#23.5 — program completion (enrollment-gated). Fetched separately so a
+  // non-critical completion failure never takes down the whole overview.
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const completionData = (await progressionApi.programCompletion(programId)) as ProgramCompletion;
+        if (active) setCompletion(completionData);
+      } catch (err) {
+        if (active) {
+          console.warn("Completion unavailable for program", programId, err);
+          setCompletion(null);
+        }
       }
     })();
     return () => {
@@ -304,7 +341,7 @@ export default function StudentProgramOverviewPage() {
         </div>
 
         {/* ---- Quick stats (real, derived) ---- */}
-        <div className="grid gap-4 grid-cols-2 md:grid-cols-5">
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-6">
           <Stat icon={<BookOpen />} label="Lessons" value={lessons.length} />
           <Stat icon={<ListTree />} label="Subjects" value={subjects.length} />
           <Stat icon={<Layers />} label="Modules" value={modules.length} />
@@ -314,7 +351,36 @@ export default function StudentProgramOverviewPage() {
             label={primaryAssessment ? assessmentTypeLabel.replace(" Assessment", "") : "Assessment"}
             value={assessmentQuestions || "—"}
           />
+          <Stat
+            icon={<CheckCircle2 />}
+            label="Completion"
+            value={completion ? `${completion.completionPercentage}%` : "—"}
+          />
         </div>
+
+        {/* ---- CS#23.5 Program completion card (real, enrollment-gated) ---- */}
+        {completion ? (
+          <div className="rounded-2xl border border-arc-slate-200 bg-white p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-base font-semibold text-arc-navy-900">Your completion</h2>
+              <Badge variant={completion.completionPercentage >= (progression?.gate ?? 95) ? "success" : "info"}>
+                {completion.mastery}
+              </Badge>
+            </div>
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-sm text-arc-slate-500 mb-1.5">
+                <span>
+                  {completion.completedLessons} of {completion.totalLessons} lessons completed
+                </span>
+                <span className="font-semibold text-arc-navy-900">{completion.completionPercentage}%</span>
+              </div>
+              <Progress
+                value={completion.completionPercentage}
+                variant={completion.completionPercentage >= (progression?.gate ?? 95) ? "mastery" : "learning"}
+              />
+            </div>
+          </div>
+        ) : null}
 
 
         {/* ---- Body: curriculum + mock exam ---- */}

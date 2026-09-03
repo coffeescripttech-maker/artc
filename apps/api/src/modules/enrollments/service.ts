@@ -4,6 +4,7 @@ import { validateRequest } from "../../lib/validate";
 import { NotFoundError, ForbiddenError } from "../../lib/errors";
 import { createEnrollmentSchema, updateEnrollmentSchema } from "./schemas";
 import { isActiveEnrollment } from "../../lib/program-access";
+import { hasPlatformAdminRole } from "../../lib/tenant-scope";
 import { auditLog } from "../../lib/audit-log";
 
 async function fireAudit(params: Parameters<typeof auditLog>[0]) {
@@ -16,23 +17,58 @@ async function fireAudit(params: Parameters<typeof auditLog>[0]) {
 }
 
 /**
- * Enrollments module (CS#9).
+ * Enrollments module (CS#9, hardened in CS#23.5).
  *
  * Admin-side enrollment management: list a program's learners, grant an
  * enrollment (source = ADMIN_GRANT, traceable to the granting admin), and
  * update status/expiry. Existing access semantics are preserved — this is
  * additive around the existing Enrollment table (architecture §19).
+ *
+ * CS#23.5 authorization model (§25 pipeline):
+ *   authenticate → requirePermission("enrollments.read" | "enrollments.manage")
+ *   → organization membership context (req.organizationId) → resource scope.
+ * The legacy hard-coded requireRoles arrays were removed — grants live in the
+ * RBAC catalog (seed: teacher/school_admin read; school_admin manage;
+ * super_admin/content_admin by bypass or grant).
  */
 
-// Enrollment management is an admin function. Teachers can view rosters for
-// programs they teach (coarse role gate, same privileged set as visibility).
-const ENROLLMENT_VIEW_ROLES = ["teacher", "school_admin", "content_admin", "super_admin"];
-const ENROLLMENT_MANAGE_ROLES = ["school_admin", "content_admin", "super_admin"];
-
-function requireRoles(req: Request, roles: string[]) {
-  if (!req.userId) throw new ForbiddenError("Authentication required");
-  if (!req.userRoles?.some((r) => roles.includes(r))) {
-    throw new ForbiddenError("Insufficient permissions for enrollment management");
+/**
+ * CS#23.5 — tenant scoping for enrollment operations (§12/§26/§29).
+ *
+ * Platform admins (super_admin / content_admin) manage enrollments anywhere.
+ * Organization-scoped callers may only touch enrollments where BOTH hold:
+ *   - the program is platform-owned (organizationId: null — the platform
+ *     content business model) or owned by the caller's organization, and
+ *   - the learner profile belongs to the caller's organization.
+ * Cross-tenant references are answered with 404 (resource hiding, §28) so
+ * valid ids from another organization can never be enumerated or mutated.
+ */
+function assertEnrollmentScope(
+  req: Request,
+  resource: {
+    programOrganizationId: string | null;
+    /** undefined = learner scope not applicable (roster listing) */
+    learnerOrganizationId: string | null | undefined;
+  }
+): void {
+  if (hasPlatformAdminRole(req.userRoles)) return;
+  const orgId = req.organizationId;
+  if (!orgId) {
+    throw new ForbiddenError(
+      "An organization context is required for enrollment management"
+    );
+  }
+  if (
+    resource.programOrganizationId !== null &&
+    resource.programOrganizationId !== orgId
+  ) {
+    throw new NotFoundError("Program not found in your organization");
+  }
+  if (
+    resource.learnerOrganizationId !== undefined &&
+    resource.learnerOrganizationId !== orgId
+  ) {
+    throw new NotFoundError("Learner not found in your organization");
   }
 }
 
@@ -96,7 +132,15 @@ export async function listProgramEnrollments(
 ) {
   try {
     const { programId } = req.params;
-    requireRoles(req, ENROLLMENT_VIEW_ROLES);
+    const program = await prisma.program.findUnique({
+      where: { id: programId },
+      select: { id: true, organizationId: true },
+    });
+    if (!program) throw new NotFoundError(`Program ${programId} not found`);
+    assertEnrollmentScope(req, {
+      programOrganizationId: program.organizationId,
+      learnerOrganizationId: undefined,
+    });
     const enrollments = await prisma.enrollment.findMany({
       where: { programId },
       include: enrollmentInclude,
@@ -140,7 +184,6 @@ export async function listMyEnrollments(req: Request, res: Response, next: NextF
 
 export async function createEnrollment(req: Request, res: Response, next: NextFunction) {
   try {
-    requireRoles(req, ENROLLMENT_MANAGE_ROLES);
     const data = validateRequest(createEnrollmentSchema, { ...req.params, ...req.body });
 
     // Resolve the learner profile: direct id, or via user id.
@@ -159,9 +202,16 @@ export async function createEnrollment(req: Request, res: Response, next: NextFu
 
     const program = await prisma.program.findUnique({
       where: { id: data.programId },
-      select: { id: true },
+      select: { id: true, organizationId: true },
     });
-        if (!program) throw new NotFoundError(`Program ${data.programId} not found`);
+    if (!program) throw new NotFoundError(`Program ${data.programId} not found`);
+
+    // CS#23.5 — tenant scope (§12/§26): the caller's organization must own the
+    // program (or the program is platform-owned) AND the learner profile.
+    assertEnrollmentScope(req, {
+      programOrganizationId: program.organizationId,
+      learnerOrganizationId: learner.organizationId,
+    });
 
     // Capture pre-existing state for the audit 'before' snapshot (upsert path).
     const preExisting = await prisma.enrollment.findUnique({
@@ -217,11 +267,24 @@ export async function createEnrollment(req: Request, res: Response, next: NextFu
 
 export async function updateEnrollment(req: Request, res: Response, next: NextFunction) {
   try {
-    requireRoles(req, ENROLLMENT_MANAGE_ROLES);
     const data = validateRequest(updateEnrollmentSchema, { ...req.params, ...req.body });
 
-    const existing = await prisma.enrollment.findUnique({ where: { id: data.id } });
+    const existing = await prisma.enrollment.findUnique({
+      where: { id: data.id },
+      include: {
+        learner: { select: { organizationId: true } },
+        program: { select: { organizationId: true } },
+      },
+    });
     if (!existing) throw new NotFoundError(`Enrollment ${data.id} not found`);
+
+    // CS#23.5 — IDOR guard (§12/§29): the enrollment's program and learner
+    // must both be within the caller's organization scope (404 resource
+    // hiding for cross-tenant ids).
+    assertEnrollmentScope(req, {
+      programOrganizationId: existing.program.organizationId,
+      learnerOrganizationId: existing.learner.organizationId,
+    });
 
     const terminating = data.status && data.status !== "ACTIVE";
         const enrollment = await prisma.enrollment.update({

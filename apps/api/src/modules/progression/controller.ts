@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { getAuthUserId } from "../../lib/validate";
-import { getProgression, getLearnerActivity } from "./service";
+import { getProgression, getLearnerActivity, getProgramCompletion } from "./service";
 import { getWeakTopics } from "../assessments/service";
 import { getRetryRecommendations } from "../assessments/service";
 import { prisma } from "@aratc/database";
@@ -14,6 +14,30 @@ export async function progression(
     const userId = getAuthUserId(req);
     const programId = req.query.programId as string | undefined;
     const result = await getProgression(userId, programId);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * GET /progression/program-completion
+ * Deterministic lesson-weighted completion for a program (CS#23.5).
+ * Enrollment-gated: non-enrolled/unpublished → 404.
+ */
+export async function programCompletion(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const userId = getAuthUserId(req);
+    const programId = req.params.id;
+    if (!programId) {
+      res.status(400).json({ error: { code: "MISSING_PROGRAM_ID", message: "Program id is required" } });
+      return;
+    }
+    const result = await getProgramCompletion(userId, programId);
     res.json(result);
   } catch (error) {
     next(error);

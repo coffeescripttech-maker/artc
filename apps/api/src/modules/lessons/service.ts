@@ -610,8 +610,11 @@ const computeCompletionFromQuestions = (answered: number, total: number): number
   return Math.round((answered / total) * 100);
 };
 
-/** Map completionPercentage to a MasteryLevel. */
-const masteryFromCompletion = (pct: number): "NOT_STARTED" | "LEARNING" | "PRACTICING" | "PROFICIENT" | "MASTERED" => {
+/**
+ * Map completionPercentage to a MasteryLevel (shared by lesson progress and
+ * program completion rollups).
+ */
+export const masteryFromCompletion = (pct: number): "NOT_STARTED" | "LEARNING" | "PRACTICING" | "PROFICIENT" | "MASTERED" => {
   if (pct >= 100) return "MASTERED";
   if (pct >= 75) return "PROFICIENT";
   if (pct >= 25) return "PRACTICING";

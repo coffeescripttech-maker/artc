@@ -17,6 +17,14 @@ vi.mock('@aratc/database', () => ({
       update: vi.fn(),
     },
     user: { findUnique: vi.fn() },
+    // CS#23.5 — resolveOrgContext verifies ACTIVE membership server-side for
+    // every x-organization-id header (never trusts the client org id).
+    organizationMembership: { findUnique: vi.fn() },
+    // CS#23.5 — requirePermission resolves effective grants from the DB.
+    // beforeEach installs a dynamic stub: enrollments.read for every role,
+    // enrollments.manage only for admin-level roles (student/teacher manage
+    // attempts stay 403; self-scoped reads stay allowed).
+    rolePermission: { findMany: vi.fn() },
   },
 }));
 
@@ -29,6 +37,7 @@ const USER_ID = '00000000-0000-4000-8000-000000000002';
 const ADMIN_ID = '00000000-0000-4000-8000-000000000003';
 const PROGRAM_ID = '00000000-0000-4000-8000-000000000004';
 const LP_ID = 'lp-000001';
+const ORG_ID = 'org-arc-1';
 
 function tokenFor(userId: string, roles: string[]): string {
   return jwt.sign({ userId, roles }, config.jwtSecret, { expiresIn: '1h' });
@@ -39,6 +48,34 @@ const studentToken = tokenFor(USER_ID, ['student']);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // CS#23.5 — requirePermission resolves effective grants from the DB.
+  // enrollments.read granted to all staff/learner roles; enrollments.manage
+  // only to admin-level roles (student/teacher stay 403 on manages; scoped
+  // reads stay allowed). Dynamic mock matches the route lookup; `as never`
+  // satisfies the Prisma-promise type (content-permission.test.ts idiom).
+  mockedPrisma.rolePermission.findMany.mockImplementation(
+    (async (args: unknown) => {
+      const where = (args as { where?: { role?: { name?: { in?: string[] } } } }).where;
+      const roles = where?.role?.name?.in ?? [];
+      const keys = new Set<string>(['enrollments.read']);
+      if (
+        roles.includes('school_admin') ||
+        roles.includes('super_admin') ||
+        roles.includes('content_admin')
+      ) {
+        keys.add('enrollments.manage');
+      }
+      return Array.from(keys).map((key) => ({ permission: { key } }));
+    }) as never
+  );
+  // CS#23.5 — the org-context middleware verifies ACTIVE membership for the
+  // header org; tests exercise the scoped path with a valid membership.
+  mockedPrisma.organizationMembership.findUnique.mockResolvedValue({
+    organizationId: ORG_ID,
+    userId: USER_ID,
+    status: 'ACTIVE',
+    role: 'ADMIN',
+  } as never);
 });
 
 describe('Program access policy (isActiveEnrollment)', () => {
@@ -63,9 +100,10 @@ describe('Program access policy (isActiveEnrollment)', () => {
 describe('Enrollment management API', () => {
   it('grants an enrollment with ADMIN_GRANT provenance and granting admin', async () => {
     mockedPrisma.learnerProfile.findUnique
-      .mockResolvedValueOnce({ id: LP_ID, userId: USER_ID } as never) // resolve via userId
-      .mockResolvedValueOnce({ id: LP_ID, userId: USER_ID } as never); // existence check
-    mockedPrisma.program.findUnique.mockResolvedValue({ id: PROGRAM_ID } as never);
+      .mockResolvedValueOnce({ id: LP_ID, userId: USER_ID, organizationId: ORG_ID } as never) // resolve via userId
+      .mockResolvedValueOnce({ id: LP_ID, userId: USER_ID, organizationId: ORG_ID } as never); // existence check
+    // Platform-owned program (organizationId: null) — passable by any org-scoped caller.
+    mockedPrisma.program.findUnique.mockResolvedValue({ id: PROGRAM_ID, organizationId: null } as never);
     mockedPrisma.enrollment.upsert.mockResolvedValue({
       id: 'e1',
       status: 'ACTIVE',
@@ -82,6 +120,7 @@ describe('Enrollment management API', () => {
     const res = await request(app)
       .post(`/api/programs/${PROGRAM_ID}/enrollments`)
       .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-organization-id', ORG_ID)
       .send({ userId: USER_ID });
 
     expect(res.status).toBe(201);
@@ -116,6 +155,7 @@ describe('Enrollment management API', () => {
     const res = await request(app)
       .post(`/api/programs/${PROGRAM_ID}/enrollments`)
       .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-organization-id', ORG_ID)
       .send({ userId: USER_ID });
 
     expect(res.status).toBe(404);
@@ -150,7 +190,8 @@ describe('Enrollment management API', () => {
 
     const res = await request(app)
       .get(`/api/programs/${PROGRAM_ID}/enrollments`)
-      .set('Authorization', `Bearer ${tokenFor(USER_ID, ['teacher'])}`);
+      .set('Authorization', `Bearer ${tokenFor(USER_ID, ['teacher'])}`)
+      .set('x-organization-id', ORG_ID);
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual([]);

@@ -115,7 +115,13 @@ function fmtTime(s: number): string {
   return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
 }
 
-function QuestionReview({ q, answer, isCorrect, score, timeSpentSeconds }: {
+function QuestionReview({
+  q,
+  answer,
+  isCorrect,
+  score,
+  timeSpentSeconds,
+}: {
   q: AttemptAnswer["question"];
   answer: unknown;
   isCorrect: boolean | null;
@@ -127,9 +133,11 @@ function QuestionReview({ q, answer, isCorrect, score, timeSpentSeconds }: {
 
   const renderOption = (opt: ReviewOption, index: number) => {
     const isSelected =
-      typeof answer === "string" ? answer === opt.id :
-      Array.isArray(answer) ? answer.includes(opt.id) :
-      false;
+      typeof answer === "string"
+        ? answer === opt.id
+        : Array.isArray(answer)
+          ? answer.includes(opt.id)
+          : false;
     const correct = isOptionCorrect(q, opt);
 
     let optionClass = "border-arc-slate-200 bg-white";
@@ -176,8 +184,8 @@ function QuestionReview({ q, answer, isCorrect, score, timeSpentSeconds }: {
                     q.difficulty === "EASY"
                       ? "bg-green-100 text-green-700"
                       : q.difficulty === "MEDIUM"
-                      ? "bg-yellow-100 text-yellow-700"
-                      : "bg-red-100 text-red-700"
+                        ? "bg-yellow-100 text-yellow-700"
+                        : "bg-red-100 text-red-700"
                   }`}
                 >
                   {q.difficulty}
@@ -203,9 +211,7 @@ function QuestionReview({ q, answer, isCorrect, score, timeSpentSeconds }: {
       <CardContent className="pt-0">
         {/* Answer rendering by type */}
         {(q.type === "MULTIPLE_CHOICE" || q.type === "TRUE_FALSE") && (
-          <div className="space-y-2">
-            {options.map((opt, i) => renderOption(opt, i))}
-          </div>
+          <div className="space-y-2">{options.map((opt, i) => renderOption(opt, i))}</div>
         )}
 
         {q.type === "MULTIPLE_SELECT" && (
@@ -313,7 +319,11 @@ function QuestionReview({ q, answer, isCorrect, score, timeSpentSeconds }: {
                   : "border-red-500 bg-red-50 text-red-800"
               }`}
             >
-              {typeof answer === "number" ? answer : typeof answer === "string" && answer ? answer : ""}
+              {typeof answer === "number"
+                ? answer
+                : typeof answer === "string" && answer
+                  ? answer
+                  : ""}
             </div>
             {q.tolerance && q.tolerance > 0 && (
               <p className="mt-1 text-xs text-arc-slate-500">
@@ -354,9 +364,7 @@ function QuestionReview({ q, answer, isCorrect, score, timeSpentSeconds }: {
           <span>
             Points earned: <strong className="text-arc-navy-900">{score}</strong>
             {timeSpentSeconds ? (
-              <span className="ml-3">
-                Time: {fmtTime(timeSpentSeconds)}
-              </span>
+              <span className="ml-3">Time: {fmtTime(timeSpentSeconds)}</span>
             ) : null}
           </span>
         </div>
@@ -449,7 +457,7 @@ export default function AssessmentReviewPage() {
     <div className="min-h-screen bg-arc-slate-50">
       {/* Header */}
       <div className="shrink-0 border-b border-arc-slate-200 bg-white px-6 py-4">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
+        <div className="max-w-12xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <Link href={`/dashboard/assessments`}>
               <ArrowLeft className="h-5 w-5 text-arc-slate-400 hover:text-arc-navy-900" />
@@ -470,7 +478,10 @@ export default function AssessmentReviewPage() {
               size="sm"
               className="gap-2"
               onClick={() =>
-                window.open(`/dashboard/assessments/${assessmentId}/report?attemptId=${attemptId}`, "_blank")
+                window.open(
+                  `/dashboard/assessments/${assessmentId}/report?attemptId=${attemptId}`,
+                  "_blank"
+                )
               }
             >
               <Download className="h-4 w-4" />
@@ -480,7 +491,7 @@ export default function AssessmentReviewPage() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto p-6">
+      <div className="max-w-12xl mx-auto p-6">
         <div className="grid gap-6 lg:grid-cols-4">
           {/* Main: Question review */}
           <div className="lg:col-span-3">
@@ -493,7 +504,12 @@ export default function AssessmentReviewPage() {
                   <ChevronLeft className="h-4 w-4 mr-1" />
                   Previous
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleNext} disabled={currentQ === total - 1}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNext}
+                  disabled={currentQ === total - 1}
+                >
                   Next
                   <ChevronRight className="h-4 w-4 ml-1" />
                 </Button>
@@ -524,11 +540,12 @@ export default function AssessmentReviewPage() {
                 <div className="space-y-2">
                   {answers.map((a, idx) => {
                     const isActive = idx === currentQ;
-                    const status = a.isCorrect === true
-                      ? "correct"
-                      : a.isCorrect === false
-                      ? "incorrect"
-                      : "unanswered";
+                    const status =
+                      a.isCorrect === true
+                        ? "correct"
+                        : a.isCorrect === false
+                          ? "incorrect"
+                          : "unanswered";
 
                     const statusColors = {
                       correct: "bg-green-500 text-white border-green-500",
@@ -549,9 +566,11 @@ export default function AssessmentReviewPage() {
                           {idx + 1}
                         </span>
                         <span className="truncate">
-                          {status === "correct" ? "✓ Correct" :
-                           status === "incorrect" ? "✗ Incorrect" :
-                           "○ Unanswered"}
+                          {status === "correct"
+                            ? "✓ Correct"
+                            : status === "incorrect"
+                              ? "✗ Incorrect"
+                              : "○ Unanswered"}
                         </span>
                       </button>
                     );
@@ -575,9 +594,7 @@ export default function AssessmentReviewPage() {
                   )}
                   <div className="mt-4 pt-3 border-t border-arc-slate-200 space-y-1">
                     {attempt.timeSpentSeconds ? (
-                      <div>
-                        Time spent: {fmtTime(attempt.timeSpentSeconds)}
-                      </div>
+                      <div>Time spent: {fmtTime(attempt.timeSpentSeconds)}</div>
                     ) : null}
                     {attempt.assessment.showExplanations && (
                       <div className="flex items-start gap-2">

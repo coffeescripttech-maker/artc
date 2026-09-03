@@ -249,6 +249,8 @@ export const progressApi = {
 export const progressionApi = {
   get: (programId?: string) =>
     apiFetch(`/progression${programId ? `?programId=${programId}` : ""}`),
+  programCompletion: (programId: string) =>
+    apiFetch(`/progression/programs/${programId}/completion`),
   weakTopics: (programId?: string) =>
     apiFetch(`/progression/weak-topics${programId ? `?programId=${programId}` : ""}`),
   activity: (limit?: number) => apiFetch(`/progression/activity${limit ? `?limit=${limit}` : ""}`),
