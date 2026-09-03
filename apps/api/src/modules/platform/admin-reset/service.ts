@@ -73,7 +73,6 @@ export async function preview(req: Request, res: Response, next: NextFunction) {
       assessments: await prisma.assessment.count(),
       attempts: await prisma.assessmentAttempt.count(),
       batches: await prisma.batch.count(),
-      tests: await prisma.test.count(),
       users: await prisma.user.count(),
       superUsers: await prisma.user.count({
         where: { roles: { some: { role: { name: "super_admin" } } } },
@@ -122,9 +121,8 @@ export async function fullReset(req: Request, res: Response, next: NextFunction)
       prisma.batchMember.deleteMany({}),
       prisma.batchTeacher.deleteMany({}),
       prisma.batch.deleteMany({}),
-      prisma.testAttempt.deleteMany({}),
-      prisma.testQuestion.deleteMany({}),
-      prisma.test.deleteMany({}),
+      // CS#22.8: Legacy Test/TestQuestion/TestAttempt models were consolidated
+      // into Assessment/AssessmentQuestion/AttemptAnswer — no separate cleanup needed.
       prisma.contentVersion.deleteMany({}),
       prisma.parentStudent.deleteMany({}),
       prisma.learnerProfile.deleteMany({}),
