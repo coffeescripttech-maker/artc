@@ -1,3 +1,4 @@
+import { CORS_ORIGIN_LIST, applyApiSecurity } from "./lib/security-config";
 import express from "express";
 import cors from "cors";
 import { authRoutes } from "./modules/auth/routes";
@@ -32,7 +33,8 @@ import { resolveOrgContext } from "./middleware/org-context";
 export function buildApp(): express.Express {
   const app = express();
 
-  app.use(cors());
+  applyApiSecurity(app);
+  app.use(cors({ origin: CORS_ORIGIN_LIST.length ? CORS_ORIGIN_LIST : true, credentials: true }));
   // Larger limit so base64 media uploads fit (15MB file ≈ 20MB base64); content endpoints stay small.
   app.use(express.json({ limit: "25mb" }));
 
@@ -80,19 +82,15 @@ export function buildApp(): express.Express {
   app.use("/settings", settingsRoutes); // Also accessible without /api prefix
 
   app.use("/api/admin-stats", adminStatsRoutes);
-  app.use("/admin-stats", adminStatsRoutes); // Also accessible without /api prefix
-
-    app.use("/api/organizations", organizationRoutes);
+  app.use("/admin-stats", adminStatsRoutes); // Also accessible without /api prefix  app.use("/api/organizations", organizationRoutes);
   app.use("/organizations", organizationRoutes); // Also accessible without /api prefix
 
   // Enrollment management (CS#9 — additive; admin-side grant/list/update)
   app.use("/api", enrollmentRoutes);
 
-    // Superadmin platform-management endpoints (§3 — superadmin-only, separate from /admin/*)
-  app.use("/api/platform/organizations", platformOrganizationsRoutes);
+    // Superadmin platform-management endpoints (§3 — superadmin-only, separate from /admin/*)  app.use("/api/platform/organizations", platformOrganizationsRoutes);
 
-    // CS#14 — admin audit log (read-only query surface over append-only events).
-  app.use("/api/admin/audit", adminAuditRoutes);
+    // CS#14 — admin audit log (read-only query surface over append-only events).  app.use("/api/admin/audit", adminAuditRoutes);
 
   // CS#23.2 — Enterprise RBAC: role/permission matrix management + simulator.
   app.use("/api/admin/access", accessControlRoutes);

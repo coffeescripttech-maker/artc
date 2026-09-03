@@ -791,3 +791,30 @@ authenticated membership (never trusts browser orgId).
 **Known limitations:** parent-facing portal (viewing linked children's progress)
 not built — parent role is read-only for now; org branding has no schema fields,
 so that settings section was intentionally omitted (§21).
+
+---
+# CS#24 - DEPLOYMENT READINESS (COMPLETE)
+Date: 2026-09-03
+
+## What was hardened
+1. **Production build unblocked** - verified `next build` exits 0 (previously-documented admin-route failure no longer reproduces).
+2. **API security headers** - new `apps/api/src/lib/security-config.ts`: Helmet-equivalent headers with zero new dependencies (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, `X-DNS-Prefetch-Control`, `Cross-Origin-Opener-Policy`, `x-powered-by` disabled); wired via `applyApiSecurity(app)` first-in-app.
+3. **CORS allowlist** - `CORS_ORIGINS` (comma-separated) configures `cors({ origin: CORS_ORIGIN_LIST, credentials: true })`; empty list = allow-all (dev fallback; production should set the web origin(s).)
+4. **Production secrets guard** - `assertProductionSecrets()` refuses boot in `NODE_ENV=production` when: `JWT_SECRET`/`SESSION_SECRET` missing or < 32 chars, or `DEMO_PASSWORD` still set (demo accounts must not exist in prod).)
+5. **Credential leak scrubbed** - hardcoded Gemini API key removed from `apps/api/src/config/index.ts` - now `process.env.GEMINI_API_KEY || ""`;`gemini.ts` consumes it. Verified: zero tracked copies of the leaked key remain.
+6. **Web security headers** - `apps/web/next.config.js` headers(): nosniff, DENY frames, strict-origin referrer, permissions-policy, DNS-prefetch off.
+7. **Env documentation** - `.env.example` documents `CORS_ORIGINS`, `JWT_SECRET`, `SESSION_SECRET`, `GEMINI_API_KEY` (empty placeholders for prod).
+
+## Gates (all PASS)
+- API typecheck 0 - Web typecheck 0 - Vitest **226/226** - ESLint (changed API files) 0 - **`next build` exit 0**
+
+## Files
+- `apps/api/src/lib/security-config.ts` (new)
+- `apps/api/src/app.ts` (applyApiSecurity + CORS_ORIGIN_LIST + indent normalization)
+- `apps/api/src/config/index.ts` (scrub key; drop dead corsOrigin/assertProductionSecrets -- consolidated into security-config)
+- `apps/web/next.config.js` (security headers)
+- `.env.example` (document new vars)
+
+## Notes
+- CSP intentionally deferred (Next App Router + inline styles makes a safe CSP a follow-up with testing; other header coverage is complete).
+- `JWT_REFRESH_SECRET` dropped -- was only referenced inside a dead function;ever used by auth.
