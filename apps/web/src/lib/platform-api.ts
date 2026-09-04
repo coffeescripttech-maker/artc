@@ -127,16 +127,118 @@ export async function fetchResetPreview(orgId?: string): Promise<ResetPreview> {
   return (await apiRequest(`/api/platform/admin/reset/preview${qs}`)) as ResetPreview;
 }
 
-export async function performFullReset(): Promise<{ ok: boolean; counts: ResetCounts }> {
-  return (await apiRequest("/api/platform/admin/reset/reset", {
-    method: "POST",
-    body: JSON.stringify({ confirm: "RESET" }),
-  })) as { ok: boolean; counts: ResetCounts };
+/**
+ * The reset endpoints return `{ ok, mode, deleted }` where `deleted` is the
+ * array of `deleteMany` results in the exact transaction order used by the
+ * backend. Map that array onto human-readable record keys so the UI can show
+ * truthful per-entity deletion counts after a reset.
+ */
+const FULL_RESET_DELETE_ORDER = [
+  "auditEvents",
+  "payments",
+  "subscriptions",
+  "attemptAnswers",
+  "attempts",
+  "assessmentQuestions",
+  "assessments",
+  "questionExposures",
+  "questionBankLinks",
+  "questions",
+  "passages",
+  "progressRecords",
+  "lessons",
+  "topics",
+  "modules",
+  "subjects",
+  "programCets",
+  "examCoverages",
+  "cetProfiles",
+  "cetExams",
+  "programs",
+  "enrollments",
+  "batchMembers",
+  "batchTeachers",
+  "batches",
+  "contentVersions",
+  "parentStudents",
+  "learners",
+  "memberships",
+  "sessions",
+  "userRoles",
+  "users",
+  "organizations",
+];
+
+const ORG_RESET_DELETE_ORDER = [
+  "auditEvents",
+  "attemptAnswers",
+  "attempts",
+  "assessmentQuestions",
+  "assessments",
+  "questionExposures",
+  "questionBankLinks",
+  "questions",
+  "progressRecords",
+  "lessons",
+  "topics",
+  "modules",
+  "curriculumItems",
+  "subjects",
+  "programCets",
+  "curriculums",
+  "programs",
+  "enrollments",
+  "batchMembers",
+  "batchTeachers",
+  "batches",
+  "contentVersions",
+  "parentStudents",
+  "learners",
+  "memberships",
+  "sessions",
+];
+
+function mapDeletedCounts(order: string[], deleted: unknown): ResetCounts {
+  const raw = Array.isArray(deleted) ? deleted : [];
+  const counts: ResetCounts = {};
+  order.forEach((key, i) => {
+    const entry = raw[i];
+    counts[key] =
+      entry && typeof entry === "object" && "count" in entry
+        ? Number((entry as { count: number }).count) || 0
+        : typeof entry === "number"
+          ? entry
+          : 0;
+  });
+  return counts;
 }
 
-export async function performOrgReset(orgId: string): Promise<{ ok: boolean; counts: ResetCounts }> {
-  return (await apiRequest(`/api/platform/admin/reset/orgs/${orgId}/reset`, {
+export async function performFullReset(): Promise<{
+  ok: boolean;
+  mode: string;
+  deleted: ResetCounts;
+}> {
+  const data = (await apiRequest("/api/platform/admin/reset/reset", {
     method: "POST",
     body: JSON.stringify({ confirm: "RESET" }),
-  })) as { ok: boolean; counts: ResetCounts };
+  })) as { ok: boolean; mode: string; deleted: unknown };
+  return { ok: data.ok, mode: data.mode, deleted: mapDeletedCounts(FULL_RESET_DELETE_ORDER, data.deleted) };
+}
+
+export async function performOrgReset(orgId: string): Promise<{
+  ok: boolean;
+  mode: string;
+  organizationId: string;
+  deleted: ResetCounts;
+}> {
+  const data = (await apiRequest(`/api/platform/admin/reset/orgs/${orgId}/reset`, {
+    method: "POST",
+    body: JSON.stringify({ confirm: "RESET" }),
+  })) as { ok: boolean; mode: string; organizationId: string; deleted: unknown };
+  return {
+    ok: data.ok,
+    mode: data.mode,
+    organizationId: data.organizationId,
+    deleted: mapDeletedCounts(ORG_RESET_DELETE_ORDER, data.deleted),
+  };
 }
