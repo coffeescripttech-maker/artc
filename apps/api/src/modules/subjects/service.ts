@@ -1,5 +1,4 @@
 import { prisma } from "@aratc/database";
-import { createSubjectSchema } from "./schemas";
 import { ConflictError, NotFoundError } from "../../lib/errors";
 import {
   type ContentVisibilityOptions,
