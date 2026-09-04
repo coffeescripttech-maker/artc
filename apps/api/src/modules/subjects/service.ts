@@ -1,12 +1,26 @@
 import { prisma } from "@aratc/database";
 import { createSubjectSchema } from "./schemas";
-import { NotFoundError } from "../../lib/errors";
+import { ConflictError, NotFoundError } from "../../lib/errors";
 import {
   type ContentVisibilityOptions,
   isVisible,
   publishedOnly,
 } from "../../lib/visibility";
 import type { CreateSubjectInput } from "./schemas";
+
+// Prisma P2002 (unique-constraint violation) surfaces as a plain object with
+// a `code` property — narrow it structurally instead of importing the Prisma
+// client runtime into the service layer.
+function isUniqueViolation(
+  err: unknown,
+): err is { code: "P2002"; meta?: { target?: string[] } } {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: unknown }).code === "P2002"
+  );
+}
 
 export async function listSubjects(opts?: ContentVisibilityOptions) {
   return prisma.subject.findMany({
@@ -95,6 +109,19 @@ export async function getSubjectBySlug(
 }
 
 export async function createSubject(input: CreateSubjectInput) {
+  // Reject duplicate subject codes up-front with a friendly 409 instead of
+  // letting the DB's unique constraint surface as an opaque 500.
+  if (input.code) {
+    const codeTaken = await prisma.subject.findUnique({
+      where: { code: input.code },
+    });
+    if (codeTaken) {
+      throw new ConflictError(
+        `A subject with code "${input.code}" already exists. Please choose a different code.`,
+      );
+    }
+  }
+
   // Generate unique slug if needed
   let slug = input.slug;
   let counter = 1;
@@ -105,23 +132,46 @@ export async function createSubject(input: CreateSubjectInput) {
     counter++;
   }
 
-  return prisma.subject.create({
-    data: {
-      name: input.name,
-      slug,
-      code: input.code,
-      description: input.description,
-      icon: input.icon,
-      color: input.color,
-      status: "DRAFT",
-    },
-  });
+  try {
+    return await prisma.subject.create({
+      data: {
+        name: input.name,
+        slug,
+        code: input.code,
+        description: input.description,
+        icon: input.icon,
+        color: input.color,
+        status: "DRAFT",
+      },
+    });
+  } catch (err) {
+    // Race-condition safety net: another request may have created the same
+    // code/slug between the pre-check and this insert.
+    if (isUniqueViolation(err)) {
+      throw new ConflictError(
+        "A subject with the same code or slug already exists. Please adjust and try again.",
+      );
+    }
+    throw err;
+  }
 }
 
 export async function updateSubject(id: string, input: Partial<CreateSubjectInput>) {
   const existing = await prisma.subject.findUnique({ where: { id } });
   if (!existing) {
     throw new NotFoundError("Subject not found");
+  }
+
+  // Reject duplicate subject codes up-front (excluding this subject itself).
+  if (input.code && input.code !== existing.code) {
+    const codeTaken = await prisma.subject.findUnique({
+      where: { code: input.code },
+    });
+    if (codeTaken) {
+      throw new ConflictError(
+        `A subject with code "${input.code}" already exists. Please choose a different code.`,
+      );
+    }
   }
 
   // Generate unique slug if slug is being changed
@@ -136,17 +186,26 @@ export async function updateSubject(id: string, input: Partial<CreateSubjectInpu
     }
   }
 
-  return prisma.subject.update({
-    where: { id },
-    data: {
-      name: input.name,
-      slug,
-      code: input.code,
-      description: input.description,
-      icon: input.icon,
-      color: input.color,
-    },
-  });
+  try {
+    return await prisma.subject.update({
+      where: { id },
+      data: {
+        name: input.name,
+        slug,
+        code: input.code,
+        description: input.description,
+        icon: input.icon,
+        color: input.color,
+      },
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      throw new ConflictError(
+        "Another subject already uses that code or slug. Please choose a different value.",
+      );
+    }
+    throw err;
+  }
 }
 
 export async function publishSubject(id: string) {

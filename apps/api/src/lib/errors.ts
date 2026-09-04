@@ -43,3 +43,9 @@ export class RateLimitError extends ApiError {
     super(message, 429);
   }
 }
+
+export class ConflictError extends ApiError {
+  constructor(message: string = "Conflict") {
+    super(message, 409);
+  }
+}

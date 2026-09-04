@@ -65,8 +65,13 @@ export default function NewSubjectPage() {
       await subjectsApi.create(formData);
       toast.success("Subject created successfully");
       router.push("/admin/subjects");
-    } catch (err: any) {
-      setError(err.message || "Failed to create subject. Please try again.");
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to create subject. Please try again.";
+      setError(message);
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }

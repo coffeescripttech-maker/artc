@@ -45,8 +45,17 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: "Request failed" }));
-    throw new Error(error.message || `HTTP error ${response.status}`);
+    // The API's error handler returns `{ error: { message, code } }`, while
+    // some endpoints may return a flat `{ message }` — support both shapes so
+    // friendly server messages (e.g. 409 duplicate-code conflicts) reach the UI.
+    const payload = (await response.json().catch(() => null)) as
+      | { error?: { message?: string }; message?: string }
+      | null;
+    const message =
+      payload?.error?.message ||
+      payload?.message ||
+      `HTTP error ${response.status}`;
+    throw new Error(message);
   }
 
   if (response.status === 204) {
